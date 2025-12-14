@@ -35,8 +35,7 @@ import {
   Printer,
 } from 'lucide-react';
 import { caixasService, participantesService, usuariosService, cobrancasService, pagamentosService } from '../lib/api';
-import QRCode from 'react-qr-code';
-import Barcode from 'react-barcode';
+import { DetalhesPagamento } from './DetalhesPagamento';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
@@ -150,32 +149,7 @@ export function CaixaDetalhes() {
   const [copied, setCopied] = useState(false);
   const [isReordering, setIsReordering] = useState(false);
 
-  // Estados para cobrança
-  const [showCobranca, setShowCobranca] = useState(false);
-  const [gerandoCobranca, setGerandoCobranca] = useState(false);
-  const [loadingPaymentDetails, setLoadingPaymentDetails] = useState(false);
-  const [cobrancaGerada, setCobrancaGerada] = useState<{
-    id: string;
-    valor: number;
-    descricao: string;
-    paymentUrl?: string;
-    pixGeneratedAt?: string;
-    pix?: {
-      qrCode: string;
-      copiaCola: string;
-    };
-    boleto?: {
-      codigoBarras: string;
-      linhaDigitavel: string;
-      url: string;
-    };
-  } | null>(null);
-  const [boletoSelecionado, setBoletoSelecionado] = useState<number | null>(null);
-  const [copiedPix, setCopiedPix] = useState(false);
-  const [copiedBoleto, setCopiedBoleto] = useState(false);
-  const [expandedMes, setExpandedMes] = useState<number | null>(null);
-  const [paymentTab, setPaymentTab] = useState<'pix' | 'boleto'>('pix');
-  const [cobrancasPorMes, setCobrancasPorMes] = useState<Record<number, CobrancaInfo>>({});
+  // Estados de UI gerais
   const [newParticipante, setNewParticipante] = useState({
     nome: '',
     email: '',
@@ -184,7 +158,6 @@ export function CaixaDetalhes() {
     chavePix: '',
     picture: '',
   });
-  const [refreshTick, setRefreshTick] = useState(0);
   const [editForm, setEditForm] = useState({
     nome: '',
     descricao: '',
@@ -202,6 +175,16 @@ export function CaixaDetalhes() {
   const [pagamentosMes, setPagamentosMes] = useState<any[]>([]);
   const [todosPagamentos, setTodosPagamentos] = useState<any[]>([]);
   const [pagamentosParticipante, setPagamentosParticipante] = useState<any[]>([]);
+  const [localPaidByMes, setLocalPaidByMes] = useState<Record<number, Set<string>>>({});
+
+  const markPaid = (mes: number, participanteId: string) => {
+    setLocalPaidByMes((prev) => {
+      const set = new Set(prev[mes] || []);
+      set.add(String(participanteId));
+      return { ...prev, [mes]: set };
+    });
+  };
+  const [cronogramaParcela, setCronogramaParcela] = useState<number>(1);
 
   // Calcular data mínima de vencimento (hoje + 5 dias)
   const getMinDataVencimento = () => {
@@ -276,116 +259,17 @@ export function CaixaDetalhes() {
   }, [caixa?.mesAtual, todosPagamentos]);
 
   useEffect(() => {
+    // Atualizar resumo ao trocar aba do cronograma
+    if (id) {
+      try { loadPagamentos(); } catch {}
+    }
+  }, [cronogramaParcela]);
+
+  useEffect(() => {
     // removido polling de caixa/mes
   }, [caixa?._id, caixa?.mesAtual]);
 
-  const [lytexPaymentDetails, setLytexPaymentDetails] = useState<Record<string, any>>({});
-
-  useEffect(() => {
-    setCobrancasPorMes({});
-    setLytexPaymentDetails({});
-  }, [selectedParticipante?._id]);
-
-  useEffect(() => {
-    const loadPaymentDetails = async () => {
-      if (!caixa?._id || !selectedParticipante?._id) return;
-
-      try {
-        // Buscar todas as associações de uma vez para evitar falhas individuais
-        const response = await cobrancasService.getAllByAssociacao({
-          caixaId: caixa._id,
-          participanteId: selectedParticipante._id,
-        });
-
-        const cobrancas = response.cobrancas || [];
-
-        // Agrupar cobranças por mês para verificar todas as possibilidades
-        const cobrancasByMes = new Map<number, any[]>();
-        for (const c of cobrancas) {
-          const list = cobrancasByMes.get(c.mesReferencia) || [];
-          list.push(c);
-          cobrancasByMes.set(c.mesReferencia, list);
-        }
-
-        const updatesCobrancas: Record<number, CobrancaInfo> = {};
-        const updatesLytex: Record<string, any> = {};
-
-        // Processar cada mês em paralelo
-        await Promise.all(Array.from(cobrancasByMes.entries()).map(async ([mes, candidates]) => {
-          // Verificar status no Lytex de TODAS as cobranças desse mês para encontrar alguma paga
-          const candidatesWithStatus = await Promise.all(candidates.map(async (c) => {
-            if (!c.lytexId) return { ...c, isPaid: false, lytexDetail: null };
-            try {
-              // Sync com Lytex
-              const invoiceResp = await cobrancasService.buscar(c.lytexId, {
-                caixaId: caixa._id,
-                participanteId: selectedParticipante._id,
-                mes: mes
-              });
-
-              const pd = await cobrancasService.paymentDetail(c.lytexId);
-              const detail = pd?.paymentDetail || pd?.detail || pd;
-              const invoice = invoiceResp?.cobranca || {};
-              const status = invoice.status || detail?.status || c.status;
-              const statusNormalized = String(status || '').toLowerCase();
-              const isPaid = ['paid', 'liquidated', 'settled', 'pago', 'inqueue'].includes(statusNormalized);
-
-              const fullDetail = {
-                ...detail,
-                ...invoice,
-                status: isPaid ? 'PAGO' : status
-              };
-
-              // Guardar para atualização de estado global
-              updatesLytex[c.lytexId] = fullDetail;
-
-              return { ...c, isPaid, lytexDetail: fullDetail, rawInvoice: invoice };
-            } catch (e) {
-              console.warn(`Erro ao verificar candidato ${c.lytexId}`, e);
-              return { ...c, isPaid: false, lytexDetail: null };
-            }
-          }));
-
-          // Lógica de Priorização:
-          // 1. Cobrança PAGA
-          // 2. Cobrança mais recente (assumindo que candidates[0] é a mais recente pois vem do backend ordenado)
-          // Se a ordem não for garantida, podemos ordenar por createdAt se disponível, mas vamos confiar na ordem do array
-          const paidCandidate = candidatesWithStatus.find(c => c.isPaid);
-          const winner = paidCandidate || candidatesWithStatus[0];
-
-          if (winner) {
-            const inv = winner.rawInvoice || {};
-            updatesCobrancas[mes] = {
-              id: winner.lytexId,
-              valor: inv.total ? inv.total / 100 : (winner.valor || 0),
-              descricao: winner.descricao || '',
-              paymentUrl: inv.paymentUrl || winner.paymentUrl,
-              pix: inv.pix || winner.pix,
-              boleto: inv.boleto || winner.boleto
-            };
-          }
-        }));
-
-        // Atualizar estado
-        setCobrancasPorMes(prev => ({ ...prev, ...updatesCobrancas }));
-        setLytexPaymentDetails(prev => ({ ...prev, ...updatesLytex }));
-
-      } catch (e) {
-        console.warn('Erro ao carregar detalhes do pagamento', e);
-      }
-    };
-
-    // Polling a cada 5 segundos para atualização em tempo real
-    let intervalId: any;
-    if (showParticipanteDetail && selectedParticipante) {
-      loadPaymentDetails(); // Carga inicial
-      intervalId = setInterval(loadPaymentDetails, 3000); // Polling
-    }
-
-    return () => {
-      if (intervalId) clearInterval(intervalId);
-    };
-  }, [showParticipanteDetail, selectedParticipante?._id, caixa?._id, expandedMes, refreshTick]);
+  
 
   const loadCaixa = async () => {
     try {
@@ -470,26 +354,7 @@ export function CaixaDetalhes() {
     }
   };
 
-  const minutesSince = (iso?: string) => {
-    if (!iso) return null;
-    const ms = Date.now() - new Date(iso).getTime();
-    const min = Math.floor(ms / 60000);
-    return min < 0 ? 0 : min;
-  };
-
-  const BoletoBarcode = ({ value }: { value: string }) => {
-    return (
-      <Barcode
-        value={value}
-        format="CODE128"
-        displayValue={false}
-        lineColor="#111827"
-        width={2}
-        height={72}
-        margin={0}
-      />
-    );
-  };
+  
   const handleCopyCode = () => {
     if (caixa?.codigoConvite) {
       navigator.clipboard.writeText(caixa.codigoConvite);
@@ -711,250 +576,7 @@ export function CaixaDetalhes() {
     setSelectedParticipante(null);
   };
 
-  // Função para gerar cobrança PIX/Boleto
-  const handleGerarCobranca = async (boleto: any) => {
-    if (!selectedParticipante || !caixa) return;
-    // Cache: se já existe cobrança gerada para este mês/semana, não gerar novamente
-    if (cobrancasPorMes[boleto.mes]) {
-      setExpandedMes(boleto.mes);
-      setPaymentTab('pix');
-      try {
-        const existing = cobrancasPorMes[boleto.mes];
-        if (existing?.id) {
-          const resp = await cobrancasService.buscar(existing.id, {
-            caixaId: caixa._id,
-            participanteId: selectedParticipante._id,
-            mes: boleto.mes
-          });
-          const invoice = resp?.cobranca || {};
-          const status = String(invoice.status || '').toLowerCase();
-          const isPaid = ['paid', 'liquidated', 'settled', 'pago', 'inqueue'].includes(status);
-          setLytexPaymentDetails((prev) => ({
-            ...prev,
-            [existing.id]: { ...invoice, status: isPaid ? 'PAGO' : invoice.status }
-          }));
-          setCobrancasPorMes((prev) => ({
-            ...prev,
-            [boleto.mes]: {
-              ...prev[boleto.mes],
-              paymentUrl: invoice.paymentUrl || prev[boleto.mes]?.paymentUrl,
-              pix: invoice.pix || prev[boleto.mes]?.pix,
-              boleto: invoice.boleto || prev[boleto.mes]?.boleto
-            }
-          }));
-        }
-      } catch { }
-      return;
-    }
-
-    setGerandoCobranca(true);
-    setBoletoSelecionado(boleto.mes);
-
-    try {
-      const payload = {
-        participante: {
-          nome: selectedParticipante.usuarioId?.nome || 'Participante',
-          // Sandbox: Lytex aceita apenas os CPFs fictícios. Se não houver CPF, usamos um dos válidos.
-          cpf: selectedParticipante.usuarioId?.cpf || '96050176876',
-          email: selectedParticipante.usuarioId?.email || 'sandbox@example.com',
-          telefone: selectedParticipante.usuarioId?.telefone || '71999999999',
-        },
-        caixa: {
-          nome: caixa.nome,
-          tipo: caixa.tipo || 'mensal',
-          valorParcela: boleto.valorParcela,
-          taxaServico: boleto.taxaServico,
-          taxaAdministrativa: boleto.fundoReserva,
-          correcaoIPCA: boleto.correcaoIPCA,
-          comissaoAdmin: boleto.comissaoAdmin,
-          mesOuSemana: boleto.mes,
-          totalParcelas: caixa.qtdParticipantes,
-        },
-        caixaId: caixa._id,
-        participanteId: selectedParticipante.usuarioId?._id || (selectedParticipante as any).usuarioId,
-        mesReferencia: boleto.mes,
-        dataVencimento: boleto.dataVencimento,
-        habilitarPix: true,
-        habilitarBoleto: true,
-      };
-      console.group('Pagamento: gerar cobrança');
-      console.log('Payload', payload);
-      console.groupEnd();
-      const response = await cobrancasService.gerar(payload);
-
-      if (response.success) {
-        const d = response.cobranca;
-        try {
-          console.group('Pagamento: resposta cobrança');
-          console.log('success', response.success);
-          console.log('cobranca', d);
-          console.log('paymentMethods.pix', d?.paymentMethods?.pix);
-          console.log('paymentMethods.boleto', d?.paymentMethods?.boleto);
-          console.log('linkBoleto', d?.linkBoleto);
-          console.groupEnd();
-        } catch { }
-        const mapped: CobrancaInfo = {
-          id: d?.id || d?._id || `${selectedParticipante._id}-${boleto.mes}`,
-          valor: typeof d?.valorCentavos === 'number' ? d.valorCentavos / 100 : (typeof d?.totalValue === 'number' ? d.totalValue / 100 : boleto.valorTotal),
-          descricao: `Pagamento ${caixa.tipo === 'semanal' ? 'Semana' : 'Mês'} ${boleto.mes} - ${selectedParticipante.usuarioId?.nome || 'Participante'}`,
-          paymentUrl: d?.linkCheckout || d?.paymentUrl,
-          pixGeneratedAt: undefined,
-          pix: d?.pix ? {
-            qrCode: d.pix.qrCode || '',
-            copiaCola: d.pix.copyPaste || '',
-          } : undefined,
-          boleto: d?.boleto ? {
-            codigoBarras: d.boleto.barCode || '',
-            linhaDigitavel: d.boleto.digitableLine || '',
-            url: d.boleto.url,
-          } : undefined,
-        };
-        try {
-          console.group('Pagamento: mapeamento cobrança');
-          console.log('mapped.pix', mapped.pix);
-          console.log('mapped.boleto', mapped.boleto);
-          console.groupEnd();
-        } catch { }
-        // Tentar enriquecer com os detalhes completos via GET na Lytex
-        let enriched = mapped;
-        const lytexId = d?._id || d?.id;
-        if (lytexId) {
-          try {
-            const buscarResp = await cobrancasService.buscar(lytexId);
-            const inv = buscarResp?.cobranca || buscarResp?.invoice || buscarResp;
-            if (inv) {
-              const tx = Array.isArray(inv.transactions) ? inv.transactions[0] : undefined;
-              const valorCents = tx?.value ?? inv?.totalValue;
-              const pixCreated = tx?.createdAt || tx?.created_at || inv?.createdAt || inv?.created_at;
-              enriched = {
-                id: inv?._id || lytexId,
-                valor: typeof valorCents === 'number' ? Math.round(valorCents) / 100 : mapped.valor,
-                descricao: mapped.descricao,
-                paymentUrl: inv?.linkCheckout || mapped.paymentUrl,
-                pixGeneratedAt: pixCreated,
-                pix: (tx?.pix || inv?.paymentMethods?.pix || inv?.pix) ? {
-                  qrCode: tx?.pix?.qrcode || inv?.paymentMethods?.pix?.qrcode || mapped.pix?.qrCode || '',
-                  // Se o EMV não vier, usamos o QRCode como copiaCola, pois a Lytex às vezes retorna o EMV no campo qrcode
-                  copiaCola: tx?.pix?.emv || tx?.pix?.qrcode || inv?.paymentMethods?.pix?.emv || inv?.pix?.copyPaste || mapped.pix?.copiaCola || '',
-                } : mapped.pix,
-                boleto: tx?.boleto || inv?.boleto || inv?.paymentMethods?.boleto ? {
-                  codigoBarras: tx?.boleto?.barcode || inv?.paymentMethods?.boleto?.barcode || mapped.boleto?.codigoBarras || '',
-                  linhaDigitavel: tx?.boleto?.digitableLine || inv?.paymentMethods?.boleto?.digitableLine || mapped.boleto?.linhaDigitavel || '',
-                  url: inv?.linkBoleto || mapped.boleto?.url,
-                } : mapped.boleto,
-              };
-              try {
-                console.group('Pagamento: detalhes Lytex GET');
-                console.log('invoice', inv);
-                console.log('transactions[0]', tx);
-                console.groupEnd();
-              } catch { }
-            }
-          } catch (e) {
-            try { console.warn('Falha ao enriquecer com GET Lytex', e); } catch { }
-          }
-        }
-        setCobrancaGerada(enriched);
-        setCobrancasPorMes((prev) => ({ ...prev, [boleto.mes]: enriched }));
-        setExpandedMes(boleto.mes);
-        setPaymentTab('pix');
-        try {
-          const interval = setInterval(async () => {
-            try {
-              const lista = await pagamentosService.getByCaixaMes(caixa._id, Math.max(1, caixa.mesAtual));
-              setPagamentosMes(Array.isArray(lista) ? lista : []);
-            } catch { }
-          }, 4000);
-          setTimeout(() => clearInterval(interval), 20000);
-        } catch { }
-      } else {
-        alert(response.message || 'Erro ao gerar cobrança');
-      }
-    } catch (error: any) {
-      console.error('Erro ao gerar cobrança:', error);
-      const msg = error?.response?.status === 401 ? 'Credenciais inválidas para a API de pagamentos' : 'Erro ao gerar cobrança. Tente novamente.';
-      alert(msg);
-    } finally {
-      setGerandoCobranca(false);
-      setBoletoSelecionado(null);
-    }
-  };
-
-  // Função para copiar código PIX
-  const handleCopyPix = async () => {
-    if (cobrancaGerada?.pix?.copiaCola) {
-      await navigator.clipboard.writeText(cobrancaGerada.pix.copiaCola);
-      setCopiedPix(true);
-      setTimeout(() => setCopiedPix(false), 2000);
-    }
-  };
-
-  const handleCopyPixMes = async (mes: number) => {
-    const c = cobrancasPorMes[mes];
-    if (!c?.pix?.copiaCola) return;
-    await navigator.clipboard.writeText(c.pix.copiaCola);
-    setCopiedPix(true);
-    setTimeout(() => setCopiedPix(false), 2000);
-  };
-
-  const handlePrintPixMes = (mes: number) => {
-    const c = cobrancasPorMes[mes];
-    const emv = c?.pix?.copiaCola || '';
-    if (!emv) return;
-    const w = window.open('', 'PRINT', 'height=650,width=600,top=100,left=100');
-    if (!w) return;
-    w.document.write('<html><head><title>PIX</title></head><body style="font-family: system-ui;">');
-    w.document.write(`<div style="padding:24px;">
-      <h1 style="font-size:18px;margin:0 0 12px 0;color:#111;">Código PIX (EMV)</h1>
-      <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:12px;">
-        <div style="font-family: monospace;font-size:12px;color:#444;word-break:break-all;">${emv}</div>
-      </div>
-    </div>`);
-    w.document.write('</body></html>');
-    w.document.close();
-    w.focus();
-    w.print();
-    w.close();
-  };
-
-  const handleCopyBoletoMes = async (mes: number) => {
-    const c = cobrancasPorMes[mes];
-    if (!c?.boleto?.linhaDigitavel) return;
-    await navigator.clipboard.writeText(c.boleto.linhaDigitavel);
-    setCopiedBoleto(true);
-    setTimeout(() => setCopiedBoleto(false), 2000);
-  };
-
-  const handlePrintBoletoMes = (mes: number) => {
-    const c = cobrancasPorMes[mes];
-    const url = c?.boleto?.url;
-    if (url) {
-      window.open(url, '_blank');
-      return;
-    }
-    const linha = c?.boleto?.linhaDigitavel || '';
-    if (!linha) return;
-    const w = window.open('', 'PRINT', 'height=650,width=600,top=100,left=100');
-    if (!w) return;
-    w.document.write('<html><head><title>Boleto</title></head><body style="font-family: system-ui;">');
-    w.document.write(`<div style="padding:24px;">
-      <h1 style="font-size:18px;margin:0 0 12px 0;color:#111;">Boleto</h1>
-      <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:12px;">
-        <div style="font-family: monospace;font-size:12px;color:#444;word-break:break-all;">${linha}</div>
-      </div>
-    </div>`);
-    w.document.write('</body></html>');
-    w.document.close();
-    w.focus();
-    w.print();
-    w.close();
-  };
-
-  const formatLinhaDigitavel = (linha: string): string => {
-    const digits = (linha || '').replace(/\D/g, '');
-    const groups = digits.match(/.{1,5}/g);
-    return groups ? groups.join(' ') : (linha || '');
-  };
+  
 
   const handleReorder = (newOrder: Participante[]) => {
     const updated = newOrder.map((p, idx) => ({ ...p, posicao: idx + 1 }));
@@ -1013,15 +635,13 @@ export function CaixaDetalhes() {
       const pagamentoDoMes = basePagamentos.find((p) => {
         const pagador = p.pagadorId?._id || p.pagadorId;
         const usuarioId = (participante.usuarioId as any)?._id || participante.usuarioId;
-        return String(p.mesReferencia) === String(parcela) && String(pagador) === String(usuarioId) && String(p.status) === 'aprovado';
+        const statusPag = String(p.status || '').toLowerCase();
+        return String(p.mesReferencia) === String(parcela) &&
+          String(pagador) === String(usuarioId) &&
+          ['aprovado', 'pago', 'paid'].includes(statusPag);
       });
 
-      // Check Lytex details
-      const cobrancaInfo = cobrancasPorMes[parcela];
-      const lytexDetail = cobrancaInfo ? lytexPaymentDetails[cobrancaInfo.id] : null;
-      const isLytexPaid = lytexDetail?.status === 'paid' || lytexDetail?.status === 'inQueue' || lytexDetail?.status === 'liquidated' || lytexDetail?.status === 'settled';
-
-      const isPago = Boolean(pagamentoDoMes) || isLytexPaid;
+      const isPago = Boolean(pagamentoDoMes);
       const isAtrasado = caixa.status === 'ativo' && !isPago && dataVencimento < new Date();
 
       boletos.push({
@@ -1088,6 +708,30 @@ export function CaixaDetalhes() {
       d.setDate(caixa.diaVencimento);
     }
     return formatDate(d.toISOString());
+  };
+
+  const getDataVencimentoParcela = (parcela: number): string => {
+    if (!caixa?.dataInicio) return '-';
+    const d = new Date(caixa.dataInicio);
+    if (caixa.tipo === 'semanal') {
+      d.setDate(d.getDate() + ((parcela - 1) * 7));
+    } else {
+      d.setMonth(d.getMonth() + parcela - 1);
+      d.setDate(caixa.diaVencimento);
+    }
+    return formatDate(d.toISOString());
+  };
+
+  const getStatusVencimento = (vencISO: string, isPago: boolean) => {
+    const hoje = new Date();
+    const venc = new Date(vencISO);
+    const h0 = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
+    const v0 = new Date(venc.getFullYear(), venc.getMonth(), venc.getDate());
+    const diff = Math.floor((h0.getTime() - v0.getTime()) / 86400000);
+    if (isPago) return { label: 'PAGO', variant: 'success' as const };
+    if (diff === 0) return { label: 'VENCE HOJE', variant: 'warning' as const };
+    if (diff > 0) return { label: `ATRASADO há ${diff} dia${diff > 1 ? 's' : ''}`, variant: 'danger' as const };
+    return { label: 'EM DIA', variant: 'success' as const };
   };
 
   const pagosCount = pagamentosMes.filter((p) => {
@@ -1363,10 +1007,16 @@ export function CaixaDetalhes() {
                   <div className="flex gap-3 overflow-x-auto pb-4 pt-1 px-1 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">
                     {Array.from({ length: caixa.duracaoMeses }).map((_, idx) => {
                       const mes = idx + 1;
-                      const pagos = todosPagamentos.filter(p => {
+                      const pagosApiSet = new Set<string>();
+                      todosPagamentos.forEach((p: any) => {
                         const s = String(p.status || '').toLowerCase();
-                        return p.mesReferencia === mes && ['aprovado', 'pago', 'paid', 'liquidated', 'settled'].includes(s);
-                      }).length;
+                        if (p.mesReferencia === mes && ['aprovado', 'pago', 'paid', 'liquidated', 'settled'].includes(s)) {
+                          const pid = p.pagadorId?._id || p.pagadorId;
+                          pagosApiSet.add(String(pid));
+                        }
+                      });
+                      const localSet = localPaidByMes[mes] || new Set<string>();
+                      const pagos = new Set<string>([...pagosApiSet, ...localSet]).size;
                       const pendentes = Math.max(0, participantes.length - pagos);
                       const isCurrent = mes === caixa.mesAtual;
                       const isPast = mes < caixa.mesAtual;
@@ -1594,6 +1244,25 @@ export function CaixaDetalhes() {
                 </Reorder.Group>
               ) : (
                 <div className="space-y-3">
+                  <div className="flex gap-2 p-2 bg-gray-100 rounded-2xl mb-4 overflow-x-auto shadow-sm">
+                    {Array.from({ length: caixa.qtdParticipantes }).map((_, i) => {
+                      const num = i + 1;
+                      return (
+                        <button
+                          key={num}
+                          onClick={() => setCronogramaParcela(num)}
+                          className={cn(
+                            'px-4 py-2.5 rounded-2xl text-sm font-semibold whitespace-nowrap transition-all',
+                            cronogramaParcela === num
+                              ? 'bg-gradient-to-br from-green-500 to-green-600 text-white shadow-md scale-105'
+                              : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-200'
+                          )}
+                        >
+                          {caixa.tipo === 'semanal' ? 'Semana' : 'Mês'} {num}
+                        </button>
+                      );
+                    })}
+                  </div>
                   {participantes.map((participante, index) => (
                     <motion.div
                       key={participante._id}
@@ -1607,9 +1276,18 @@ export function CaixaDetalhes() {
                           setSelectedParticipante(participante);
                           setShowParticipanteDetail(true);
                         }}
-                        className={cn(
-                          participante.posicao === caixa.mesAtual && 'ring-2 ring-green-400 bg-green-50/50'
-                        )}
+                        className={cn(() => {
+                          const pagamentosSel = todosPagamentos.filter((p: any) => p.mesReferencia === cronogramaParcela);
+                          const usuarioId = (participante.usuarioId as any)?._id || participante.usuarioId;
+                          const paidApi = pagamentosSel.some((p: any) => {
+                            const s = String(p.status || '').toLowerCase();
+                            const pagador = p.pagadorId?._id || p.pagadorId;
+                            return String(pagador) === String(usuarioId) && ['aprovado','pago','paid','liquidated','settled'].includes(s);
+                          });
+                          const paidLocal = (localPaidByMes[cronogramaParcela] || new Set<string>()).has(String(usuarioId));
+                          const paid = paidApi || paidLocal;
+                          return paid ? 'ring-2 ring-green-300 bg-green-50/70' : (participante.posicao === caixa.mesAtual ? 'ring-2 ring-green-400 bg-green-50/50' : '');
+                        })}
                       >
                         <div className="flex items-center gap-3">
                           {/* Posição */}
@@ -1637,36 +1315,47 @@ export function CaixaDetalhes() {
                               <p className="font-semibold text-gray-900 truncate">
                                 {participante?.usuarioId?.nome || 'Sem nome'}
                               </p>
-                              {participante.jaRecebeu && (
-                                <Badge variant="success" size="sm">
-                                  <CheckCircle2 className="w-3 h-3 mr-1" />
-                                  Recebeu
-                                </Badge>
-                              )}
-                              {participante.posicao === caixa.mesAtual && !participante.jaRecebeu && (
-                                <Badge variant="warning" size="sm">
-                                  Recebe agora
-                                </Badge>
-                              )}
-                              {!participante.aceite && (
-                                <Badge variant="gray" size="sm">
-                                  Pendente aceite
-                                </Badge>
-                              )}
+                              {(() => {
+                                const vencISO = (() => {
+                                  const d = new Date(caixa.dataInicio || new Date().toISOString());
+                                  if (caixa.tipo === 'semanal') {
+                                    d.setDate(d.getDate() + ((cronogramaParcela - 1) * 7));
+                                  } else {
+                                    d.setMonth(d.getMonth() + cronogramaParcela - 1);
+                                    d.setDate(caixa.diaVencimento);
+                                  }
+                                  return d.toISOString();
+                                })();
+                                const pagamentosSel = todosPagamentos.filter((p: any) => p.mesReferencia === cronogramaParcela);
+                                const isPagoApi = pagamentosSel.some((p: any) => {
+                                  const s = String(p.status || '').toLowerCase();
+                                  const pagador = p.pagadorId?._id || p.pagadorId;
+                                  const usuarioId = (participante.usuarioId as any)?._id || participante.usuarioId;
+                                  return String(pagador) === String(usuarioId) && ['aprovado', 'pago', 'paid', 'liquidated', 'settled'].includes(s);
+                                });
+                                const isPagoLocal = (localPaidByMes[cronogramaParcela] || new Set<string>()).has(String((participante.usuarioId as any)?._id || participante.usuarioId));
+                                const isPago = isPagoApi || isPagoLocal;
+                                const st = getStatusVencimento(vencISO, isPago);
+                                return (
+                                  <Badge variant={st.variant} size="sm">
+                                    {st.label}
+                                  </Badge>
+                                );
+                              })()}
                             </div>
                             <div className="flex items-center gap-3 text-sm text-gray-500 mt-1">
                               <span className="flex items-center gap-1">
                                 <Calendar className="w-3 h-3" />
-                                {calcularDataRecebimento(participante.posicao || 0)}
+                                {getDataVencimentoParcela(cronogramaParcela)}
                               </span>
-                              <span className="flex items-center gap-1">
+                              <span className="hidden sm:flex items-center gap-1">
                                 <Phone className="w-3 h-3" />
                                 {participante.usuarioId.telefone}
                               </span>
                             </div>
                           </div>
 
-                          <div className="text-right hidden sm:block">
+                          <div className="text-right block">
                             <p className="text-xs text-gray-500">Valor a receber</p>
                             <p className="font-bold text-green-700">
                               {(() => {
@@ -1679,6 +1368,17 @@ export function CaixaDetalhes() {
                                 return formatCurrency(valor);
                               })()}
                             </p>
+                            {(() => {
+                              const usuarioId = (participante.usuarioId as any)?._id || participante.usuarioId;
+                              const pagosApi = todosPagamentos.filter((p: any) => {
+                                const s = String(p.status || '').toLowerCase();
+                                const pagador = p.pagadorId?._id || p.pagadorId;
+                                return String(pagador) === String(usuarioId) && ['aprovado','pago','paid','liquidated','settled'].includes(s);
+                              }).length;
+                              const localCount = Object.values(localPaidByMes).reduce((acc, set) => acc + (set.has(String(usuarioId)) ? 1 : 0), 0);
+                              const pagosTotal = pagosApi + localCount;
+                              return (<p className="text-xs font-semibold mt-0.5 text-green-700">PAGO {pagosTotal}/{caixa.qtdParticipantes}</p>);
+                            })()}
                           </div>
 
                           <ChevronRight className="w-5 h-5 text-gray-400 flex-shrink-0" />
@@ -2297,466 +1997,18 @@ export function CaixaDetalhes() {
         </div>
       </Modal>
 
-      {/* Modal Detalhes do Participante */}
-      <Modal
+      {/* Modal de Detalhes de Pagamento */}
+      <DetalhesPagamento
         isOpen={showParticipanteDetail}
         onClose={() => {
           setShowParticipanteDetail(false);
           setSelectedParticipante(null);
         }}
-        title="Detalhes de Pagamentos dos Participantes"
-        size="full"
-      >
-        {selectedParticipante && (
-          <div>
-            {/* Info do participante */}
-            <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-xl mb-4">
-              <Avatar
-                name={selectedParticipante.usuarioId.nome}
-                src={selectedParticipante.usuarioId.fotoUrl}
-                size="lg"
-              />
-              <div className="flex-1">
-                <p className="font-bold text-gray-900">{selectedParticipante.usuarioId.nome}</p>
-                <p className="text-sm text-gray-500">{selectedParticipante.usuarioId.email}</p>
-                <p className="text-sm text-gray-500">{selectedParticipante.usuarioId.telefone}</p>
-              </div>
-              <div className="text-right">
-                <p className="text-xs text-gray-500">Score</p>
-                <p className={cn(
-                  "text-2xl font-bold",
-                  selectedParticipante.usuarioId.score >= 80 ? "text-green-600" :
-                    selectedParticipante.usuarioId.score >= 60 ? "text-amber-600" : "text-red-600"
-                )}>
-                  {selectedParticipante.usuarioId.score}
-                </p>
-              </div>
-            </div>
-
-            {/* Info de recebimento */}
-            <div className="p-3 bg-amber-50 rounded-xl mb-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-amber-700 font-medium">Data de Recebimento</p>
-                  <p className="font-bold text-amber-800">
-                    {calcularDataRecebimento(selectedParticipante.posicao || 0)}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p className="text-xs text-amber-700 font-medium">Posição</p>
-                  <p className="font-bold text-amber-800">{selectedParticipante.posicao}º</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Lista de boletos */}
-            <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-              <FileText className="w-4 h-4" />
-              Boletos / Pagamentos
-              <Button
-                variant="secondary"
-                size="sm"
-                leftIcon={<RefreshCw className="w-4 h-4" />}
-                onClick={() => setRefreshTick((t) => t + 1)}
-                className="ml-auto"
-              >
-                Atualizar
-              </Button>
-            </h4>
-            <div className="space-y-2 max-h-[70vh] overflow-y-auto">
-              {calcularBoletos(selectedParticipante).map((boleto) => {
-                const cobranca = cobrancasPorMes[boleto.mes];
-                const lytexDetail = cobranca ? lytexPaymentDetails[cobranca.id] : null;
-                const statusNormalized = String(lytexDetail?.status || '').toLowerCase();
-                const isLytexPaid = ['paid', 'liquidated', 'settled', 'pago', 'inqueue'].includes(statusNormalized);
-
-                if (cobranca?.id === '693c90a76d1525df96fa1650') {
-                  console.log(`[DEBUG RENDER] ID ${cobranca.id}: Status=${lytexDetail?.status}, Norm=${statusNormalized}, IsPaid=${isLytexPaid}`);
-                }
-
-                const finalStatus = isLytexPaid ? 'pago' : boleto.status;
-                const isPago = finalStatus === 'pago';
-
-                return (
-                  <div
-                    key={boleto.mes}
-                    className={cn(
-                      "p-3 rounded-xl border",
-                      isPago ? "bg-green-50 border-green-200" :
-                        finalStatus === 'atrasado' ? "bg-red-50 border-red-200" :
-                          "bg-gray-50 border-gray-200"
-                    )}
-                  >
-                    <div
-                      className="flex items-center justify-between mb-2 cursor-pointer"
-                      onClick={() => {
-                        if (!isPago && caixa?.status === 'ativo') {
-                          const open = expandedMes === boleto.mes ? null : boleto.mes;
-                          setExpandedMes(open);
-                          if (open && !cobrancasPorMes[boleto.mes] && !gerandoCobranca) {
-                            handleGerarCobranca(boleto);
-                          }
-                        }
-                      }}
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold">{caixa.tipo === 'semanal' ? 'Semana' : 'Mês'} {boleto.mes}</span>
-                        <Badge
-                          variant={isPago ? 'success' : finalStatus === 'atrasado' ? 'danger' : 'warning'}
-                          className={isPago ? 'bg-green-100 text-green-800' : ''}
-                          size="sm"
-                        >
-                          {isPago ? 'PAGO' : finalStatus === 'atrasado' ? 'Atrasado' : 'Aguardando Pagamento'}
-                        </Badge>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-gray-900">
-                          {formatCurrency(boleto.valorTotal)}
-                        </span>
-                        {!isPago && caixa?.status === 'ativo' && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setExpandedMes(expandedMes === boleto.mes ? null : boleto.mes);
-                            }}
-                            className="p-1 rounded-lg hover:bg-gray-100"
-                          >
-                            <ChevronRight className={cn("w-4 h-4 text-gray-500 transition-transform", expandedMes === boleto.mes && "rotate-90")} />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                    {cobranca?.id && (
-                      <div className="text-xs text-gray-500 font-mono mb-1">
-                        ID: {cobranca.id}
-                      </div>
-                    )}
-                    <div className="text-xs text-gray-600">Vencimento: {formatDate(boleto.dataVencimento)}</div>
-
-                    {!isPago && caixa?.status === 'ativo' && expandedMes === boleto.mes && (
-                      <div className="mt-3">
-                        <div className="text-sm text-gray-700 space-y-1 mb-3">
-                          <div className="flex justify-between">
-                            <span>Valor da parcela</span>
-                            <span className="font-medium">{formatCurrency(boleto.valorParcela)}</span>
-                          </div>
-                          {boleto.fundoReserva > 0 && (
-                            <div className="flex justify-between">
-                              <span>Fundo de reserva</span>
-                              <span className="font-medium">{formatCurrency(boleto.fundoReserva)}</span>
-                            </div>
-                          )}
-                          <div className="flex justify-between">
-                            <span>Taxa de serviço</span>
-                            <span className="font-medium">{formatCurrency(TAXA_SERVICO)}</span>
-                          </div>
-
-                          {boleto.correcaoIPCA > 0 && (
-                            <div className="flex justify-between">
-                              <span>IPCA</span>
-                              <span className="font-medium">{formatCurrency(boleto.correcaoIPCA)}</span>
-                            </div>
-                          )}
-                          {boleto.comissaoAdmin > 0 && (
-                            <div className="flex justify-between">
-                              <span>Comissão do administrador (10%)</span>
-                              <span className="font-medium">{formatCurrency(boleto.comissaoAdmin)}</span>
-                            </div>
-                          )}
-                        </div>
-                        <div className="flex gap-1 p-1 bg-gray-100 rounded-xl mb-3">
-                          <button
-                            onClick={() => {
-                              setPaymentTab('pix');
-                            }}
-                            className={cn('flex-1 px-3 py-2 rounded-lg text-sm font-medium', paymentTab === 'pix' ? 'bg-white text-green-600 shadow-sm' : 'text-gray-600 hover:text-gray-800')}
-                          >
-                            PIX
-                          </button>
-                          <button
-                            onClick={() => {
-                              setPaymentTab('boleto');
-                            }}
-                            className={cn('flex-1 px-3 py-2 rounded-lg text-sm font-medium', paymentTab === 'boleto' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600 hover:text-gray-800')}
-                          >
-                            Boleto
-                          </button>
-                        </div>
-
-                        {!cobrancasPorMes[boleto.mes] ? (
-                          <Button
-                            variant="primary"
-                            size="sm"
-                            className="w-full"
-                            onClick={() => handleGerarCobranca(boleto)}
-                            disabled={gerandoCobranca}
-                            leftIcon={gerandoCobranca && boletoSelecionado === boleto.mes ?
-                              <Loader2 className="w-4 h-4 animate-spin" /> :
-                              <QrCode className="w-4 h-4" />
-                            }
-                          >
-                            {gerandoCobranca && boletoSelecionado === boleto.mes ? 'Gerando...' : 'Gerar cobrança'}
-                          </Button>
-                        ) : paymentTab === 'pix' ? (
-                          <div className="space-y-3">
-                            {cobrancasPorMes[boleto.mes].pixGeneratedAt && (
-                              <div className="text-xs text-gray-500 text-center">
-                                PIX gerado há {minutesSince(cobrancasPorMes[boleto.mes].pixGeneratedAt)} min
-                              </div>
-                            )}
-                            <div className="flex justify-center">
-                              {cobrancasPorMes[boleto.mes].pix?.copiaCola ? (
-                                <div className="bg-white p-3 rounded-lg border border-gray-200">
-                                  <QRCode value={cobrancasPorMes[boleto.mes].pix!.copiaCola} size={176} />
-                                </div>
-                              ) : (
-                                <div className="w-44 h-44 bg-gray-100 rounded-lg flex items-center justify-center">
-                                  <QrCode className="w-20 h-20 text-gray-400" />
-                                </div>
-                              )}
-                            </div>
-                            <div className="space-y-2">
-                              <label className="text-sm font-medium text-gray-700">Código PIX</label>
-                              <div className="flex gap-2">
-                                <input
-                                  type="text"
-                                  readOnly
-                                  value={cobrancasPorMes[boleto.mes].pix?.copiaCola || ''}
-                                  className="flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-mono text-gray-600 truncate"
-                                />
-                                <Button
-                                  variant={copiedPix ? 'primary' : 'secondary'}
-                                  size="sm"
-                                  onClick={() => handleCopyPixMes(boleto.mes)}
-                                  leftIcon={copiedPix ? <CheckCircle2 className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                                  className={copiedPix ? 'bg-green-500 hover:bg-green-600' : ''}
-                                >
-                                  {copiedPix ? 'Copiado!' : 'Copiar'}
-                                </Button>
-                                <Button
-                                  variant="secondary"
-                                  size="sm"
-                                  onClick={() => handlePrintPixMes(boleto.mes)}
-                                  leftIcon={<Printer className="w-4 h-4" />}
-                                >
-                                  Imprimir
-                                </Button>
-                                {cobrancasPorMes[boleto.mes].paymentUrl && (
-                                  <Button
-                                    variant="secondary"
-                                    size="sm"
-                                    onClick={() => window.open(cobrancasPorMes[boleto.mes].paymentUrl!, '_blank')}
-                                    leftIcon={<ExternalLink className="w-4 h-4" />}
-                                  >
-                                    Abrir Checkout
-                                  </Button>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="space-y-3">
-                            <div className="space-y-2">
-                              <label className="text-sm font-medium text-gray-700">Linha Digitável</label>
-                              <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
-                                <p className="text-sm font-mono text-gray-600 break-all">
-                                  {formatLinhaDigitavel(cobrancasPorMes[boleto.mes].boleto?.linhaDigitavel || '')}
-                                </p>
-                              </div>
-                            </div>
-                            {cobrancasPorMes[boleto.mes].boleto?.codigoBarras && (
-                              <div className="space-y-2">
-                                <label className="text-sm font-medium text-gray-700">Código de Barras</label>
-                                <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
-                                  <p className="text-sm font-mono text-gray-600 break-all">
-                                    {cobrancasPorMes[boleto.mes].boleto?.codigoBarras}
-                                  </p>
-                                </div>
-                                <div className="flex justify-center mt-2">
-                                  <Barcode
-                                    value={cobrancasPorMes[boleto.mes].boleto?.codigoBarras || ''}
-                                    format="CODE128"
-                                    width={2}
-                                    height={50}
-                                  />
-                                </div>
-                              </div>
-                            )}
-                            <div className="flex gap-2">
-                              <Button
-                                variant={copiedBoleto ? 'primary' : 'secondary'}
-                                size="sm"
-                                onClick={() => handleCopyBoletoMes(boleto.mes)}
-                                leftIcon={copiedBoleto ? <CheckCircle2 className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                                className={copiedBoleto ? 'bg-green-500 hover:bg-green-600' : ''}
-                              >
-                                {copiedBoleto ? 'Copiado!' : 'Copiar linha'}
-                              </Button>
-                              <Button
-                                variant="secondary"
-                                size="sm"
-                                onClick={() => handlePrintBoletoMes(boleto.mes)}
-                                leftIcon={<Printer className="w-4 h-4" />}
-                              >
-                                Imprimir
-                              </Button>
-                              {cobrancasPorMes[boleto.mes].boleto?.url && (
-                                <Button
-                                  variant="primary"
-                                  size="sm"
-                                  onClick={() => window.open(cobrancasPorMes[boleto.mes].boleto!.url, '_blank')}
-                                  leftIcon={<ExternalLink className="w-4 h-4" />}
-                                >
-                                  Ver boleto
-                                </Button>
-                              )}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Remoção opcional: deixar apenas o X para fechar */}
-          </div>
-        )}
-      </Modal>
-
-      {/* Modal de Cobrança PIX/Boleto */}
-      <Modal
-        isOpen={showCobranca}
-        onClose={() => {
-          setShowCobranca(false);
-          setCobrancaGerada(null);
-        }}
-        title="Pagamento"
-        size="lg"
-      >
-        {cobrancaGerada && (
-          <div className="space-y-6">
-            {/* Info da cobrança */}
-            <div className="p-4 bg-green-50 rounded-xl border border-green-200">
-              <p className="text-sm text-green-700 font-medium mb-1">{cobrancaGerada.descricao}</p>
-              <p className="text-3xl font-bold text-green-800">
-                {formatCurrency(cobrancaGerada.valor)}
-              </p>
-            </div>
-
-            {/* Tabs PIX / Boleto */}
-            <div className="space-y-4">
-              {/* PIX */}
-              {cobrancaGerada.pix && (
-                <div className="border border-gray-200 rounded-xl p-4">
-                  <div className="flex items-center gap-2 mb-4">
-                    <QrCode className="w-5 h-5 text-green-600" />
-                    <h3 className="font-semibold text-gray-900">Pagar com PIX</h3>
-                    {cobrancaGerada?.pixGeneratedAt && (
-                      <span className="ml-auto text-xs text-gray-500">
-                        PIX gerado há {minutesSince(cobrancaGerada.pixGeneratedAt)} min
-                      </span>
-                    )}
-                  </div>
-
-                  {/* QR Code */}
-                  <div className="flex justify-center mb-4">
-                    {cobrancaGerada.pix.qrCode.startsWith('data:') ? (
-                      <img
-                        src={cobrancaGerada.pix.qrCode}
-                        alt="QR Code PIX"
-                        className="w-48 h-48 border border-gray-200 rounded-lg"
-                      />
-                    ) : (
-                      <div className="w-48 h-48 bg-gray-100 rounded-lg flex items-center justify-center">
-                        <QrCode className="w-24 h-24 text-gray-400" />
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Código Copia e Cola */}
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700">Código PIX (Copia e Cola)</label>
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        value={cobrancaGerada.pix.copiaCola}
-                        readOnly
-                        className="flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-mono text-gray-600 truncate"
-                      />
-                      <Button
-                        variant={copiedPix ? 'primary' : 'secondary'}
-                        size="sm"
-                        onClick={handleCopyPix}
-                        leftIcon={copiedPix ? <CheckCircle2 className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                        className={copiedPix ? 'bg-green-500 hover:bg-green-600' : ''}
-                      >
-                        {copiedPix ? 'Copiado!' : 'Copiar'}
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Boleto */}
-              {cobrancaGerada.boleto && (
-                <div className="border border-gray-200 rounded-xl p-4">
-                  <div className="flex items-center gap-2 mb-4">
-                    <FileText className="w-5 h-5 text-blue-600" />
-                    <h3 className="font-semibold text-gray-900">Pagar com Boleto</h3>
-                  </div>
-
-                  {/* Código de barras */}
-                  <div className="space-y-2 mb-4">
-                    <label className="text-sm font-medium text-gray-700">Linha Digitável</label>
-                    <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
-                      <p className="text-sm font-mono text-gray-600 break-all">
-                        {formatLinhaDigitavel(cobrancaGerada.boleto.linhaDigitavel)}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Botão para abrir boleto */}
-                  {cobrancaGerada.boleto.url && (
-                    <Button
-                      variant="primary"
-                      className="w-full"
-                      onClick={() => window.open(cobrancaGerada.boleto?.url, '_blank')}
-                      leftIcon={<ExternalLink className="w-4 h-4" />}
-                    >
-                      Ver Boleto Completo
-                    </Button>
-                  )}
-                </div>
-              )}
-
-              {/* Link de pagamento */}
-              {cobrancaGerada.paymentUrl && (
-                <Button
-                  variant="secondary"
-                  className="w-full"
-                  onClick={() => window.open(cobrancaGerada.paymentUrl, '_blank')}
-                  leftIcon={<ExternalLink className="w-4 h-4" />}
-                >
-                  Abrir Página de Pagamento
-                </Button>
-              )}
-            </div>
-
-            <Button
-              variant="secondary"
-              className="w-full"
-              onClick={() => {
-                setShowCobranca(false);
-                setCobrancaGerada(null);
-              }}
-            >
-              Fechar
-            </Button>
-          </div>
-        )}
-      </Modal>
+        caixa={caixa}
+        participante={selectedParticipante}
+        onRefreshPagamentos={loadPagamentos}
+        onPaidUpdate={markPaid}
+      />
     </div>
   );
 }
