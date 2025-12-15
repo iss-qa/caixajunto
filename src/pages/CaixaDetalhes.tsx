@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence, Reorder } from 'framer-motion';
 import {
@@ -124,7 +124,6 @@ type CobrancaInfo = {
 
 const tabs = [
   { id: 'participantes', label: 'Participantes', icon: Users },
-  { id: 'pagamentos', label: 'Pagamentos', icon: Wallet },
   { id: 'configuracoes', label: 'Configurações', icon: Settings },
 ];
 
@@ -165,7 +164,7 @@ export function CaixaDetalhes() {
     valorTotal: 5000,
     qtdParticipantes: 10,
     duracaoMeses: 10,
-    dataVencimento: '', // Data completa de vencimento da primeira parcela
+    dataVencimento: '',
   });
   const [showIniciarCaixa, setShowIniciarCaixa] = useState(false);
   const [aceiteContrato, setAceiteContrato] = useState(false);
@@ -185,6 +184,98 @@ export function CaixaDetalhes() {
     });
   };
   const [cronogramaParcela, setCronogramaParcela] = useState<number>(1);
+
+  // ============================================================================
+  // MELHORIAS ADICIONADAS
+  // ============================================================================
+
+  // MELHORIA 2: Verificação de pagamento por participante/mês
+  const verificarPagamento = useCallback((usuarioId: string, participanteId: string, mes: number) => {
+    const statusValidos = ['aprovado', 'pago', 'paid', 'liquidated', 'settled', 'inqueue'];
+
+    // Verificar cache local (atualização otimista)
+    // localPaidByMes armazena o ID do Participante (não do Usuário)
+    const localSet = localPaidByMes[mes];
+    if (localSet && localSet.has(String(participanteId))) {
+      return true;
+    }
+
+    return todosPagamentos.some(p => {
+      const pagadorId = p.pagadorId?._id || p.pagadorId;
+      const status = String(p.status || '').toLowerCase();
+
+      return (
+        String(pagadorId) === String(usuarioId) &&
+        p.mesReferencia === mes &&
+        statusValidos.includes(status)
+      );
+    });
+  }, [todosPagamentos, localPaidByMes]);
+
+  // MELHORIA 1: Cálculo de progresso otimizado
+  const { progressoPercentual, pagamentosRealizados, totalPagamentosNecessarios } = useMemo(() => {
+    if (!caixa) return { progressoPercentual: 0, pagamentosRealizados: 0, totalPagamentosNecessarios: 0 };
+
+    // Total necessário = participantes × duração
+    const total = caixa.qtdParticipantes * caixa.duracaoMeses;
+
+    // Contar pagamentos realizados verificando status consolidado (Local + Remoto)
+    let realizados = 0;
+    
+    if (participantes.length > 0) {
+      participantes.forEach(p => {
+        const usuarioId = p.usuarioId?._id || p.usuarioId;
+        const participanteId = p._id;
+        
+        // Verificar cada mês possível
+        for (let mes = 1; mes <= caixa.duracaoMeses; mes++) {
+          if (verificarPagamento(String(usuarioId), String(participanteId), mes)) {
+            realizados++;
+          }
+        }
+      });
+    } else {
+      // Fallback se não houver participantes carregados (usa apenas todosPagamentos)
+      const statusValidos = ['aprovado', 'pago', 'paid', 'liquidated', 'settled', 'inqueue'];
+      realizados = todosPagamentos.filter(p =>
+        statusValidos.includes(String(p.status || '').toLowerCase())
+      ).length;
+    }
+
+    // Calcular percentual
+    const percentual = total > 0 ? Math.round((realizados / total) * 100) : 0;
+
+    return {
+      progressoPercentual: percentual,
+      pagamentosRealizados: realizados,
+      totalPagamentosNecessarios: total
+    };
+  }, [caixa, participantes, todosPagamentos, verificarPagamento]);
+
+  // MELHORIA 3: Status consolidado do participante
+  const obterStatusParticipante = useCallback((participante: Participante, mes: number) => {
+    const usuarioId = participante.usuarioId?._id || participante.usuarioId;
+    const participanteId = participante._id;
+    const isPago = verificarPagamento(String(usuarioId), String(participanteId), mes);
+
+    if (!caixa) return { isPago: false, isAtrasado: false, isVenceHoje: false };
+
+    const dataBase = new Date(caixa.dataInicio || new Date());
+    const dataVencimento = new Date(dataBase);
+
+    if (caixa.tipo === 'semanal') {
+      dataVencimento.setDate(dataVencimento.getDate() + ((mes - 1) * 7));
+    } else {
+      dataVencimento.setMonth(dataVencimento.getMonth() + mes - 1);
+      dataVencimento.setDate(caixa.diaVencimento);
+    }
+
+    const hoje = new Date();
+    const vencHoje = dataVencimento.toDateString() === hoje.toDateString();
+    const atrasado = caixa.status === 'ativo' && !isPago && dataVencimento < hoje;
+
+    return { isPago, isAtrasado: atrasado, isVenceHoje: vencHoje };
+  }, [caixa, verificarPagamento]);
 
   // Calcular data mínima de vencimento (hoje + 5 dias)
   const getMinDataVencimento = () => {
@@ -221,6 +312,89 @@ export function CaixaDetalhes() {
     }
   };
 
+  // Sincronização de pagamentos (Gateway Check) reaproveitando lógica do modal
+  const syncPaymentsForParticipantes = async (lista: Participante[]) => {
+    if (!id || !lista.length) return;
+
+    const promises = lista.map(async (p) => {
+      try {
+        const response = await cobrancasService.getAllByAssociacao({
+          caixaId: id,
+          participanteId: p._id,
+        });
+
+        const cobrancas = response?.cobrancas || [];
+        const cobrancasPorMes = new Map<number, any[]>();
+
+        for (const c of cobrancas) {
+          const mes = c.mesReferencia;
+          if (!mes) continue;
+          if (!cobrancasPorMes.has(mes)) {
+            cobrancasPorMes.set(mes, []);
+          }
+          cobrancasPorMes.get(mes)!.push(c);
+        }
+
+        const tarefasMes: Promise<void>[] = [];
+
+        for (const [mes, candidatos] of cobrancasPorMes.entries()) {
+          const tarefa = (async () => {
+            try {
+              const resultados = await Promise.allSettled(
+                candidatos.map(async (c: any) => {
+                  if (!c.lytexId) {
+                    const statusLocal = String(c.status || '').toLowerCase();
+                    const pagos = ['pago', 'paid', 'liquidated', 'settled', 'aprovado', 'inqueue'];
+                    if (pagos.includes(statusLocal)) {
+                      markPaid(mes, p._id);
+                    }
+                    return null;
+                  }
+
+                  try {
+                    const [invoiceResp, detailResp] = await Promise.all([
+                      cobrancasService.buscar(c.lytexId, {
+                        caixaId: id,
+                        participanteId: p._id,
+                        mes,
+                      }),
+                      cobrancasService.paymentDetail(c.lytexId),
+                    ]);
+
+                    const invoice = invoiceResp?.cobranca || invoiceResp || {};
+                    const detail = detailResp?.paymentDetail || detailResp?.detail || detailResp || {};
+
+                    const statusRaw = String(invoice?.status || detail?.status || '').toLowerCase();
+                    const pagos = ['paid', 'liquidated', 'settled', 'pago', 'inqueue', 'aprovado'];
+
+                    if (pagos.includes(statusRaw)) {
+                      markPaid(mes, p._id);
+                    }
+
+                    return null;
+                  } catch {
+                    return null;
+                  }
+                }),
+              );
+
+              void resultados;
+            } catch {
+            }
+          })();
+
+          tarefasMes.push(tarefa);
+        }
+
+        await Promise.allSettled(tarefasMes);
+      } catch (e) {
+        console.error(`Erro ao sincronizar pagamentos do participante ${p.usuarioId?.nome}:`, e);
+      }
+    });
+
+    await Promise.allSettled(promises);
+  };
+
   useEffect(() => {
     if (id) {
       loadCaixa();
@@ -240,7 +414,7 @@ export function CaixaDetalhes() {
       const lista = Array.isArray(response) ? response : (response.data || []);
       setTodosPagamentos(lista);
 
-      // Atualizar pagamentosMes para compatibilidade (embora vamos usar todosPagamentos no dashboard)
+      // Atualizar pagamentosMes para compatibilidade
       if (caixa?.mesAtual) {
         setPagamentosMes(lista.filter((p: any) => p.mesReferencia === caixa.mesAtual));
       } else {
@@ -261,21 +435,14 @@ export function CaixaDetalhes() {
   useEffect(() => {
     // Atualizar resumo ao trocar aba do cronograma
     if (id) {
-      try { loadPagamentos(); } catch {}
+      try { loadPagamentos(); } catch { }
     }
   }, [cronogramaParcela]);
-
-  useEffect(() => {
-    // removido polling de caixa/mes
-  }, [caixa?._id, caixa?.mesAtual]);
-
-  
 
   const loadCaixa = async () => {
     try {
       const response = await caixasService.getById(id!);
       setCaixa(response);
-      // Calcular data de vencimento baseada no diaVencimento existente
       const dataVenc = new Date();
       if (response.diaVencimento) {
         dataVenc.setDate(response.diaVencimento);
@@ -337,24 +504,23 @@ export function CaixaDetalhes() {
     try {
       const response = await participantesService.getByCaixa(id!);
       if (response && response.length > 0) {
-        // Filtrar participantes válidos (com usuarioId não nulo)
         const participantesValidos = response.filter((p: Participante) =>
           p.usuarioId && p.usuarioId._id
         );
         setParticipantes(participantesValidos);
         saveParticipantes(participantesValidos);
+
+        // Sincronizar pagamentos assim que os participantes forem carregados
+        await syncPaymentsForParticipantes(participantesValidos);
       } else {
-        // Se não houver participantes, apenas limpar a lista
         setParticipantes([]);
       }
     } catch (error) {
       console.error('Erro ao carregar participantes:', error);
-      // Em caso de erro, apenas mostrar lista vazia
       setParticipantes([]);
     }
   };
 
-  
   const handleCopyCode = () => {
     if (caixa?.codigoConvite) {
       navigator.clipboard.writeText(caixa.codigoConvite);
@@ -400,7 +566,6 @@ export function CaixaDetalhes() {
       setAceiteContrato(false);
     } catch (error) {
       console.error('Erro ao iniciar caixa:', error);
-      // Mock: atualizar localmente
       if (caixa) {
         setCaixa({ ...caixa, status: 'ativo', mesAtual: 1, dataInicio: new Date().toISOString() });
       }
@@ -409,7 +574,6 @@ export function CaixaDetalhes() {
     }
   };
 
-  // Função para gerar datas de recebimento
   const gerarCronograma = () => {
     if (!caixa) return [];
 
@@ -468,7 +632,6 @@ export function CaixaDetalhes() {
     }
 
     try {
-      // Converter dataVencimento em diaVencimento para o backend
       const dataVenc = new Date(editForm.dataVencimento);
       const updateData = {
         ...editForm,
@@ -477,7 +640,6 @@ export function CaixaDetalhes() {
         valorParcela: editForm.valorTotal / editForm.qtdParticipantes,
       };
       await caixasService.update(id!, updateData);
-      // Atualizar localmente
       if (caixa) {
         setCaixa({
           ...caixa,
@@ -490,7 +652,6 @@ export function CaixaDetalhes() {
       setShowEditCaixa(false);
     } catch (error) {
       console.error('Erro ao atualizar:', error);
-      // Atualizar localmente mesmo com erro
       if (caixa) {
         const dataVenc = new Date(editForm.dataVencimento);
         setCaixa({
@@ -505,7 +666,6 @@ export function CaixaDetalhes() {
   };
 
   const handleDeleteCaixa = async () => {
-    // Não permitir excluir caixa ativo (exceto master)
     if (caixa?.status === 'ativo') {
       alert('Não é possível excluir um caixa ativo. Apenas administradores master podem realizar esta ação.');
       setShowDeleteConfirm(false);
@@ -527,7 +687,6 @@ export function CaixaDetalhes() {
       return;
     }
     try {
-      // Primeiro cria o usuário
       const usuario = await usuariosService.create({
         ...newParticipante,
         tipo: 'usuario',
@@ -538,7 +697,6 @@ export function CaixaDetalhes() {
         throw new Error('Erro ao criar usuário no servidor');
       }
 
-      // Depois adiciona como participante
       const participante = await participantesService.create({
         caixaId: id,
         usuarioId: usuario._id,
@@ -550,7 +708,6 @@ export function CaixaDetalhes() {
         throw new Error('Erro ao vincular participante ao caixa');
       }
 
-      // Sucesso - recarregar lista
       await loadParticipantes();
       setShowAddParticipante(false);
       setNewParticipante({ nome: '', email: '', telefone: '', cpf: '', chavePix: '', picture: '' });
@@ -568,15 +725,12 @@ export function CaixaDetalhes() {
     } catch (error) {
       console.error('Erro ao remover participante:', error);
     }
-    // Remover localmente
     const updatedParticipantes = participantes.filter(p => p._id !== participanteId);
     setParticipantes(updatedParticipantes);
     saveParticipantes(updatedParticipantes);
     setShowParticipanteDetail(false);
     setSelectedParticipante(null);
   };
-
-  
 
   const handleReorder = (newOrder: Participante[]) => {
     const updated = newOrder.map((p, idx) => ({ ...p, posicao: idx + 1 }));
@@ -596,9 +750,6 @@ export function CaixaDetalhes() {
     }
   };
 
-  // Calcular boletos do participante
-  // REGRA: Parcela = valorTotal / qtdParticipantes
-  // Número de parcelas = número de participantes
   const calcularBoletos = (participante: Participante): Boleto[] => {
     if (!caixa) return [];
 
@@ -607,8 +758,6 @@ export function CaixaDetalhes() {
     const isSemanal = caixa.tipo === 'semanal';
 
     const valorParcelaReal = caixa.valorTotal / caixa.qtdParticipantes;
-
-    // CORREÇÃO: Número de parcelas = número de participantes
     const numParcelas = caixa.qtdParticipantes;
 
     for (let parcela = 1; parcela <= numParcelas; parcela++) {
@@ -618,15 +767,12 @@ export function CaixaDetalhes() {
       } else {
         dataVencimento.setMonth(dataVencimento.getMonth() + parcela - 1);
       }
-      // Se diaVencimento é um dia do mês, ajustar
       if (!isSemanal && caixa.diaVencimento > 0) {
         dataVencimento.setDate(caixa.diaVencimento);
       }
 
       const correcaoIPCA = parcela > 1 ? valorParcelaReal * TAXA_IPCA_MENSAL : 0;
-
       const fundoReserva = parcela === 1 ? (valorParcelaReal / caixa.qtdParticipantes) : 0;
-
       const taxaAdmin = 0;
       const comissaoAdmin = parcela === numParcelas ? caixa.valorTotal * 0.10 : 0;
 
@@ -662,7 +808,6 @@ export function CaixaDetalhes() {
     return boletos;
   };
 
-  // Calcular data de recebimento
   const calcularDataRecebimento = (posicao: number): string => {
     if (!caixa?.dataInicio) return '-';
     const data = new Date(caixa.dataInicio);
@@ -822,7 +967,7 @@ export function CaixaDetalhes() {
           )}>
             <div className="flex items-start justify-between">
               <div>
-                <div className="flex items-center gap-2 mb-1">
+                <div className="flex items-center gap-2 mb-1 flex-wrap">
                   <h1 className="text-xl md:text-2xl font-bold">{caixa.nome}</h1>
                   {caixaIniciado && (
                     <Badge className="bg-white text-green-600">
@@ -830,16 +975,11 @@ export function CaixaDetalhes() {
                       Em andamento
                     </Badge>
                   )}
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-white text-sm font-medium capitalize">
-                    {caixa.tipo === 'semanal' ? 'Semanal' : 'Mensal'}
-                  </span>
-                  <span className="text-white/90 text-sm font-medium">
-                    {(caixa.tipo === 'semanal' ? 'Semana' : 'Mês')} {Math.max(1, caixa.mesAtual)}/{caixa.duracaoMeses}
+                  <span className="text-white/90 text-sm font-medium border-l border-white/30 pl-2 ml-1">
+                    Tipo de Caixa: {caixa.tipo === 'semanal' ? 'Semanal' : 'Mensal'}
                   </span>
                 </div>
-                <p className="text-white/80 text-sm">{caixa.descricao || 'Sem descrição'}</p>
+                <p className="text-white/80 text-sm mt-1">{caixa.descricao || 'Sem descrição'}</p>
               </div>
               <div className="flex items-center gap-2">
                 {caixaCompleto && !caixaIniciado && (
@@ -858,20 +998,29 @@ export function CaixaDetalhes() {
             </div>
 
             {/* Progress */}
-            <div className="mt-4">
-              <div className="flex justify-between text-sm mb-1">
-                <span className="text-white/80">Progresso</span>
-                <span className="font-medium">
-                  {Math.round((caixa.mesAtual / caixa.duracaoMeses) * 100)}%
-                </span>
+            <div className="mt-6">
+              <div className="flex justify-between items-end mb-2">
+                <div className="flex flex-col">
+                  <span className="text-white/90 font-medium text-lg">{progressoPercentual}%</span>
+                  <span className="text-white/70 text-xs">Concluído</span>
+                </div>
+                <div className="text-right">
+                  <span className="text-white/90 font-medium text-lg">{pagamentosRealizados}</span>
+                  <span className="text-white/70 text-xs ml-1">pagamentos</span>
+                </div>
               </div>
-              <div className="h-2 bg-white/20 rounded-full overflow-hidden">
+
+              <div className="h-3 bg-black/20 rounded-full overflow-hidden backdrop-blur-sm">
                 <motion.div
                   initial={{ width: 0 }}
-                  animate={{ width: `${(caixa.mesAtual / caixa.duracaoMeses) * 100}%` }}
-                  transition={{ duration: 0.5 }}
-                  className="h-full bg-white rounded-full"
+                  animate={{ width: `${progressoPercentual}%` }}
+                  transition={{ duration: 0.8, ease: "easeOut" }}
+                  className="h-full bg-white rounded-full shadow-[0_0_10px_rgba(255,255,255,0.5)]"
                 />
+              </div>
+
+              <div className="flex justify-end mt-1">
+                <span className="text-white/60 text-xs">Meta: {totalPagamentosNecessarios} pagamentos</span>
               </div>
             </div>
           </div>
@@ -1263,129 +1412,117 @@ export function CaixaDetalhes() {
                       );
                     })}
                   </div>
-                  {participantes.map((participante, index) => (
-                    <motion.div
-                      key={participante._id}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: index * 0.05 }}
-                    >
-                      <Card
-                        hover
-                        onClick={() => {
-                          setSelectedParticipante(participante);
-                          setShowParticipanteDetail(true);
-                        }}
-                        className={cn(() => {
-                          const pagamentosSel = todosPagamentos.filter((p: any) => p.mesReferencia === cronogramaParcela);
-                          const usuarioId = (participante.usuarioId as any)?._id || participante.usuarioId;
-                          const paidApi = pagamentosSel.some((p: any) => {
-                            const s = String(p.status || '').toLowerCase();
-                            const pagador = p.pagadorId?._id || p.pagadorId;
-                            return String(pagador) === String(usuarioId) && ['aprovado','pago','paid','liquidated','settled'].includes(s);
-                          });
-                          const paidLocal = (localPaidByMes[cronogramaParcela] || new Set<string>()).has(String(usuarioId));
-                          const paid = paidApi || paidLocal;
-                          return paid ? 'ring-2 ring-green-300 bg-green-50/70' : (participante.posicao === caixa.mesAtual ? 'ring-2 ring-green-400 bg-green-50/50' : '');
-                        })}
+                  {participantes.map((participante, index) => {
+                    const { isPago, isAtrasado, isVenceHoje } = obterStatusParticipante(participante, cronogramaParcela);
+
+                    return (
+                      <motion.div
+                        key={participante._id}
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: index * 0.05 }}
                       >
-                        <div className="flex items-center gap-3">
-                          {/* Posição */}
-                          <div className={cn(
-                            'w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm',
-                            participante.jaRecebeu
-                              ? 'bg-green-100 text-green-700'
+                        <Card
+                          hover
+                          onClick={() => {
+                            setSelectedParticipante(participante);
+                            setShowParticipanteDetail(true);
+                          }}
+                          className={cn(
+                            "transition-all",
+                            isPago
+                              ? 'ring-2 ring-blue-500 bg-blue-50'  // ← AZUL quando PAGO
                               : participante.posicao === caixa.mesAtual
-                                ? 'bg-amber-100 text-amber-700'
-                                : 'bg-gray-100 text-gray-500'
-                          )}>
-                            {participante.posicao || '-'}
-                          </div>
+                              ? 'ring-2 ring-green-400 bg-green-50/50'
+                              : ''
+                          )}
+                        >
+                          <div className="flex items-center gap-3">
+                            {/* Posição */}
+                            <div className={cn(
+                              'w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm',
+                              isPago
+                                ? 'bg-blue-500 text-white'  // ← AZUL quando PAGO
+                                : participante.posicao === caixa.mesAtual
+                                  ? 'bg-amber-100 text-amber-700'
+                                  : 'bg-gray-100 text-gray-500'
+                            )}>
+                              {participante.posicao || '-'}
+                            </div>
 
-                          {/* Avatar */}
-                          <Avatar
-                            name={participante?.usuarioId?.nome || 'Sem nome'}
-                            src={participante?.usuarioId?.fotoUrl}
-                            size="md"
-                          />
+                            <Avatar
+                              name={participante?.usuarioId?.nome || 'Sem nome'}
+                              src={participante?.usuarioId?.fotoUrl}
+                              size="md"
+                            />
 
-                          {/* Info */}
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <p className="font-semibold text-gray-900 truncate">
-                                {participante?.usuarioId?.nome || 'Sem nome'}
-                              </p>
-                              {(() => {
-                                const vencISO = (() => {
-                                  const d = new Date(caixa.dataInicio || new Date().toISOString());
-                                  if (caixa.tipo === 'semanal') {
-                                    d.setDate(d.getDate() + ((cronogramaParcela - 1) * 7));
-                                  } else {
-                                    d.setMonth(d.getMonth() + cronogramaParcela - 1);
-                                    d.setDate(caixa.diaVencimento);
-                                  }
-                                  return d.toISOString();
-                                })();
-                                const pagamentosSel = todosPagamentos.filter((p: any) => p.mesReferencia === cronogramaParcela);
-                                const isPagoApi = pagamentosSel.some((p: any) => {
-                                  const s = String(p.status || '').toLowerCase();
-                                  const pagador = p.pagadorId?._id || p.pagadorId;
-                                  const usuarioId = (participante.usuarioId as any)?._id || participante.usuarioId;
-                                  return String(pagador) === String(usuarioId) && ['aprovado', 'pago', 'paid', 'liquidated', 'settled'].includes(s);
-                                });
-                                const isPagoLocal = (localPaidByMes[cronogramaParcela] || new Set<string>()).has(String((participante.usuarioId as any)?._id || participante.usuarioId));
-                                const isPago = isPagoApi || isPagoLocal;
-                                const st = getStatusVencimento(vencISO, isPago);
-                                return (
-                                  <Badge variant={st.variant} size="sm">
-                                    {st.label}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <p className="font-semibold text-gray-900 truncate">
+                                  {participante?.usuarioId?.nome || 'Sem nome'}
+                                </p>
+
+                                {/* ← BADGES EM DIA + PAGO */}
+                                {isPago ? (
+                                  <>
+                                    <Badge variant="success" size="sm" className="bg-white text-green-700 border border-green-200 shadow-sm">
+                                      EM DIA
+                                    </Badge>
+                                    <Badge variant="success" size="sm" className="bg-blue-500 text-white shadow-sm">
+                                      <CheckCircle2 className="w-3 h-3 mr-1" />
+                                      PAGO
+                                    </Badge>
+                                  </>
+                                ) : isAtrasado ? (
+                                  <Badge variant="danger" size="sm">
+                                    <AlertTriangle className="w-3 h-3 mr-1" />
+                                    ATRASADO
                                   </Badge>
-                                );
-                              })()}
-                            </div>
-                            <div className="flex items-center gap-3 text-sm text-gray-500 mt-1">
-                              <span className="flex items-center gap-1">
-                                <Calendar className="w-3 h-3" />
-                                {getDataVencimentoParcela(cronogramaParcela)}
-                              </span>
-                              <span className="hidden sm:flex items-center gap-1">
-                                <Phone className="w-3 h-3" />
-                                {participante.usuarioId.telefone}
-                              </span>
-                            </div>
-                          </div>
+                                ) : isVenceHoje ? (
+                                  <Badge variant="warning" size="sm">
+                                    <Clock className="w-3 h-3 mr-1" />
+                                    VENCE HOJE
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="success" size="sm" className="bg-white text-green-700 border border-green-200 shadow-sm">
+                                    EM DIA
+                                  </Badge>
+                                )}
+                              </div>
 
-                          <div className="text-right block">
-                            <p className="text-xs text-gray-500">Valor a receber</p>
-                            <p className="font-bold text-green-700">
-                              {(() => {
-                                const atual = Math.max(1, caixa.mesAtual);
-                                const pos = participante.posicao || 1;
-                                const diff = Math.max(0, pos - atual);
-                                const ipcaUnit = caixa.valorParcela * TAXA_IPCA_MENSAL;
-                                const ipcaTotal = diff * ipcaUnit;
-                                const valor = caixa.valorTotal + ipcaTotal;
-                                return formatCurrency(valor);
-                              })()}
-                            </p>
-                            {(() => {
-                              const usuarioId = (participante.usuarioId as any)?._id || participante.usuarioId;
-                              const pagosApi = todosPagamentos.filter((p: any) => {
-                                const s = String(p.status || '').toLowerCase();
-                                const pagador = p.pagadorId?._id || p.pagadorId;
-                                return String(pagador) === String(usuarioId) && ['aprovado','pago','paid','liquidated','settled'].includes(s);
-                              }).length;
-                              const localCount = Object.values(localPaidByMes).reduce((acc, set) => acc + (set.has(String(usuarioId)) ? 1 : 0), 0);
-                              const pagosTotal = pagosApi + localCount;
-                              return (<p className="text-xs font-semibold mt-0.5 text-green-700">PAGO {pagosTotal}/{caixa.qtdParticipantes}</p>);
-                            })()}
-                          </div>
+                              <div className="flex items-center gap-3 text-sm text-gray-500 mt-1">
+                                <span className="flex items-center gap-1">
+                                  <Calendar className="w-3 h-3" />
+                                  {getDataVencimentoParcela(cronogramaParcela)}
+                                </span>
+                                <span className="hidden sm:flex items-center gap-1">
+                                  <Phone className="w-3 h-3" />
+                                  {participante.usuarioId.telefone}
+                                </span>
+                              </div>
+                            </div>
 
-                          <ChevronRight className="w-5 h-5 text-gray-400 flex-shrink-0" />
-                        </div>
-                      </Card>
-                    </motion.div>
-                  ))}
+                            <div className="text-right block">
+                              <p className="text-xs text-gray-500">Valor a receber</p>
+                              <p className="font-bold text-green-700">
+                                {(() => {
+                                  const atual = Math.max(1, caixa.mesAtual);
+                                  const pos = participante.posicao || 1;
+                                  const diff = Math.max(0, pos - atual);
+                                  const ipcaUnit = caixa.valorParcela * TAXA_IPCA_MENSAL;
+                                  const ipcaTotal = diff * ipcaUnit;
+                                  const valor = caixa.valorTotal + ipcaTotal;
+                                  return formatCurrency(valor);
+                                })()}
+                              </p>
+                            </div>
+
+                            <ChevronRight className="w-5 h-5 text-gray-400 flex-shrink-0" />
+                          </div>
+                        </Card>
+                      </motion.div>
+                    );
+                  })}
                 </div>
               )
             ) : (
@@ -1397,18 +1534,8 @@ export function CaixaDetalhes() {
                 onAction={() => setShowAddParticipante(true)}
               />
             )}
-          </motion.div>
-        )}
 
-        {activeTab === 'pagamentos' && (
-          <motion.div
-            key="pagamentos"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-          >
-            {/* Legenda de valores */}
-            <Card className="mb-4 bg-blue-50 border-blue-200">
+            <Card className="mt-6 mb-4 bg-blue-50 border-blue-200">
               <h4 className="font-semibold text-blue-800 mb-2">Composição do Boleto</h4>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
                 <div>
@@ -1463,51 +1590,10 @@ export function CaixaDetalhes() {
                 </div>
               </div>
             </Card>
-
-            {participantes.length > 0 ? (
-              <div className="space-y-3">
-                {participantes.map((p, index) => {
-                  const boletos = calcularBoletos(p);
-                  return (
-                    <Card key={p._id}>
-                      <div
-                        className="flex items-center justify-between cursor-pointer"
-                        onClick={() => {
-                          setSelectedParticipante(p);
-                          setConfirmRemove(false);
-                          setShowParticipanteDetail(true);
-                        }}
-                      >
-                        <div className="flex items-center gap-3">
-                          <Avatar name={p.usuarioId.nome} src={p.usuarioId.fotoUrl} size="sm" />
-                          <div>
-                            <p className="font-medium text-gray-900">{p.usuarioId.nome}</p>
-                            <p className="text-sm text-gray-500">Posição {p.posicao}</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-4">
-                          <div className="text-right">
-                            <p className="text-xs text-gray-500">Pago</p>
-                            <p className="font-bold text-green-600">
-                              {boletos.filter(b => b.status === 'pago').length}/{caixa.duracaoMeses}
-                            </p>
-                          </div>
-                          <ChevronRight className="w-5 h-5 text-gray-400" />
-                        </div>
-                      </div>
-                    </Card>
-                  );
-                })}
-              </div>
-            ) : (
-              <EmptyState
-                icon={Wallet}
-                title="Nenhum pagamento"
-                description="Adicione participantes para visualizar os pagamentos."
-              />
-            )}
           </motion.div>
         )}
+
+
 
         {activeTab === 'configuracoes' && (
           <motion.div
