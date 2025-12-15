@@ -9,6 +9,8 @@ interface EmptyStateProps {
   description: string;
   actionLabel?: string;
   onAction?: () => void;
+  secondaryActionLabel?: string;
+  onSecondaryAction?: () => void;
 }
 
 export function EmptyState({
@@ -17,6 +19,8 @@ export function EmptyState({
   description,
   actionLabel,
   onAction,
+  secondaryActionLabel,
+  onSecondaryAction,
 }: EmptyStateProps) {
   return (
     <motion.div
@@ -29,12 +33,20 @@ export function EmptyState({
       </div>
       <h3 className="text-lg font-semibold text-gray-900 mb-1">{title}</h3>
       <p className="text-sm text-gray-500 max-w-xs mb-4">{description}</p>
-      {actionLabel && onAction && (
-        <Button onClick={onAction} variant="primary">
-          {actionLabel}
-        </Button>
-      )}
+      {(actionLabel && onAction) || (secondaryActionLabel && onSecondaryAction) ? (
+        <div className="flex flex-col sm:flex-row gap-3 w-full max-w-xs">
+          {actionLabel && onAction && (
+            <Button onClick={onAction} variant="primary" className="flex-1">
+              {actionLabel}
+            </Button>
+          )}
+          {secondaryActionLabel && onSecondaryAction && (
+            <Button onClick={onSecondaryAction} variant="secondary" className="flex-1">
+              {secondaryActionLabel}
+            </Button>
+          )}
+        </div>
+      ) : null}
     </motion.div>
   );
 }
-

@@ -5,17 +5,14 @@ import {
   Filter,
   CheckCircle2,
   Clock,
-  XCircle,
   Eye,
-  FileImage,
   Download,
-  ChevronRight,
   Calendar,
   Wallet,
   AlertTriangle,
   ChevronDown,
   ChevronUp,
-  Info,
+  DollarSign,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { pagamentosService, caixasService } from '../lib/api';
@@ -82,6 +79,11 @@ export function Pagamentos() {
   const [statusFilter, setStatusFilter] = useState('');
   const [selectedBoleto, setSelectedBoleto] = useState<Boleto | null>(null);
   const [showDetalheModal, setShowDetalheModal] = useState(false);
+  const [activeTab, setActiveTab] = useState<'recebimentos' | 'splits' | 'carteira'>('recebimentos');
+  const [periodFilter, setPeriodFilter] = useState<'mes_atual' | 'todos'>('mes_atual');
+  const [splitStatusFilter, setSplitStatusFilter] = useState('');
+  const [observacoes, setObservacoes] = useState<Record<string, string>>({});
+  const [splitsPagos, setSplitsPagos] = useState<Record<string, boolean>>({});
   const enviarComprovante = (boletoId: string) => {
     setCaixasComBoletos((prev) =>
       prev.map((caixa) => ({
@@ -217,131 +219,318 @@ export function Pagamentos() {
     atrasados: allBoletos.filter((b) => b.status === 'atrasado').length,
   };
 
+  // Helpers
+  const participantesPorCaixa = (c: CaixaComBoletos) => {
+    const m1 = c.boletos.filter((b) => b.mes === 1);
+    return m1.length;
+  };
+
+  const boletosMesAtual = allBoletos.filter((b) => {
+    const caixa = caixasComBoletos.find((c) => c._id === b.caixaId);
+    if (!caixa) return false;
+    return periodFilter === 'mes_atual' ? b.mes === caixa.mesAtual : true;
+  });
+
+  const proximoVencimento = (() => {
+    const futuros = boletosMesAtual.filter((b) => b.status !== 'pago').map((b) => new Date(b.dataVencimento));
+    if (futuros.length === 0) return null;
+    const min = futuros.reduce((acc, d) => (d < acc ? d : acc), futuros[0]);
+    return formatDate(min.toISOString());
+  })();
+
+  // Splits (10% da parcela)
+  const splits = boletosMesAtual.map((b) => ({
+    id: `${b._id}-split`,
+    participanteNome: b.participanteNome,
+    caixaNome: b.caixaNome,
+    valor: b.valorParcela * 0.10,
+    vencimento: b.dataVencimento,
+    status: splitsPagos[`${b._id}-split`] ? 'pago' : 'pendente',
+  })).filter((s) => (splitStatusFilter ? s.status === splitStatusFilter : true));
+
+  const splitsPendentes = splits.filter((s) => s.status === 'pendente').length;
+  const splitsRealizados = splits.filter((s) => s.status === 'pago').length;
+  const splitsTotalPago = splits.filter((s) => s.status === 'pago').reduce((sum, s) => sum + s.valor, 0);
+  const proximoPagamentoSplit = (() => {
+    const futuros = splits.filter((s) => s.status === 'pendente').map((s) => new Date(s.vencimento));
+    if (futuros.length === 0) return null;
+    const min = futuros.reduce((acc, d) => (d < acc ? d : acc), futuros[0]);
+    return formatDate(min.toISOString());
+  })();
+
+  const marcarSplitPago = (id: string) => {
+    setSplitsPagos((prev) => ({ ...prev, [id]: true }));
+  };
+
   return (
-    <div className="max-w-4xl mx-auto px-4 py-6">
-      {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Pagamentos</h1>
-        <p className="text-sm text-gray-500">
-          Visualize todos os boletos e pagamentos dos participantes
-        </p>
+    <div className="max-w-5xl mx-auto px-4 py-6">
+      {/* Top Bar */}
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <DollarSign className="w-5 h-5 text-green-600" />
+          <h1 className="text-2xl font-bold text-gray-900">Gestão Financeira</h1>
+        </div>
+        <Button variant="secondary" leftIcon={<Download className="w-4 h-4" />}>Exportar</Button>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-        <Card className="p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center">
-              <Clock className="w-5 h-5 text-amber-600" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-900">{estatisticas.pendentes}</p>
-              <p className="text-xs text-gray-500">Pendentes</p>
-            </div>
-          </div>
-        </Card>
-        <Card className="p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
-              <Eye className="w-5 h-5 text-blue-600" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-900">{estatisticas.aguardando}</p>
-              <p className="text-xs text-gray-500">Aguardando</p>
-            </div>
-          </div>
-        </Card>
-        <Card className="p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
-              <CheckCircle2 className="w-5 h-5 text-green-600" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-900">{estatisticas.pagos}</p>
-              <p className="text-xs text-gray-500">Pagos</p>
-            </div>
-          </div>
-        </Card>
-        <Card className="p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-red-100 rounded-xl flex items-center justify-center">
-              <AlertTriangle className="w-5 h-5 text-red-600" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-900">{estatisticas.atrasados}</p>
-              <p className="text-xs text-gray-500">Atrasados</p>
-            </div>
-          </div>
-        </Card>
+      {/* Tabs */}
+      <div className="flex items-center gap-2 mb-6">
+        <button
+          onClick={() => setActiveTab('recebimentos')}
+          className={cn('px-4 py-2 rounded-xl text-sm font-medium', activeTab === 'recebimentos' ? 'border border-blue-400 text-blue-700 bg-white' : 'bg-white text-gray-700 border border-gray-200')}
+        >
+          Recebimentos de Participantes
+        </button>
+        <button
+          onClick={() => setActiveTab('splits')}
+          className={cn('px-4 py-2 rounded-xl text-sm font-medium', activeTab === 'splits' ? 'border border-blue-400 text-blue-700 bg-white' : 'bg-white text-gray-700 border border-gray-200')}
+        >
+          Pagamentos de Pontos/Split
+        </button>
+        <button
+          onClick={() => setActiveTab('carteira')}
+          className={cn('px-4 py-2 rounded-xl text-sm font-medium', activeTab === 'carteira' ? 'border border-blue-400 text-blue-700 bg-white' : 'bg-white text-gray-700 border border-gray-200')}
+        >
+          Carteira
+        </button>
       </div>
 
-      {/* Legenda de valores */}
-      <Card className="mb-6 bg-blue-50 border-blue-200">
-        <div className="flex items-start gap-3">
-          <Info className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
-          <div>
-            <h4 className="font-semibold text-blue-800 mb-2">Composição do Boleto</h4>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
-              <div>
-                <span className="text-gray-600">Taxa serviço:</span>
-                <span className="font-medium text-gray-900 ml-1">{formatCurrency(TAXA_SERVICO)}/mês</span>
+      {activeTab === 'recebimentos' && (
+        <>
+          {/* Metrics */}
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+            <Card className="p-4">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600">Em Dia</span>
+                <CheckCircle2 className="w-4 h-4 text-green-600" />
               </div>
-              <div>
-                <span className="text-gray-600">Fundo reserva:</span>
-                <span className="font-medium text-gray-900 ml-1">{formatCurrency(FUNDO_RESERVA)} (1º mês)</span>
+              <p className="mt-2 text-lg font-bold text-green-700">{estatisticas.pagos}</p>
+            </Card>
+            <Card className="p-4">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600">Atrasados</span>
+                <AlertTriangle className="w-4 h-4 text-red-600" />
               </div>
-              <div>
-                <span className="text-gray-600">Taxa admin:</span>
-                <span className="font-medium text-gray-900 ml-1">{formatCurrency(TAXA_ADMIN)} (último)</span>
+              <p className="mt-2 text-lg font-bold text-red-700">{estatisticas.atrasados}</p>
+            </Card>
+            <Card className="p-4">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600">Aguardando</span>
+                <Eye className="w-4 h-4 text-blue-600" />
               </div>
-              <div>
-                <span className="text-gray-600">IPCA:</span>
-                <span className="font-medium text-gray-900 ml-1">{(TAXA_IPCA_MENSAL * 100).toFixed(2)}%/mês</span>
-              </div>
-            </div>
+              <p className="mt-2 text-lg font-bold text-blue-700">{estatisticas.aguardando}</p>
+            </Card>
+            <Card className="p-4">
+              <span className="text-sm text-gray-600">Total Mês</span>
+              <p className="mt-2 text-xl font-bold text-gray-900">{formatCurrency(boletosMesAtual.reduce((s,b)=>s+b.valorTotal,0))}</p>
+            </Card>
+            <Card className="p-4">
+              <span className="text-sm text-gray-600">Próximo Vencimento</span>
+              <p className="mt-2 text-base font-semibold text-gray-900">{proximoVencimento || '-'}</p>
+            </Card>
           </div>
-        </div>
-      </Card>
 
-      {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-3 mb-6">
-        <div className="flex-1">
-          <Input
-            placeholder="Buscar por nome ou caixa..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            leftIcon={<Search className="w-4 h-4" />}
-          />
-        </div>
-        <div className="flex gap-2 overflow-x-auto pb-2 sm:pb-0">
-          {statusFilters.map((filter) => (
-            <button
-              key={filter.value}
-              onClick={() => setStatusFilter(filter.value)}
-              className={cn(
-                'px-3 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-all flex items-center gap-1.5',
-                statusFilter === filter.value
-                  ? 'bg-green-500 text-white shadow-lg'
-                  : 'bg-white text-gray-600 border border-gray-200 hover:border-green-300'
-              )}
-              style={statusFilter === filter.value ? { boxShadow: '0 4px 14px rgba(34, 197, 94, 0.3)' } : {}}
+          {/* Filters */}
+          <div className="flex flex-col sm:flex-row gap-3 mb-6">
+            <div className="flex-1">
+              <Input
+                placeholder="Buscar participante..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                leftIcon={<Search className="w-4 h-4" />}
+              />
+            </div>
+            <select
+              className="px-3 py-2 rounded-xl border border-gray-200 text-sm"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
             >
-              <filter.icon className="w-4 h-4" />
-              {filter.label}
-            </button>
-          ))}
-        </div>
-      </div>
+              <option value="">Todos os Status</option>
+              <option value="pendente">Pendentes</option>
+              <option value="enviado">Aguardando</option>
+              <option value="pago">Pagos</option>
+              <option value="atrasado">Atrasados</option>
+            </select>
+            <select
+              className="px-3 py-2 rounded-xl border border-gray-200 text-sm"
+              value={periodFilter}
+              onChange={(e) => setPeriodFilter(e.target.value as 'mes_atual' | 'todos')}
+            >
+              <option value="mes_atual">Mês Atual</option>
+              <option value="todos">Todos os Meses</option>
+            </select>
+          </div>
 
-      {/* Caixas com Boletos */}
+          {/* Lista de recebimentos */}
+          <div className="space-y-3">
+            {boletosMesAtual.filter((b)=>{
+              if (statusFilter && b.status !== statusFilter) return false;
+              if (search && !b.participanteNome.toLowerCase().includes(search.toLowerCase())) return false;
+              return true;
+            }).map((boleto) => (
+              <Card key={boleto._id} className="p-3">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-gray-900">{boleto.participanteNome}</span>
+                      <Badge variant={getStatusBadge(boleto.status).variant} size="sm">
+                        {getStatusBadge(boleto.status).label}
+                      </Badge>
+                    </div>
+                    <p className="text-sm text-gray-600">Caixa: {boleto.caixaNome}</p>
+                    <p className="text-sm"><span className="text-gray-600">Valor:</span> <span className="text-green-700 font-semibold">{formatCurrency(boleto.valorTotal)}</span></p>
+                    <p className="text-sm text-gray-600">Vencimento: {formatDate(boleto.dataVencimento)}</p>
+                    {observacoes[boleto._id] && (
+                      <div className="mt-2 p-2 bg-yellow-50 rounded-lg text-sm text-gray-800">
+                        Observação: {observacoes[boleto._id]}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => setObservacoes((prev)=>({ ...prev, [boleto._id]: prev[boleto._id] || 'Solicitado comprovante via WhatsApp' }))}
+                    >
+                      Anotar
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => {
+                        setSelectedBoleto(boleto);
+                        setShowDetalheModal(true);
+                      }}
+                    >
+                      Comprovante
+                    </Button>
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </div>
+        </>
+      )}
+
+      {activeTab === 'splits' && (
+        <>
+          {/* Metrics */}
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+            <Card className="p-4">
+              <span className="text-sm text-gray-600">Pendentes</span>
+              <p className="mt-2 text-lg font-bold text-amber-700">{splitsPendentes}</p>
+            </Card>
+            <Card className="p-4">
+              <span className="text-sm text-gray-600">Realizados</span>
+              <p className="mt-2 text-lg font-bold text-green-700">{splitsRealizados}</p>
+            </Card>
+            <Card className="p-4">
+              <span className="text-sm text-gray-600">Total Pago</span>
+              <p className="mt-2 text-xl font-bold text-gray-900">{formatCurrency(splitsTotalPago)}</p>
+            </Card>
+            <Card className="p-4">
+              <span className="text-sm text-gray-600">Próximo Pagamento</span>
+              <p className="mt-2 text-base font-semibold text-gray-900">{proximoPagamentoSplit || '-'}</p>
+            </Card>
+          </div>
+
+          {/* Filters */}
+          <div className="flex flex-col sm:flex-row gap-3 mb-6">
+            <div className="flex-1">
+              <Input
+                placeholder="Buscar por participante ou caixa..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                leftIcon={<Search className="w-4 h-4" />}
+              />
+            </div>
+            <select
+              className="px-3 py-2 rounded-xl border border-gray-200 text-sm"
+              value={splitStatusFilter}
+              onChange={(e) => setSplitStatusFilter(e.target.value)}
+            >
+              <option value="">Todos os Status</option>
+              <option value="pendente">Pendentes</option>
+              <option value="pago">Pagos</option>
+            </select>
+            <select className="px-3 py-2 rounded-xl border border-gray-200 text-sm" value={"todos"} onChange={()=>{}}>
+              <option value="todos">Todos os Tipos</option>
+            </select>
+          </div>
+
+          {/* Lista de splits */}
+          <div className="space-y-3">
+            {splits.filter((s)=>{
+              if (search && !s.participanteNome.toLowerCase().includes(search.toLowerCase()) && !s.caixaNome.toLowerCase().includes(search.toLowerCase())) return false;
+              return true;
+            }).map((s)=> (
+              <Card key={s.id} className="p-3">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-gray-900">{s.participanteNome}</span>
+                      <Badge variant={s.status === 'pago' ? 'success' : 'warning'} size="sm">{s.status === 'pago' ? 'Pago' : 'Pendente'}</Badge>
+                    </div>
+                    <p className="text-sm text-gray-600">Caixa: {s.caixaNome}</p>
+                    <p className="text-sm text-gray-600">Tipo: Split de Pontos (10%)</p>
+                    <p className="text-sm"><span className="text-gray-600">Valor:</span> <span className="text-green-700 font-semibold">{formatCurrency(s.valor)}</span></p>
+                    <p className="text-sm text-gray-600">Vencimento: {formatDate(s.vencimento)}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {s.status !== 'pago' && (
+                      <Button variant="primary" size="sm" onClick={() => marcarSplitPago(s.id)}>Marcar como Pago</Button>
+                    )}
+                    <Button size="sm" variant="secondary">Upload</Button>
+                    <Button size="sm" variant="secondary">Documento</Button>
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </div>
+        </>
+      )}
+
+      {activeTab === 'carteira' && (
+        <>
+          <div className="grid gap-3">
+            {caixasComBoletos.map((c)=>{
+              const participantes = participantesPorCaixa(c);
+              const valorTotalCaixa = c.valorParcela * participantes * c.duracaoMeses;
+              const ganhoAdmin = valorTotalCaixa * 0.10;
+              const concluido = c.mesAtual >= c.duracaoMeses;
+              return (
+                <Card key={c._id} className="p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <div>
+                      <h3 className="font-semibold text-gray-900">{c.nome}</h3>
+                      <p className="text-xs text-gray-600">Participantes: {participantes} • Duração: {c.duracaoMeses} {c.duracaoMeses === 1 ? 'mês' : 'meses'}</p>
+                    </div>
+                    <Badge variant={concluido ? 'success' : 'gray'} size="sm">{concluido ? 'Concluído' : `Mês ${c.mesAtual}/${c.duracaoMeses}`}</Badge>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-gray-600">Ganho do Administrador (10%)</p>
+                      <p className="text-xl font-bold text-gray-900">{formatCurrency(ganhoAdmin)}</p>
+                      <p className="text-xs text-gray-500 mt-1">Disponível para saque apenas no último ponto, quando o caixa for concluído.</p>
+                    </div>
+                    <Button variant={concluido ? 'primary' : 'secondary'} disabled={!concluido}>Sacar</Button>
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
+        </>
+      )}
+
+      {/* Caixas com Boletos - Detalhes expandíveis (apenas no modal/apoio) */}
       {loading ? (
         <div className="space-y-3">
           {[1, 2, 3].map((i) => (
             <CardSkeleton key={i} />
           ))}
         </div>
-      ) : caixasComBoletos.length > 0 ? (
-        <div className="space-y-4">
+      ) : activeTab === 'recebimentos' && caixasComBoletos.length > 0 ? (
+        <div className="space-y-4 hidden">
           {caixasComBoletos.map((caixa) => {
             const caixaBoletos = caixa.boletos.filter(b => {
               if (statusFilter && b.status !== statusFilter) return false;

@@ -76,6 +76,44 @@ export function calculateProgress(current: number, total: number): number {
   return Math.round((current / total) * 100);
 }
 
+export function calculateCurrentPeriod(
+  tipo: 'mensal' | 'semanal' | undefined,
+  dataInicio: string | Date | undefined,
+  duracaoMeses: number,
+  mesAtual: number
+): number {
+  const base = Math.max(1, mesAtual || 1);
+  const totalPeriodos = Math.max(1, duracaoMeses || 1);
+
+  if (!dataInicio) return Math.min(base, totalPeriodos);
+
+  const inicio = new Date(dataInicio);
+  if (Number.isNaN(inicio.getTime())) return Math.min(base, totalPeriodos);
+
+  const agora = new Date();
+  if (agora <= inicio) return Math.min(base, totalPeriodos);
+
+  let diff = 0;
+
+  if (tipo === 'semanal') {
+    const msDiff = agora.getTime() - inicio.getTime();
+    diff = Math.floor(msDiff / (1000 * 60 * 60 * 24 * 7));
+  } else {
+    const anos = agora.getFullYear() - inicio.getFullYear();
+    const meses = agora.getMonth() - inicio.getMonth();
+    diff = anos * 12 + meses;
+
+    if (agora.getDate() < inicio.getDate()) {
+      diff -= 1;
+    }
+  }
+
+  const calculado = 1 + Math.max(0, diff);
+  const combinado = Math.max(base, calculado);
+
+  return Math.min(totalPeriodos, combinado);
+}
+
 export function getInitials(name: string): string {
   return name
     .split(' ')
@@ -84,4 +122,3 @@ export function getInitials(name: string): string {
     .toUpperCase()
     .slice(0, 2);
 }
-

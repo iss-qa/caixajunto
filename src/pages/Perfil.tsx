@@ -29,7 +29,6 @@ import { formatCurrency } from '../lib/utils';
 const menuItems = [
   { icon: Bell, label: 'Notificações', path: '/notificacoes', badge: '3' },
   { icon: Shield, label: 'Segurança', path: '/seguranca' },
-  { icon: CreditCard, label: 'Chave Pix', path: '/pix' },
   { icon: HelpCircle, label: 'Ajuda', path: '/ajuda' },
   { icon: FileText, label: 'Termos de Uso', path: '/termos' },
 ];

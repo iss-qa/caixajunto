@@ -21,9 +21,8 @@ export function Header() {
       { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
       { path: '/caixas', label: 'Caixas', icon: Wallet },
       { path: '/participantes', label: 'Participantes', icon: Users },
-      { path: '/pagamentos', label: 'Pagamentos', icon: CreditCard },
+      { path: '/pagamentos', label: 'Gestão Financeira', icon: CreditCard },
       { path: '/contrato', label: 'Contrato', icon: FileText },
-      { path: '/perfil', label: 'Perfil', icon: Users },
     ];
 
     // Se for master, adiciona opção do Painel Master
@@ -127,7 +126,11 @@ export function Header() {
                   onClick={() => setUserMenuOpen(!userMenuOpen)}
                   className="flex items-center gap-2 p-1.5 hover:bg-white/10 rounded-xl transition-colors"
                 >
-                  <Avatar name={usuario?.nome || 'U'} size="sm" />
+                  <Avatar
+                    name={usuario?.nome || 'U'}
+                    src={usuario?.fotoUrl || usuario?.picture || usuario?.avatar}
+                    size="sm"
+                  />
                   <ChevronDown className={cn('w-4 h-4 transition-transform hidden sm:block', userMenuOpen && 'rotate-180')} />
                 </button>
 

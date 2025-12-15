@@ -33,6 +33,8 @@ import {
   Download,
   ExternalLink,
   Printer,
+  Search,
+  UserCheck,
 } from 'lucide-react';
 import { caixasService, participantesService, usuariosService, cobrancasService, pagamentosService } from '../lib/api';
 import { DetalhesPagamento } from './DetalhesPagamento';
@@ -140,6 +142,7 @@ export function CaixaDetalhes() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('participantes');
   const [showAddParticipante, setShowAddParticipante] = useState(false);
+  const [showAddExistente, setShowAddExistente] = useState(false);
   const [showEditCaixa, setShowEditCaixa] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showParticipanteDetail, setShowParticipanteDetail] = useState(false);
@@ -147,6 +150,8 @@ export function CaixaDetalhes() {
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [copied, setCopied] = useState(false);
   const [isReordering, setIsReordering] = useState(false);
+  const [showRemoveParticipanteModal, setShowRemoveParticipanteModal] = useState(false);
+  const [participanteToRemove, setParticipanteToRemove] = useState<Participante | null>(null);
 
   // Estados de UI gerais
   const [newParticipante, setNewParticipante] = useState({
@@ -157,6 +162,13 @@ export function CaixaDetalhes() {
     chavePix: '',
     picture: '',
   });
+  const [usuariosSemCaixa, setUsuariosSemCaixa] = useState<Array<{ _id: string; nome: string; email: string; telefone: string; cpf?: string; chavePix?: string; score?: number; fotoUrl?: string }>>([]);
+  const [searchUsuario, setSearchUsuario] = useState('');
+  const [usuariosSelecionadosIds, setUsuariosSelecionadosIds] = useState<string[]>([]);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [showErrorModal, setShowErrorModal] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [editForm, setEditForm] = useState({
     nome: '',
     descricao: '',
@@ -711,25 +723,93 @@ export function CaixaDetalhes() {
       await loadParticipantes();
       setShowAddParticipante(false);
       setNewParticipante({ nome: '', email: '', telefone: '', cpf: '', chavePix: '', picture: '' });
-      alert('Participante adicionado com sucesso!');
+      setSuccessMessage('Participante adicionado com sucesso!');
+      setShowSuccessModal(true);
     } catch (error: any) {
       console.error('Erro ao adicionar participante:', error);
-      const errorMessage = error.response?.data?.message || error.message || 'Erro ao adicionar participante. Verifique os dados e tente novamente.';
-      alert(`Erro ao adicionar participante:\n\n${errorMessage}`);
+      const message = error.response?.data?.message || error.message || 'Erro ao adicionar participante. Verifique os dados e tente novamente.';
+      setErrorMessage(message);
+      setShowErrorModal(true);
+    }
+  };
+
+  const loadUsuariosSemCaixa = async () => {
+    try {
+      // Buscar todos os usuários do tipo 'usuario'
+      const responseUsuarios = await usuariosService.getAll();
+      const listaUsuarios = Array.isArray(responseUsuarios) ? responseUsuarios : responseUsuarios.usuarios || [];
+      const usuarios = listaUsuarios.filter((u: any) => u.tipo === 'usuario');
+
+      // Buscar vínculos existentes de participantes
+      const responseParticipantes = await participantesService.getAll();
+      const listaParticipantes = Array.isArray(responseParticipantes) ? responseParticipantes : responseParticipantes.participantes || [];
+      const usuariosComVinculo = new Set(
+        listaParticipantes.map((p: any) => p.usuarioId?._id || p.usuarioId)
+      );
+
+      // Regra: não pode estar em 2 caixas simultaneamente → somente usuários sem vínculo
+      const livres = usuarios.filter((u: any) => !usuariosComVinculo.has(u._id));
+      setUsuariosSemCaixa(livres);
+    } catch (error) {
+      console.error('Erro ao carregar usuários sem caixa:', error);
+      setUsuariosSemCaixa([]);
+    }
+  };
+
+  const handleAddExistente = async () => {
+    if (!usuariosSelecionadosIds.length) {
+      setErrorMessage('Selecione pelo menos um participante existente.');
+      setShowErrorModal(true);
+      return;
+    }
+
+    try {
+      await Promise.all(
+        usuariosSelecionadosIds.map(async (usuarioId) => {
+          const participante = await participantesService.create({
+            caixaId: id,
+            usuarioId,
+            aceite: true,
+            status: 'ativo',
+          });
+
+          if (!participante) {
+            throw new Error('Erro ao vincular participante existente ao caixa');
+          }
+        })
+      );
+
+      await loadParticipantes();
+      setShowAddExistente(false);
+      setUsuariosSelecionadosIds([]);
+      setSuccessMessage('Participantes existentes adicionados com sucesso!');
+      setShowSuccessModal(true);
+    } catch (error: any) {
+      console.error('Erro ao adicionar participante existente:', error);
+      const message = error.response?.data?.message || error.message || 'Erro ao adicionar participante existente.';
+      setErrorMessage(message);
+      setShowErrorModal(true);
     }
   };
 
   const handleRemoveParticipante = async (participanteId: string) => {
     try {
       await participantesService.delete(participanteId);
-    } catch (error) {
+      const updatedParticipantes = participantes.filter((p) => p._id !== participanteId);
+      setParticipantes(updatedParticipantes);
+      saveParticipantes(updatedParticipantes);
+      setShowParticipanteDetail(false);
+      setSelectedParticipante(null);
+      setShowRemoveParticipanteModal(false);
+      setParticipanteToRemove(null);
+      setSuccessMessage('Participante removido com sucesso!');
+      setShowSuccessModal(true);
+    } catch (error: any) {
       console.error('Erro ao remover participante:', error);
+      const message = error.response?.data?.message || 'Erro ao remover participante.';
+      setErrorMessage(message);
+      setShowErrorModal(true);
     }
-    const updatedParticipantes = participantes.filter(p => p._id !== participanteId);
-    setParticipantes(updatedParticipantes);
-    saveParticipantes(updatedParticipantes);
-    setShowParticipanteDetail(false);
-    setSelectedParticipante(null);
   };
 
   const handleReorder = (newOrder: Participante[]) => {
@@ -1297,16 +1377,30 @@ export function CaixaDetalhes() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
           >
-            {/* Actions */}
             <div className="flex flex-wrap gap-2 mb-4">
-              <Button
-                variant="primary"
-                size="sm"
-                leftIcon={<UserPlus className="w-4 h-4" />}
-                onClick={() => setShowAddParticipante(true)}
-              >
-                Cadastrar Participante
-              </Button>
+              {participantes.length > 0 && (
+                <>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    leftIcon={<UserPlus className="w-4 h-4" />}
+                    onClick={() => setShowAddParticipante(true)}
+                  >
+                    Cadastrar Participante
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    leftIcon={<UserCheck className="w-4 h-4" />}
+                    onClick={async () => {
+                      await loadUsuariosSemCaixa();
+                      setShowAddExistente(true);
+                    }}
+                  >
+                    Adicionar Existente
+                  </Button>
+                </>
+              )}
               <Button
                 variant="secondary"
                 size="sm"
@@ -1414,6 +1508,7 @@ export function CaixaDetalhes() {
                   </div>
                   {participantes.map((participante, index) => {
                     const { isPago, isAtrasado, isVenceHoje } = obterStatusParticipante(participante, cronogramaParcela);
+                    const canRemove = !caixaIniciado && !participante.posicao;
 
                     return (
                       <motion.div
@@ -1438,17 +1533,31 @@ export function CaixaDetalhes() {
                           )}
                         >
                           <div className="flex items-center gap-3">
-                            {/* Posição */}
-                            <div className={cn(
-                              'w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm',
-                              isPago
-                                ? 'bg-blue-500 text-white'  // ← AZUL quando PAGO
-                                : participante.posicao === caixa.mesAtual
-                                  ? 'bg-amber-100 text-amber-700'
-                                  : 'bg-gray-100 text-gray-500'
-                            )}>
-                              {participante.posicao || '-'}
-                            </div>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                if (!canRemove) return;
+                                e.stopPropagation();
+                                setParticipanteToRemove(participante);
+                                setShowRemoveParticipanteModal(true);
+                              }}
+                              className={cn(
+                                'w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm',
+                                canRemove
+                                  ? 'bg-red-50 text-red-600 hover:bg-red-100'
+                                  : isPago
+                                    ? 'bg-blue-500 text-white'
+                                    : participante.posicao === caixa.mesAtual
+                                      ? 'bg-amber-100 text-amber-700'
+                                      : 'bg-gray-100 text-gray-500'
+                              )}
+                            >
+                              {canRemove ? (
+                                <Trash2 className="w-4 h-4" />
+                              ) : (
+                                participante.posicao || '-'
+                              )}
+                            </button>
 
                             <Avatar
                               name={participante?.usuarioId?.nome || 'Sem nome'}
@@ -1506,9 +1615,10 @@ export function CaixaDetalhes() {
                               <p className="text-xs text-gray-500">Valor a receber</p>
                               <p className="font-bold text-green-700">
                                 {(() => {
-                                  const atual = Math.max(1, caixa.mesAtual);
-                                  const pos = participante.posicao || 1;
-                                  const diff = Math.max(0, pos - atual);
+                                  const referenciaMes = participante.posicao && participante.posicao > 0
+                                    ? participante.posicao
+                                    : cronogramaParcela;
+                                  const diff = Math.max(0, referenciaMes - 1);
                                   const ipcaUnit = caixa.valorParcela * TAXA_IPCA_MENSAL;
                                   const ipcaTotal = diff * ipcaUnit;
                                   const valor = caixa.valorTotal + ipcaTotal;
@@ -1529,9 +1639,14 @@ export function CaixaDetalhes() {
               <EmptyState
                 icon={Users}
                 title="Nenhum participante ainda"
-                description="Cadastre os participantes do caixa para começar."
+                description="Cadastre os participantes do caixa ou use um existente para começar."
                 actionLabel="Cadastrar Participante"
                 onAction={() => setShowAddParticipante(true)}
+                secondaryActionLabel="Adicionar Existente"
+                onSecondaryAction={async () => {
+                  await loadUsuariosSemCaixa();
+                  setShowAddExistente(true);
+                }}
               />
             )}
 
@@ -1782,6 +1897,121 @@ export function CaixaDetalhes() {
         </div>
       </Modal>
 
+      {/* Modal Adicionar Participante Existente */}
+      <Modal
+        isOpen={showAddExistente}
+        onClose={() => setShowAddExistente(false)}
+        title="Adicionar Participante Existente"
+        size="lg"
+      >
+        <div className="space-y-4">
+          <Input
+            placeholder="Buscar por nome, email ou telefone..."
+            leftIcon={<Search className="w-4 h-4" />}
+            value={searchUsuario}
+            onChange={(e) => setSearchUsuario(e.target.value)}
+          />
+          <div className="max-h-64 overflow-auto border border-gray-100 rounded-xl">
+            {usuariosSemCaixa
+              .filter((u) => {
+                if (!searchUsuario) return true;
+                const term = searchUsuario.toLowerCase();
+                return (
+                  (u.nome || '').toLowerCase().includes(term) ||
+                  (u.email || '').toLowerCase().includes(term) ||
+                  (u.telefone || '').toLowerCase().includes(term)
+                );
+              })
+              .map((u) => {
+                const selecionado = usuariosSelecionadosIds.includes(u._id);
+                return (
+                  <button
+                    key={u._id}
+                    onClick={() =>
+                      setUsuariosSelecionadosIds((prev) =>
+                        prev.includes(u._id) ? prev.filter((id) => id !== u._id) : [...prev, u._id]
+                      )
+                    }
+                    className={cn(
+                      'w-full flex items-center gap-3 p-3 hover:bg-gray-50 border-b border-gray-100 text-left',
+                      selecionado && 'bg-green-50'
+                    )}
+                  >
+                    <Avatar name={u.nome} src={u.fotoUrl} size="sm" />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-gray-900 truncate">{u.nome}</p>
+                      <p className="text-xs text-gray-500 truncate">{u.email} • {u.telefone}</p>
+                    </div>
+                    <Badge variant={selecionado ? 'success' : 'gray'} size="sm">
+                      {selecionado ? 'Selecionado' : 'Selecionar'}
+                    </Badge>
+                  </button>
+                );
+              })}
+            {usuariosSemCaixa.length === 0 && (
+              <div className="p-4 text-center text-sm text-gray-500">Nenhum participante disponível sem caixa.</div>
+            )}
+          </div>
+          <div className="flex flex-col sm:flex-row gap-3">
+            <Button
+              variant="secondary"
+              className="flex-1"
+              onClick={() => setShowAddExistente(false)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="primary"
+              className="flex-1"
+              onClick={handleAddExistente}
+              disabled={!usuariosSelecionadosIds.length}
+            >
+              Adicionar ao Caixa
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={showRemoveParticipanteModal}
+        onClose={() => {
+          setShowRemoveParticipanteModal(false);
+          setParticipanteToRemove(null);
+        }}
+        title="Remover Participante"
+        size="sm"
+      >
+        <div className="text-center py-4">
+          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Trash2 className="w-8 h-8 text-red-600" />
+          </div>
+          <p className="text-gray-700 mb-6">
+            Tem certeza que deseja remover {participanteToRemove?.usuarioId?.nome || 'este participante'} do caixa?
+          </p>
+          <div className="flex flex-col sm:flex-row gap-3">
+            <Button
+              variant="secondary"
+              className="flex-1"
+              onClick={() => {
+                setShowRemoveParticipanteModal(false);
+                setParticipanteToRemove(null);
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="danger"
+              className="flex-1"
+              onClick={async () => {
+                if (!participanteToRemove) return;
+                await handleRemoveParticipante(participanteToRemove._id);
+              }}
+            >
+              Remover
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Modal Editar Caixa */}
       <Modal
@@ -2095,6 +2325,48 @@ export function CaixaDetalhes() {
         onRefreshPagamentos={loadPagamentos}
         onPaidUpdate={markPaid}
       />
+
+      <Modal
+        isOpen={showErrorModal}
+        onClose={() => setShowErrorModal(false)}
+        title="Erro"
+        size="sm"
+      >
+        <div className="text-center py-4">
+          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <AlertTriangle className="w-8 h-8 text-red-600" />
+          </div>
+          <p className="text-gray-700 mb-6">{errorMessage}</p>
+          <Button
+            variant="primary"
+            className="w-full"
+            onClick={() => setShowErrorModal(false)}
+          >
+            OK
+          </Button>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={showSuccessModal}
+        onClose={() => setShowSuccessModal(false)}
+        title="Sucesso"
+        size="sm"
+      >
+        <div className="text-center py-4">
+          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <CheckCircle2 className="w-8 h-8 text-green-600" />
+          </div>
+          <p className="text-gray-700 mb-6">{successMessage}</p>
+          <Button
+            variant="primary"
+            className="w-full"
+            onClick={() => setShowSuccessModal(false)}
+          >
+            OK
+          </Button>
+        </div>
+      </Modal>
     </div>
   );
 }

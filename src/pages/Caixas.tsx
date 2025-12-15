@@ -23,7 +23,7 @@ import { Badge } from '../components/ui/Badge';
 import { EmptyState } from '../components/ui/EmptyState';
 import { CardSkeleton } from '../components/ui/Skeleton';
 import { ProgressBar } from '../components/ui/ProgressBar';
-import { formatCurrency, cn } from '../lib/utils';
+import { formatCurrency, cn, calculateCurrentPeriod } from '../lib/utils';
 
 interface Caixa {
   _id: string;
@@ -96,6 +96,7 @@ export function Caixas() {
           status: p.caixaId?.status || 'aguardando',
           mesAtual: p.caixaId?.mesAtual || 1,
           tipo: p.caixaId?.tipo || p.tipo || 'mensal',
+          dataInicio: p.caixaId?.dataInicio,
           codigoConvite: p.caixaId?.codigoConvite || '',
           participantesAtivos: p.caixaId?.qtdParticipantes || p.qtdParticipantes || 0,
         }));
@@ -356,6 +357,15 @@ export function Caixas() {
             const semParticipantes = participantesAtivos === 0;
             const isIncompleto = participantesFaltando > 0 && !semParticipantes;
             const isCompleto = participantesFaltando === 0;
+            const periodoAtual = calculateCurrentPeriod(
+              caixa.tipo,
+              caixa.dataInicio,
+              caixa.duracaoMeses,
+              caixa.mesAtual || 1
+            );
+            const totalPagamentos = (caixa.qtdParticipantes || 0) * (caixa.duracaoMeses || 0);
+            const pagos = caixa.stats?.pagos || 0;
+            const pendentes = Math.max(0, totalPagamentos - pagos);
             
             return (
               <motion.div
@@ -412,7 +422,7 @@ export function Caixas() {
                     <div className="flex flex-col gap-1 items-end">
                       {caixa.status === 'ativo' ? (
                         <Badge variant="success" size="sm">
-                          {caixa.tipo === 'semanal' ? 'Semana' : 'Mês'} {Math.max(1, caixa.mesAtual)}/{caixa.duracaoMeses}
+                          {caixa.tipo === 'semanal' ? 'Semana' : 'Mês'} {periodoAtual}/{caixa.duracaoMeses}
                         </Badge>
                       ) : (
                         <Badge variant={getStatusBadge(caixa.status)} size="sm">
@@ -455,7 +465,7 @@ export function Caixas() {
                   {/* Progress */}
                   {caixa.status === 'ativo' && (
                     <ProgressBar
-                      value={Math.max(1, caixa.mesAtual)}
+                      value={periodoAtual}
                       max={caixa.duracaoMeses}
                       color="primary"
                       size="sm"
@@ -492,11 +502,11 @@ export function Caixas() {
                       <div className="flex items-center gap-3 text-sm">
                         <span className="flex items-center gap-1 text-green-600">
                           <CheckCircle2 className="w-4 h-4" />
-                          {caixa.stats?.pagos || 0} pagos
+                          {pagos} pagos
                         </span>
                         <span className="flex items-center gap-1 text-amber-600">
                           <Clock className="w-4 h-4" />
-                          {caixa.stats?.pendentes ?? caixa.qtdParticipantes} pendentes
+                          {pendentes} pendentes
                         </span>
                       </div>
                     ) : (semParticipantes || isIncompleto) ? (
