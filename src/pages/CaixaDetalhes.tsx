@@ -558,6 +558,15 @@ export function CaixaDetalhes() {
   };
 
   const handleAtivarCaixa = async () => {
+    // Validação: só iniciar se posições estiverem sorteadas para todos
+    const total = caixa?.qtdParticipantes || 0;
+    const completo = participantes.length === total && total > 0;
+    const todasPosicoes = completo && participantes.every((p) => (p.posicao || 0) > 0);
+    if (!completo || !todasPosicoes) {
+      setErrorMessage('Sorteie as posições e garanta que todos os participantes tenham uma posição antes de iniciar.');
+      setShowErrorModal(true);
+      return;
+    }
     try {
       await caixasService.alterarStatus(id!, 'ativo');
       loadCaixa();
@@ -568,6 +577,16 @@ export function CaixaDetalhes() {
 
   const handleIniciarCaixa = async () => {
     if (!aceiteContrato) return;
+
+    // Validação: só iniciar se posições estiverem sorteadas para todos
+    const total = caixa?.qtdParticipantes || 0;
+    const completo = participantes.length === total && total > 0;
+    const todasPosicoes = completo && participantes.every((p) => (p.posicao || 0) > 0);
+    if (!completo || !todasPosicoes) {
+      setErrorMessage('Sorteie as posições e garanta que todos os participantes tenham uma posição antes de iniciar.');
+      setShowErrorModal(true);
+      return;
+    }
 
     try {
       await caixasService.alterarStatus(id!, 'ativo');
@@ -694,6 +713,11 @@ export function CaixaDetalhes() {
   };
 
   const handleAddParticipante = async () => {
+    if (caixa && participantes.length >= (caixa.qtdParticipantes || 0)) {
+      setErrorMessage('O caixa já está completo. Edite o caixa para aumentar participantes antes de adicionar.');
+      setShowErrorModal(true);
+      return;
+    }
     if (!newParticipante.nome || !newParticipante.email || !newParticipante.telefone) {
       alert('Preencha nome, email e telefone.');
       return;
@@ -757,6 +781,11 @@ export function CaixaDetalhes() {
   };
 
   const handleAddExistente = async () => {
+    if (caixa && participantes.length >= (caixa.qtdParticipantes || 0)) {
+      setErrorMessage('O caixa já está completo. Edite o caixa para aumentar participantes antes de adicionar.');
+      setShowErrorModal(true);
+      return;
+    }
     if (!usuariosSelecionadosIds.length) {
       setErrorMessage('Selecione pelo menos um participante existente.');
       setShowErrorModal(true);
@@ -766,6 +795,19 @@ export function CaixaDetalhes() {
     try {
       await Promise.all(
         usuariosSelecionadosIds.map(async (usuarioId) => {
+          // TODO: impedir múltiplos caixas simultâneos para o mesmo participante (regra pode ser revista futuramente)
+          try {
+            const participacoes = await participantesService.getByUsuario(usuarioId);
+            const lista = Array.isArray(participacoes) ? participacoes : participacoes?.participacoes || [];
+            const temCaixaAtivo = lista.some((p: any) => String(p.caixaId?.status || p.status || '').toLowerCase() === 'ativo');
+            if (temCaixaAtivo) {
+              throw new Error('Este participante já está em um caixa em andamento.');
+            }
+          } catch (e: any) {
+            if (e?.message?.includes('em andamento')) {
+              throw e;
+            }
+          }
           const participante = await participantesService.create({
             caixaId: id,
             usuarioId,
@@ -1059,6 +1101,11 @@ export function CaixaDetalhes() {
                     Tipo de Caixa: {caixa.tipo === 'semanal' ? 'Semanal' : 'Mensal'}
                   </span>
                 </div>
+                {caixa.adminId?.nome && (
+                  <p className="text-white/80 text-xs mt-1">
+                    Organizado por: {caixa.adminId.nome}
+                  </p>
+                )}
                 <p className="text-white/80 text-sm mt-1">{caixa.descricao || 'Sem descrição'}</p>
               </div>
               <div className="flex items-center gap-2">
@@ -1406,7 +1453,7 @@ export function CaixaDetalhes() {
                 size="sm"
                 leftIcon={<Shuffle className="w-4 h-4" />}
                 onClick={handleSortear}
-                disabled={participantes.length === 0 || caixaIniciado}
+                disabled={!caixaCompleto || caixaIniciado}
               >
                 Sortear Posições
               </Button>
@@ -1415,7 +1462,7 @@ export function CaixaDetalhes() {
                 size="sm"
                 leftIcon={<GripVertical className="w-4 h-4" />}
                 onClick={() => isReordering ? saveOrder() : setIsReordering(true)}
-                disabled={participantes.length === 0 || caixaIniciado}
+                disabled={!caixaCompleto || caixaIniciado}
               >
                 {isReordering ? 'Salvar Ordem' : 'Reordenar'}
               </Button>
@@ -1612,17 +1659,16 @@ export function CaixaDetalhes() {
                             </div>
 
                             <div className="text-right block">
-                              <p className="text-xs text-gray-500">Valor a receber</p>
+                              <p className="text-xs text-gray-500">Valor Pago</p>
                               <p className="font-bold text-green-700">
                                 {(() => {
-                                  const referenciaMes = participante.posicao && participante.posicao > 0
-                                    ? participante.posicao
-                                    : cronogramaParcela;
-                                  const diff = Math.max(0, referenciaMes - 1);
-                                  const ipcaUnit = caixa.valorParcela * TAXA_IPCA_MENSAL;
-                                  const ipcaTotal = diff * ipcaUnit;
-                                  const valor = caixa.valorTotal + ipcaTotal;
-                                  return formatCurrency(valor);
+                                  const referenciaMes = cronogramaParcela;
+                                  const base = caixa.valorParcela || (caixa.valorTotal / caixa.qtdParticipantes);
+                                  const fundoReserva = referenciaMes === 1 ? (base / caixa.qtdParticipantes) : 0;
+                                  const ipca = referenciaMes > 1 ? base * TAXA_IPCA_MENSAL : 0;
+                                  const comissaoAdmin = referenciaMes === (caixa.duracaoMeses || caixa.qtdParticipantes) ? caixa.valorTotal * 0.10 : 0;
+                                  const total = base + TAXA_SERVICO + fundoReserva + ipca + comissaoAdmin;
+                                  return formatCurrency(isPago ? total : 0);
                                 })()}
                               </p>
                             </div>
@@ -1640,13 +1686,13 @@ export function CaixaDetalhes() {
                 icon={Users}
                 title="Nenhum participante ainda"
                 description="Cadastre os participantes do caixa ou use um existente para começar."
-                actionLabel="Cadastrar Participante"
-                onAction={() => setShowAddParticipante(true)}
-                secondaryActionLabel="Adicionar Existente"
-                onSecondaryAction={async () => {
+                actionLabel={caixaCompleto || caixaIniciado ? undefined : "Cadastrar Participante"}
+                onAction={caixaCompleto || caixaIniciado ? undefined : (() => setShowAddParticipante(true))}
+                secondaryActionLabel={caixaCompleto || caixaIniciado ? undefined : "Adicionar Existente"}
+                onSecondaryAction={caixaCompleto || caixaIniciado ? undefined : (async () => {
                   await loadUsuariosSemCaixa();
                   setShowAddExistente(true);
-                }}
+                })}
               />
             )}
 

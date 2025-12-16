@@ -161,6 +161,10 @@ export const pagamentosService = {
     const response = await api.patch(`/pagamentos/${id}/comprovante`, { comprovanteUrl });
     return response.data;
   },
+  atualizarObservacao: async (id: string, observacao: string) => {
+    const response = await api.patch(`/pagamentos/${id}`, { observacao });
+    return response.data;
+  },
   aprovar: async (id: string) => {
     const response = await api.patch(`/pagamentos/${id}/aprovar`);
     return response.data;
@@ -275,6 +279,41 @@ export const cobrancasService = {
     const response = await api.get(
       `/cobrancas/todas-por-associacao/${caixaId}/${participanteId}`,
     );
+    return response.data;
+  },
+  wallet: async () => {
+    const response = await api.get('/cobrancas/wallet');
+    return response.data;
+  },
+  transactions: async (params?: { page?: number; limit?: number }) => {
+    const response = await api.get('/cobrancas/transactions', { params });
+    return response.data;
+  },
+};
+
+// Bancos (Lytex - via backend)
+export const bancosService = {
+  getAll: async () => {
+    const response = await api.get('/bancos');
+    return response.data;
+  },
+};
+
+export const carteiraService = {
+  createSubAccount: async (data: any) => {
+    const response = await api.post('/usuarios/me/subconta', data);
+    return response.data;
+  },
+  getSubAccount: async () => {
+    const response = await api.get('/usuarios/me/subconta');
+    return response.data;
+  },
+  getBankAccounts: async () => {
+    const response = await api.get('/usuarios/me/contas-bancarias');
+    return response.data;
+  },
+  saveBankAccount: async (data: any) => {
+    const response = await api.post('/usuarios/me/contas-bancarias', data);
     return response.data;
   },
 };

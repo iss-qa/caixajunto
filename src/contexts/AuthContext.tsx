@@ -13,6 +13,8 @@ interface Usuario {
   picture?: string;
   avatar?: string;
   fotoUrl?: string;
+  cpf?: string;
+  lytexSubAccountId?: string;
 }
 
 interface AuthContextType {
@@ -93,4 +95,3 @@ export function useAuth() {
   }
   return context;
 }
-

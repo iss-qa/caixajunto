@@ -13,6 +13,7 @@ import { Notificacoes } from './pages/Notificacoes';
 import { Pagamentos } from './pages/Pagamentos';
 import { PainelMaster } from './pages/PainelMaster';
 import { Contrato } from './pages/Contrato';
+import Carteira from './pages/Carteira';
 
 // Protected Route Component
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -77,7 +78,7 @@ function AppRoutes() {
       />
 
       {/* Protected Routes */}
-      <Route
+  <Route
         element={
           <ProtectedRoute>
             <Layout />
@@ -90,6 +91,7 @@ function AppRoutes() {
         <Route path="/caixas/:id" element={<CaixaDetalhes />} />
         <Route path="/participantes" element={<Participantes />} />
         <Route path="/contrato" element={<Contrato />} />
+        <Route path="/carteira" element={<Carteira />} />
         <Route path="/perfil" element={<Perfil />} />
         <Route path="/notificacoes" element={<Notificacoes />} />
         <Route path="/pagamentos" element={<Pagamentos />} />

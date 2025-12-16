@@ -18,11 +18,12 @@ export function Header() {
   // Menu items baseado no tipo de usuário
   const getMenuItems = () => {
     const baseItems = [
-      { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+      { path: '/dashboard', label: 'Home', icon: LayoutDashboard },
       { path: '/caixas', label: 'Caixas', icon: Wallet },
       { path: '/participantes', label: 'Participantes', icon: Users },
-      { path: '/pagamentos', label: 'Gestão Financeira', icon: CreditCard },
+      { path: '/pagamentos', label: 'Financeiro', icon: CreditCard },
       { path: '/contrato', label: 'Contrato', icon: FileText },
+      { path: '/carteira', label: 'Carteira', icon: Wallet },
     ];
 
     // Se for master, adiciona opção do Painel Master

@@ -17,7 +17,7 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { usuariosService, participantesService } from '../lib/api';
+import { usuariosService, participantesService, caixasService } from '../lib/api';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
@@ -26,7 +26,6 @@ import { Modal } from '../components/ui/Modal';
 import { Input } from '../components/ui/Input';
 import { CardSkeleton } from '../components/ui/Skeleton';
 import { EmptyState } from '../components/ui/EmptyState';
-import { formatCurrency, cn } from '../lib/utils';
 
 interface Usuario {
   _id: string;
@@ -41,6 +40,20 @@ interface Usuario {
   lytexClientId?: string;
   caixaNome?: string; // Nome do caixa vinculado
   caixaId?: string; // ID do caixa vinculado
+   adminNome?: string;
+}
+
+interface CaixaResumo {
+  _id: string;
+  nome: string;
+  adminId?:
+    | {
+        _id?: string;
+        nome?: string;
+        email?: string;
+        telefone?: string;
+      }
+    | string;
 }
 
 // Função auxiliar para remover formatação do CPF
@@ -111,6 +124,8 @@ export function Participantes() {
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedParticipante, setSelectedParticipante] = useState<Usuario | null>(null);
   const [imagePreview, setImagePreview] = useState<string>('');
+  const [caixas, setCaixas] = useState<CaixaResumo[]>([]);
+  const [selectedCaixaId, setSelectedCaixaId] = useState('');
   
   const [formData, setFormData] = useState({
     nome: '',
@@ -137,17 +152,43 @@ export function Participantes() {
       // Buscar todos os participantes (vínculos)
       const responseParticipantes = await participantesService.getAll();
       const listaParticipantes = Array.isArray(responseParticipantes) ? responseParticipantes : responseParticipantes.participantes || [];
+
+      // Para o master, buscar todos os caixas para descobrir o administrador de cada participante
+      let caixasPorId: Record<string, CaixaResumo> = {};
+      if (usuarioLogado?.tipo === 'master') {
+        try {
+          const respCaixas = await caixasService.getAll();
+          const listaCaixas = (Array.isArray(respCaixas) ? respCaixas : respCaixas.caixas || []) as CaixaResumo[];
+          setCaixas(listaCaixas);
+          caixasPorId = listaCaixas.reduce((map: Record<string, CaixaResumo>, c: CaixaResumo) => {
+            if (c && c._id) {
+              map[c._id] = c;
+            }
+            return map;
+          }, {});
+        } catch (e) {
+          console.error('Erro ao carregar caixas para mapear administradores:', e);
+        }
+      }
       
       // Combinar usuários com seus caixas
       const participantesComCaixa = usuarios.map((usuario: any) => {
         const vinculo = listaParticipantes.find((p: any) => 
           p.usuarioId === usuario._id || p.usuarioId?._id === usuario._id
         );
+        const caixaId =
+          vinculo?.caixaId?._id || vinculo?.caixaId || '';
+        const caixaInfo = caixaId ? caixasPorId[caixaId] : undefined;
+        const adminFromCaixa =
+          typeof caixaInfo?.adminId === 'string'
+            ? undefined
+            : caixaInfo?.adminId?.nome;
         
         return {
           ...usuario,
           caixaNome: vinculo?.caixaId?.nome || vinculo?.caixaNome || '',
-          caixaId: vinculo?.caixaId?._id || vinculo?.caixaId || '',
+          caixaId,
+          adminNome: adminFromCaixa || '',
         };
       });
       
@@ -289,6 +330,15 @@ export function Participantes() {
         tipo: 'usuario',
         senha: 'Senha@123', // Senha padrão
       });
+
+      if (selectedCaixaId) {
+        await participantesService.create({
+          caixaId: selectedCaixaId,
+          usuarioId: newUser._id,
+          aceite: true,
+          status: 'ativo',
+        });
+      }
       
       await loadParticipantes();
       setShowAddModal(false);
@@ -395,6 +445,7 @@ export function Participantes() {
     });
     setImagePreview('');
     setCpfError('');
+    setSelectedCaixaId('');
   };
 
   const filteredParticipantes = participantes.filter((p) =>
@@ -466,6 +517,9 @@ export function Participantes() {
                   <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Chave PIX</th>
                   <th className="text-center py-3 px-4 text-sm font-semibold text-gray-700">Score</th>
                   <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Caixa</th>
+                  {usuarioLogado?.tipo === 'master' && (
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Gerenciado por</th>
+                  )}
                   <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700">Ações</th>
                 </tr>
               </thead>
@@ -525,6 +579,11 @@ export function Participantes() {
                         <span className="text-xs text-gray-400">Sem caixa</span>
                       )}
                     </td>
+                    {usuarioLogado?.tipo === 'master' && (
+                      <td className="py-3 px-4 text-sm text-gray-600">
+                        {participante.adminNome || '-'}
+                      </td>
+                    )}
                     <td className="py-3 px-4">
                       <div className="flex items-center justify-end gap-2">
                         <Button
@@ -639,6 +698,29 @@ export function Participantes() {
             value={formData.chavePix}
             onChange={(e) => setFormData({ ...formData, chavePix: e.target.value })}
           />
+
+          {usuarioLogado?.tipo === 'master' && caixas.length > 0 && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Vincular ao Caixa
+              </label>
+              <select
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                value={selectedCaixaId}
+                onChange={(e) => setSelectedCaixaId(e.target.value)}
+              >
+                <option value="">Sem caixa (apenas cadastrar usuário)</option>
+                {caixas.map((c) => (
+                  <option key={c._id} value={c._id}>
+                    {c.nome}
+                    {c.adminId && typeof c.adminId === 'object' && c.adminId.nome
+                      ? ` • Admin: ${c.adminId.nome}`
+                      : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div className="flex gap-3 pt-4">
             <Button
