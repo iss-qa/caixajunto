@@ -1,24 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import {
-  Award,
-  TrendingUp,
-  Wallet,
-  Plus,
-  ChevronRight,
-  CheckCircle2,
-  Clock,
-  Gift,
-  AlertTriangle,
-  Users,
-} from 'lucide-react';
+import { Award, TrendingUp, Wallet, Plus, Gift, Users } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { dashboardService, caixasService, participantesService, pagamentosService } from '../lib/api';
+import { caixasService, participantesService, pagamentosService } from '../lib/api';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
-import { ProgressBar } from '../components/ui/ProgressBar';
 import { CardSkeleton } from '../components/ui/Skeleton';
 import { EmptyState } from '../components/ui/EmptyState';
 import { formatCurrency, cn } from '../lib/utils';
@@ -188,16 +176,23 @@ export function Dashboard() {
   }, [usuario]);
 
   const calcDiasRestantes = (item: any) => {
-    const start = item.dataInicio ? new Date(item.dataInicio) : new Date();
-    const semanas = item.tipo === 'semanal';
+    const pos = Number(item.posicao);
+    if (!Number.isFinite(pos) || pos <= 0) return null;
+    const startRaw = item.dataInicio ? new Date(item.dataInicio) : new Date();
+    const start = isNaN(startRaw.getTime()) ? new Date() : startRaw;
+    const semanal = item.tipo === 'semanal';
     const target = new Date(start);
-    if (semanas) {
-      target.setDate(target.getDate() + (item.posicao - 1) * 7);
+    if (semanal) {
+      target.setDate(target.getDate() + (pos - 1) * 7);
     } else {
-      target.setMonth(target.getMonth() + (item.posicao - 1));
-      target.setDate(item.diaVencimento || target.getDate());
+      target.setMonth(target.getMonth() + (pos - 1));
+      const baseDay = target.getDate();
+      const dia = Number(item.diaVencimento);
+      target.setDate(Number.isFinite(dia) && dia > 0 ? dia : baseDay);
     }
-    const diff = Math.max(0, target.getTime() - Date.now());
+    const time = target.getTime();
+    if (isNaN(time)) return null;
+    const diff = Math.max(0, time - Date.now());
     return Math.ceil(diff / (1000 * 60 * 60 * 24));
   };
 
@@ -214,6 +209,10 @@ export function Dashboard() {
             <Badge variant="info" size="sm">Participante</Badge>
           </h1>
           <p className="text-sm text-gray-500">Score: {usuario?.score ?? 0}</p>
+          <p className="text-sm text-gray-600 mt-2">
+            O CaixaJunto é um grupo de contribuição coletiva onde todos pagam parcelas
+            e cada participante recebe o valor completo em sua vez, com taxa reduzida.
+          </p>
         </div>
 
         {/* Comparativo de Crédito */}
@@ -233,6 +232,10 @@ export function Dashboard() {
               ))}
             </div>
           </div>
+          <p className="text-xs md:text-sm text-gray-700 mb-3">
+            Compare o custo total das modalidades para o valor escolhido. No CaixaJunto a taxa é
+            de <span className="font-semibold text-green-700">2%</span>, geralmente a melhor opção.
+          </p>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
             {comparativo.map((c) => (
               <Card key={c.nome} className="text-center">
@@ -241,6 +244,9 @@ export function Dashboard() {
                 <Badge variant={c.nome === 'CaixaJunto' ? 'success' : 'gray'} size="sm">
                   {c.juros}%
                 </Badge>
+                {c.nome === 'CaixaJunto' && (
+                  <p className="mt-1 text-[11px] text-green-700 font-medium">Melhor opção</p>
+                )}
               </Card>
             ))}
           </div>
@@ -275,7 +281,13 @@ export function Dashboard() {
                     <Badge variant="info" size="sm">Posição {item.posicao}</Badge>
                   </div>
                   <p className="text-sm text-gray-700">
-                    Faltam <strong>{dias} dia{dias === 1 ? '' : 's'}</strong> para sua contemplação.
+                    {dias == null ? (
+                      <span>Aguardando definição da posição</span>
+                    ) : (
+                      <span>
+                        Faltam <strong>{dias} dia{dias === 1 ? '' : 's'}</strong> para sua contemplação.
+                      </span>
+                    )}
                   </p>
                   <p className="text-xs text-gray-500 mt-1">
                     Participantes: {item.qtdParticipantes} • Duração: {item.duracaoMeses} {item.tipo === 'semanal' ? 'semanas' : 'meses'}
@@ -560,143 +572,7 @@ export function Dashboard() {
         </Card>
       </motion.div>
 
-      {/* Meus Caixas */}
-      <motion.div variants={itemVariants}>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-bold text-gray-900">Meus Caixas</h2>
-        </div>
-
-        {data?.caixas && data.caixas.length > 0 ? (
-          <div className="space-y-4">
-            {data.caixas.map((caixa, index) => {
-              const participantesFaltando = caixa.qtdParticipantes - caixa.participantes;
-              const isIncompleto = participantesFaltando > 0;
-              const semParticipantes = caixa.participantes === 0;
-              
-              // Calcular ganho correto: 10% do valor total
-              const ganhoCorreto = caixa.valorTotal * 0.10;
-              
-              return (
-                <motion.div
-                  key={caixa.id}
-                  variants={itemVariants}
-                  custom={index}
-                >
-                  <Card
-                    hover
-                    onClick={() => navigate(`/caixas/${caixa.id}`)}
-                    className={cn(
-                      'overflow-hidden min-h-[220px]',
-                      semParticipantes && 'ring-2 ring-red-300 bg-red-50/30',
-                      isIncompleto && !semParticipantes && 'ring-2 ring-amber-300 bg-amber-50/30',
-                      !semParticipantes && !isIncompleto && caixa.status === 'ativo' && 'ring-2 ring-green-300 bg-green-50/30'
-                    )}
-                  >
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1 flex-wrap">
-                          <h3 className="font-semibold text-gray-900">{caixa.nome}</h3>
-                          {caixa.status === 'ativo' ? (
-                            <Badge variant="success" size="sm">
-                              {caixa.tipo === 'semanal' ? 'Semana' : 'Mês'} {Math.max(1, caixa.mesAtual)}/{caixa.duracaoMeses}
-                            </Badge>
-                          ) : caixa.status === 'aguardando' ? (
-                            <Badge variant="warning" size="sm">
-                              Aguardando início
-                            </Badge>
-                          ) : (
-                            <Badge variant="gray" size="sm">
-                              {caixa.status}
-                            </Badge>
-                          )}
-                          {semParticipantes && (
-                            <Badge variant="danger" size="sm">
-                              <AlertTriangle className="w-3 h-3 mr-1" />
-                              Sem participantes
-                            </Badge>
-                          )}
-                          {isIncompleto && !semParticipantes && (
-                            <Badge variant="warning" size="sm">
-                              <Users className="w-3 h-3 mr-1" />
-                              Faltam {participantesFaltando}
-                            </Badge>
-                          )}
-                        </div>
-                        <p className="text-sm text-gray-500">
-                          Tipo: {caixa.tipo === 'semanal' ? 'Semanal' : 'Mensal'} • Parcela {formatCurrency(caixa.valorParcela || 0)} • {caixa.participantes}/{caixa.qtdParticipantes} participantes • {formatCurrency(caixa.valorTotal)}
-                        </p>
-                      </div>
-                      <ChevronRight className="w-5 h-5 text-gray-400" />
-                    </div>
-
-                    {/* Alerta visual */}
-                    {(semParticipantes || isIncompleto) && (
-                      <div className={cn(
-                        "p-2 rounded-lg mb-3 flex items-center gap-2",
-                        semParticipantes ? "bg-red-100" : "bg-amber-100"
-                      )}>
-                        <AlertTriangle className={cn(
-                          "w-4 h-4",
-                          semParticipantes ? "text-red-600" : "text-amber-600"
-                        )} />
-                        <span className={cn(
-                          "text-xs font-medium",
-                          semParticipantes ? "text-red-700" : "text-amber-700"
-                        )}>
-                          {semParticipantes 
-                            ? "Adicione participantes para começar!" 
-                            : `Adicione mais ${participantesFaltando} participante${participantesFaltando > 1 ? 's' : ''} para completar`
-                          }
-                        </span>
-                      </div>
-                    )}
-
-                    {/* Pagamentos do mês */}
-                    {caixa.status === 'ativo' && (
-                      <div className="flex items-center gap-4 text-sm mb-3">
-                        <div className="flex items-center gap-1.5 text-green-600">
-                          <CheckCircle2 className="w-4 h-4" />
-                          <span>{caixa.stats?.pagos || 0} pagos</span>
-                        </div>
-                        <div className="flex items-center gap-1.5 text-amber-600">
-                          <Clock className="w-4 h-4" />
-                          <span>{caixa.stats?.pendentes ?? caixa.qtdParticipantes} pendentes</span>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Progress Bar */}
-                    {caixa.status === 'ativo' && (
-                      <ProgressBar
-                        value={Math.max(1, caixa.mesAtual)}
-                        max={caixa.duracaoMeses}
-                        color="primary"
-                        size="sm"
-                      />
-                    )}
-
-                    {/* Ganho Estimado - Corrigido */}
-                    <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100">
-                      <span className="text-xs text-gray-500">Seu ganho estimado (10%)</span>
-                      <span className="font-bold text-green-600">
-                        {formatCurrency(ganhoCorreto)}
-                      </span>
-                    </div>
-                  </Card>
-                </motion.div>
-              );
-            })}
-          </div>
-        ) : (
-          <EmptyState
-            icon={Wallet}
-            title="Nenhum caixa ainda"
-            description="Crie seu primeiro caixa e comece a organizar sua caixinha!"
-            actionLabel="Criar Caixa"
-            onAction={() => navigate('/caixas/novo')}
-          />
-        )}
-      </motion.div>
+      {/* Sessão detalhada de caixas removida da Home do administrador */}
     </motion.div>
   );
 }

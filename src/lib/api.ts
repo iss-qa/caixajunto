@@ -316,4 +316,36 @@ export const carteiraService = {
     const response = await api.post('/usuarios/me/contas-bancarias', data);
     return response.data;
   },
+  updateBankAccount: async (id: string, data: any) => {
+    const response = await api.patch(`/usuarios/me/contas-bancarias/${id}`, data);
+    return response.data;
+  },
+  deleteBankAccount: async (id: string) => {
+    const response = await api.delete(`/usuarios/me/contas-bancarias/${id}`);
+    return response.data;
+  },
+};
+
+export const splitService = {
+  calculate: async (params: { caixaId: string; mes?: number }) => {
+    const response = await api.get('/split/calculate', {
+      params: { caixaId: params.caixaId, mes: params.mes ?? 1 },
+    });
+    return response.data as {
+      caixaId: string;
+      tipoParcela: 'primeira' | 'intermediaria' | 'ultima';
+      participantes: number;
+      meses: number;
+      valorCaixa: number;
+      valorParcela: number;
+      totalArrecadado: number;
+      distribuicao: Array<{
+        chave: 'participante' | 'taxa' | 'fundo_reserva' | 'admin';
+        descricao: string;
+        percentual: number;
+        valor: number;
+        recipientId?: string;
+      }>;
+    };
+  },
 };

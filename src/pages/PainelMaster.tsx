@@ -284,6 +284,20 @@ export function PainelMaster() {
           </p>
           <p className="text-xs text-gray-500 mt-1">Receita Potencial</p>
         </Card>
+
+        {/* Split de Pagamentos */}
+        <Card className="bg-gradient-to-br from-indigo-50 to-indigo-100/50 border-indigo-200/50">
+          <div className="flex items-center justify-between mb-2">
+            <div className="w-10 h-10 bg-indigo-500 rounded-xl flex items-center justify-center">
+              <PieChart className="w-5 h-5 text-white" />
+            </div>
+          </div>
+          <p className="text-base font-semibold text-gray-900 mb-1">Configurar Split</p>
+          <p className="text-xs text-gray-500">Defina percentuais e visualize a distribuição</p>
+          <div className="mt-3">
+            <Button onClick={() => (window.location.href = '/painel-master/split')}>Abrir</Button>
+          </div>
+        </Card>
       </motion.div>
 
       {/* Second Row - Charts and Stats */}
@@ -632,4 +646,3 @@ export function PainelMaster() {
     </motion.div>
   );
 }
-

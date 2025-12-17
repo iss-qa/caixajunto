@@ -2,18 +2,28 @@ import { Link, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Home, Bell, Wallet, User, CreditCard, FileText } from 'lucide-react';
 import { cn } from '../../lib/utils';
-
-const navItems = [
-  { path: '/dashboard', label: 'Início', icon: Home },
-  { path: '/caixas', label: 'Caixas', icon: Wallet },
-  { path: '/pagamentos', label: 'Pagtos', icon: CreditCard },
-  { path: '/notificacoes', label: 'Avisos', icon: Bell },
-  { path: '/contrato', label: 'Contrato', icon: FileText },
-  { path: '/perfil', label: 'Perfil', icon: User },
-];
-
+import { useAuth } from '../../contexts/AuthContext';
+ 
 export function BottomNav() {
   const location = useLocation();
+  const { usuario } = useAuth();
+  const navItems =
+    usuario?.tipo === 'usuario'
+      ? [
+          { path: '/dashboard', label: 'Início', icon: Home },
+          { path: '/caixas', label: 'Caixas', icon: Wallet },
+          { path: '/contrato', label: 'Contrato', icon: FileText },
+          { path: '/carteira', label: 'Carteira', icon: Wallet },
+          { path: '/perfil', label: 'Perfil', icon: User },
+        ]
+      : [
+          { path: '/dashboard', label: 'Início', icon: Home },
+          { path: '/caixas', label: 'Caixas', icon: Wallet },
+          { path: '/pagamentos', label: 'Pagtos', icon: CreditCard },
+          { path: '/notificacoes', label: 'Avisos', icon: Bell },
+          { path: '/contrato', label: 'Contrato', icon: FileText },
+          { path: '/perfil', label: 'Perfil', icon: User },
+        ];
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 md:hidden bg-white border-t border-gray-100 safe-area-bottom z-50">

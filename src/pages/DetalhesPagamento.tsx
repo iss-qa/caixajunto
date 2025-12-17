@@ -7,7 +7,7 @@ import { Avatar } from '../components/ui/Avatar'
 import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
 import { formatCurrency, formatDate, cn } from '../lib/utils'
-import { cobrancasService, pagamentosService } from '../lib/api'
+import { cobrancasService } from '../lib/api'
 
 interface Participante {
   _id: string
@@ -43,6 +43,7 @@ interface CobrancaCompleta {
   valor: number
   descricao: string
   status: 'pago' | 'pendente' | 'atrasado' | 'expirado'
+  dueDate?: string
   paymentUrl?: string
   pix?: {
     qrCode: string
@@ -111,11 +112,16 @@ export function DetalhesPagamento({
   
   // MELHORIA 2: Estado consolidado
   const [cobrancas, setCobrancas] = useState<Map<number, CobrancaCompleta>>(new Map())
+  const cobrancasRef = useRef<Map<number, CobrancaCompleta>>(new Map())
   
   // MELHORIA 3: Refs para evitar closures obsoletas
   const isLoadingRef = useRef(false)
   const lastLoadTimeRef = useRef<number>(0)
   const abortControllerRef = useRef<AbortController | null>(null)
+
+  useEffect(() => {
+    cobrancasRef.current = cobrancas
+  }, [cobrancas])
 
   // MELHORIA 4: Logger com controle de ambiente
   const logger = useMemo(() => ({
@@ -150,13 +156,28 @@ export function DetalhesPagamento({
     try {
       const tx = Array.isArray(invoice?.transactions) ? invoice.transactions[0] : null
       const valorCents = tx?.value ?? invoice?.totalValue ?? 0
+
+      const dueDateRaw = invoice?.dueDate || invoice?.vencimento
       
       // Normalizar datas
       const pixGeradoEm = tx?.createdAt || tx?.created_at || invoice?.createdAt || invoice?.created_at
       
       // Normalizar status
-      const statusRaw = String(invoice?.status || '').toLowerCase()
-      const statusPago = ['paid', 'liquidated', 'settled', 'pago', 'inqueue', 'aprovado'].includes(statusRaw)
+      const statusSources = [
+        invoice?.status,
+        invoice?.lytexStatus,
+        invoice?.detailStatus,
+        invoice?.local?.status,
+      ]
+        .map((s) => String(s || '').toLowerCase())
+        .filter(Boolean)
+      const paidStatuses = ['paid', 'liquidated', 'settled', 'pago', 'inqueue', 'aprovado']
+      const paidAt =
+        invoice?.payedAt ||
+        invoice?.paidAt ||
+        invoice?.paid_at ||
+        invoice?.local?.data_pagamento
+      const statusPago = Boolean(paidAt) || statusSources.some((s) => paidStatuses.includes(s))
       
       // PIX
       const pixQrcode = tx?.pix?.qrcode || invoice?.paymentMethods?.pix?.qrcode || invoice?.pix?.qrcode || ''
@@ -172,6 +193,7 @@ export function DetalhesPagamento({
         valor: Math.round(valorCents) / 100,
         descricao,
         status: statusPago ? 'pago' : 'pendente',
+        dueDate: typeof dueDateRaw === 'string' ? dueDateRaw : undefined,
         paymentUrl: invoice?.linkCheckout || invoice?.paymentUrl,
         pix: (pixQrcode || pixEmv) ? {
           qrCode: pixQrcode,
@@ -189,10 +211,10 @@ export function DetalhesPagamento({
       // Adicionar detalhes de pagamento se pago
       if (statusPago) {
         cobranca.detalhePagamento = {
-          pagoEm: invoice?.payedAt || invoice?.paidAt || invoice?.paid_at,
-          metodo: invoice?.paymentMethod || invoice?.method,
+          pagoEm: paidAt,
+          metodo: invoice?.paymentMethod || invoice?.method || invoice?.local?.metodo_pagamento,
           creditoEm: invoice?.creditAt || invoice?.credit_at,
-          valorPago: invoice?.payedValue || invoice?.paidValue,
+          valorPago: invoice?.payedValue || invoice?.paidValue || invoice?.local?.valor,
           taxas: invoice?.rates || 0
         }
       }
@@ -248,6 +270,20 @@ export function DetalhesPagamento({
         cobrancasPorMes.get(mes)!.push(c)
       }
 
+      if (cobrancasDB.length === 0) {
+        for (const [mes, cobranca] of cobrancasRef.current.entries()) {
+          if (!cobranca?.id) continue
+          if (!cobrancasPorMes.has(mes)) {
+            cobrancasPorMes.set(mes, [])
+          }
+          cobrancasPorMes.get(mes)!.push({
+            lytexId: cobranca.id,
+            descricao: cobranca.descricao,
+            mesReferencia: mes,
+          })
+        }
+      }
+
       // MELHORIA 8: Processar em lotes para evitar sobrecarga
       const novasCobrancas = new Map<number, CobrancaCompleta>()
       const promessas: Promise<void>[] = []
@@ -270,10 +306,17 @@ export function DetalhesPagamento({
                     cobrancasService.paymentDetail(c.lytexId)
                   ])
 
-                  const invoice = invoiceResp?.cobranca || {}
-                  const detail = detailResp?.paymentDetail || detailResp?.detail || detailResp
+                  const invoice = invoiceResp?.cobranca || invoiceResp || {}
+                  const detailWrapper = detailResp || {}
+                  const detail = detailWrapper?.paymentDetail || detailWrapper?.detail || detailWrapper
 
-                  const merged = { ...detail, ...invoice }
+                  const merged = {
+                    ...invoice,
+                    ...detail,
+                    local: detailWrapper?.local,
+                    lytexStatus: invoice?.status,
+                    detailStatus: detail?.status,
+                  }
                   const normalizada = normalizarCobranca(merged, mes, c.descricao || '')
 
                   if (normalizada?.status === 'pago') {
@@ -353,6 +396,19 @@ export function DetalhesPagamento({
       }
     }
   }, [isOpen, participante?._id, loadPaymentDetails])
+
+  useEffect(() => {
+    if (!isOpen || expandedMes === null) return
+
+    const cobranca = cobrancas.get(expandedMes)
+    if (!cobranca || cobranca.status === 'pago') return
+
+    const intervalId = setInterval(() => {
+      void loadPaymentDetails(true)
+    }, POLLING_INTERVAL_MS)
+
+    return () => clearInterval(intervalId)
+  }, [isOpen, expandedMes, cobrancas, loadPaymentDetails])
 
   // Reset ao mudar participante
   useEffect(() => {
@@ -533,7 +589,7 @@ export function DetalhesPagamento({
           totalParcelas: caixa.qtdParticipantes,
         },
         caixaId: caixa._id,
-        participanteId: participante.usuarioId?._id || participante.usuarioId,
+        participanteId: participante._id,
         mesReferencia: boleto.mes,
         dataVencimento: boleto.dataVencimento,
         habilitarPix: true,
@@ -555,7 +611,11 @@ export function DetalhesPagamento({
       // Buscar detalhes completos da cobrança
       const lytexId = response.cobranca?._id || response.cobranca?.id
       if (lytexId) {
-        const invoiceResp = await cobrancasService.buscar(lytexId)
+        const invoiceResp = await cobrancasService.buscar(lytexId, {
+          caixaId: caixa._id,
+          participanteId: participante._id,
+          mes: boleto.mes,
+        })
         const cobrancaNormalizada = normalizarCobranca(
           invoiceResp?.cobranca || invoiceResp,
           boleto.mes,
@@ -712,6 +772,57 @@ export function DetalhesPagamento({
             const isAtrasado = boleto.status === 'atrasado'
             const isExpanded = expandedMes === boleto.mes
 
+            const baseCents = Math.round((boleto.valorTotal || 0) * 100)
+            const cobrancaTotalCents =
+              typeof cobranca?.valor === 'number' && Number.isFinite(cobranca.valor)
+                ? Math.round(cobranca.valor * 100)
+                : null
+
+            const now = new Date()
+            const vencimentoOriginal = new Date(boleto.dataVencimento)
+            const startOfDay = (d: Date) => {
+              const copy = new Date(d)
+              copy.setHours(0, 0, 0, 0)
+              return copy
+            }
+
+            const daysLate =
+              isAtrasado && !Number.isNaN(vencimentoOriginal.getTime())
+                ? Math.max(
+                    1,
+                    Math.floor(
+                      (startOfDay(now).getTime() -
+                        startOfDay(vencimentoOriginal).getTime()) /
+                        (24 * 60 * 60 * 1000),
+                    ),
+                  )
+                : 0
+
+            const multaCents = 300
+            const jurosCents =
+              isAtrasado && daysLate > 0 ? Math.round(baseCents * 0.01 * daysLate) : 0
+            const previewTotalCents =
+              isAtrasado && daysLate > 0 ? baseCents + multaCents + jurosCents : baseCents
+
+            const previewDueDateIso = (() => {
+              if (!isAtrasado) return null
+              const d = new Date()
+              d.setDate(d.getDate() + 5)
+              d.setHours(23, 59, 59, 999)
+              return d.toISOString()
+            })()
+
+            const displayTotalCents =
+              cobrancaTotalCents !== null
+                ? cobrancaTotalCents
+                : isAtrasado
+                  ? previewTotalCents
+                  : baseCents
+
+            const extraCents = Math.max(0, displayTotalCents - baseCents)
+            const displayDueDate =
+              cobranca?.dueDate || (isAtrasado ? previewDueDateIso : boleto.dataVencimento)
+
             return (
               <div 
                 key={boleto.mes} 
@@ -743,7 +854,7 @@ export function DetalhesPagamento({
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="font-bold text-gray-900">
-                      {formatCurrency(boleto.valorTotal)}
+                      {formatCurrency(displayTotalCents / 100)}
                     </span>
                     {!isPago && caixa?.status === 'ativo' && (
                       <button 
@@ -833,6 +944,14 @@ export function DetalhesPagamento({
                             {formatCurrency(TAXA_SERVICO)}
                           </span>
                         </div>
+                        {isAtrasado && extraCents > 0 && (
+                          <div className="flex justify-between">
+                            <span className="text-red-700">Multa + juros</span>
+                            <span className="font-medium text-red-700">
+                              {formatCurrency(extraCents / 100)}
+                            </span>
+                          </div>
+                        )}
                         {boleto.correcaoIPCA > 0 && (
                           <div className="flex justify-between">
                             <span>IPCA</span>
@@ -852,7 +971,7 @@ export function DetalhesPagamento({
                         <div className="flex justify-between pt-1 border-t mt-2">
                           <span className="font-semibold">TOTAL</span>
                           <span className="font-bold text-green-700">
-                            {formatCurrency(boleto.valorTotal)}
+                            {formatCurrency(displayTotalCents / 100)}
                           </span>
                         </div>
                       </div>
@@ -862,7 +981,20 @@ export function DetalhesPagamento({
 
                 {/* Data de Vencimento */}
                 <div className="text-xs text-gray-600">
-                  Vencimento: {formatDate(boleto.dataVencimento)}
+                  {isAtrasado ? (
+                    <div className="space-y-0.5">
+                      <div>Vencimento original: {formatDate(boleto.dataVencimento)}</div>
+                      {displayDueDate && (
+                        <div className="text-red-700 font-medium">
+                          Novo vencimento: {formatDate(displayDueDate)}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <span>
+                      Vencimento: {formatDate(displayDueDate || boleto.dataVencimento)}
+                    </span>
+                  )}
                 </div>
 
                 {/* Área Expandida - Pagamento */}
@@ -890,6 +1022,14 @@ export function DetalhesPagamento({
                           {formatCurrency(TAXA_SERVICO)}
                         </span>
                       </div>
+                      {isAtrasado && extraCents > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-red-700">Multa + juros</span>
+                          <span className="font-medium text-red-700">
+                            {formatCurrency(extraCents / 100)}
+                          </span>
+                        </div>
+                      )}
                       {boleto.correcaoIPCA > 0 && (
                         <div className="flex justify-between">
                           <span>IPCA</span>

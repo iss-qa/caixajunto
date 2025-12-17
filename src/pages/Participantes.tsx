@@ -134,6 +134,7 @@ export function Participantes() {
     cpf: '',
     chavePix: '',
     picture: '',
+    senha: '',
   });
 
   useEffect(() => {
@@ -153,22 +154,31 @@ export function Participantes() {
       const responseParticipantes = await participantesService.getAll();
       const listaParticipantes = Array.isArray(responseParticipantes) ? responseParticipantes : responseParticipantes.participantes || [];
 
-      // Para o master, buscar todos os caixas para descobrir o administrador de cada participante
+      // Buscar caixas para mapear nomes e administradores
       let caixasPorId: Record<string, CaixaResumo> = {};
-      if (usuarioLogado?.tipo === 'master') {
-        try {
-          const respCaixas = await caixasService.getAll();
-          const listaCaixas = (Array.isArray(respCaixas) ? respCaixas : respCaixas.caixas || []) as CaixaResumo[];
-          setCaixas(listaCaixas);
-          caixasPorId = listaCaixas.reduce((map: Record<string, CaixaResumo>, c: CaixaResumo) => {
-            if (c && c._id) {
-              map[c._id] = c;
-            }
-            return map;
-          }, {});
-        } catch (e) {
-          console.error('Erro ao carregar caixas para mapear administradores:', e);
+      try {
+        let respCaixas: any;
+        if (usuarioLogado?.tipo === 'master') {
+          respCaixas = await caixasService.getAll();
+        } else {
+          // Administrador: pega apenas seus caixas; fallback para getAll se necessário
+          try {
+            respCaixas = await caixasService.getByAdmin(usuarioLogado!._id);
+          } catch (e) {
+            respCaixas = await caixasService.getAll();
+          }
         }
+        const listaCaixas = (Array.isArray(respCaixas) ? respCaixas : respCaixas.caixas || []) as CaixaResumo[];
+        // Expor caixas disponíveis para o combo (exclui em andamento)
+        setCaixas(listaCaixas.filter((c: any) => String(c.status || '') !== 'ativo'));
+        caixasPorId = listaCaixas.reduce((map: Record<string, CaixaResumo>, c: CaixaResumo) => {
+          if (c && c._id) {
+            map[c._id] = c;
+          }
+          return map;
+        }, {});
+      } catch (e) {
+        console.error('Erro ao carregar caixas para mapear administradores:', e);
       }
       
       // Combinar usuários com seus caixas
@@ -186,9 +196,9 @@ export function Participantes() {
         
         return {
           ...usuario,
-          caixaNome: vinculo?.caixaId?.nome || vinculo?.caixaNome || '',
+          caixaNome: vinculo?.caixaId?.nome || vinculo?.caixaNome || (caixasPorId[caixaId]?.nome || ''),
           caixaId,
-          adminNome: adminFromCaixa || '',
+          adminNome: adminFromCaixa || (caixasPorId[caixaId]?.adminId && typeof caixasPorId[caixaId].adminId !== 'string' ? (caixasPorId[caixaId].adminId as any)?.nome || '' : ''),
         };
       });
       
@@ -306,6 +316,13 @@ export function Participantes() {
       return;
     }
 
+    // Validar senha
+    if (!formData.senha || formData.senha.length < 6) {
+      setErrorMessage('Defina uma senha com pelo menos 6 caracteres.');
+      setShowErrorModal(true);
+      return;
+    }
+
     // Validar CPF se fornecido
     const cpfDigits = formData.cpf ? formatCPF(formData.cpf) : '';
     if (cpfDigits && cpfDigits.length === 11 && !validarCPF(cpfDigits)) {
@@ -328,7 +345,7 @@ export function Participantes() {
         cpf: cpfDigits,
         telefone: telefoneDigits,
         tipo: 'usuario',
-        senha: 'Senha@123', // Senha padrão
+        senha: formData.senha,
       });
 
       if (selectedCaixaId) {
@@ -377,6 +394,8 @@ export function Participantes() {
         ...formData,
         cpf: cpfDigits,
         telefone: telefoneDigits,
+        // Envia senha somente se informada
+        ...(formData.senha ? { senha: formData.senha } : {}),
       });
       await loadParticipantes();
       setShowEditModal(false);
@@ -419,6 +438,7 @@ export function Participantes() {
       cpf: participante.cpf || '',
       chavePix: participante.chavePix || '',
       picture: participante.picture || '',
+      senha: '',
     });
     setImagePreview(participante.picture || '');
     setShowEditModal(true);
@@ -442,6 +462,7 @@ export function Participantes() {
       cpf: '',
       chavePix: '',
       picture: '',
+      senha: '',
     });
     setImagePreview('');
     setCpfError('');
@@ -699,7 +720,23 @@ export function Participantes() {
             onChange={(e) => setFormData({ ...formData, chavePix: e.target.value })}
           />
 
-          {usuarioLogado?.tipo === 'master' && caixas.length > 0 && (
+          <Input
+            label="Senha"
+            type="password"
+            placeholder="Atualizar senha (opcional)"
+            value={formData.senha}
+            onChange={(e) => setFormData({ ...formData, senha: e.target.value })}
+          />
+
+          <Input
+            label="Senha *"
+            type="password"
+            placeholder="Defina a senha do participante"
+            value={formData.senha}
+            onChange={(e) => setFormData({ ...formData, senha: e.target.value })}
+          />
+
+          {(usuarioLogado?.tipo === 'master' || usuarioLogado?.tipo === 'administrador') && caixas.length > 0 && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Vincular ao Caixa
@@ -710,7 +747,7 @@ export function Participantes() {
                 onChange={(e) => setSelectedCaixaId(e.target.value)}
               >
                 <option value="">Sem caixa (apenas cadastrar usuário)</option>
-                {caixas.map((c) => (
+                {caixas.filter((c: any) => String((c as any).status || '') !== 'ativo').map((c) => (
                   <option key={c._id} value={c._id}>
                     {c.nome}
                     {c.adminId && typeof c.adminId === 'object' && c.adminId.nome

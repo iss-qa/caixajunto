@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Wallet, TrendingUp, Download, Plus, Eye, EyeOff, Building2, Check, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { carteiraService, cobrancasService, caixasService, pagamentosService, bancosService } from '../lib/api';
+import { carteiraService, cobrancasService, caixasService, pagamentosService } from '../lib/api';
 import { formatCurrency, formatDate } from '../lib/utils';
 
 type StatusTransacaoCarteira = 'em_dia' | 'atrasado';
@@ -72,18 +73,17 @@ interface TransacaoLytexCarteira {
 
 const WalletDashboard = () => {
   const { usuario, updateUsuario } = useAuth();
+  const navigate = useNavigate();
   const [showBalance, setShowBalance] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
-  const [showModal, setShowModal] = useState<null | 'withdraw' | 'addBank'>(null);
+  const [showModal, setShowModal] = useState<null | 'withdraw'>(null);
   const [selectedBank, setSelectedBank] = useState<string | null>(null);
   const [withdrawAmount, setWithdrawAmount] = useState('');
-  const [banks, setBanks] = useState<Array<{ code: string; name: string }>>([]);
-  const [loadingBanks, setLoadingBanks] = useState(false);
-  const [banksError, setBanksError] = useState<string | null>(null);
   const [walletError, setWalletError] = useState<string | null>(null);
   const [hasSubAccount, setHasSubAccount] = useState(
     Boolean(usuario?.lytexSubAccountId),
   );
+  const [checkingSubAccount, setCheckingSubAccount] = useState(false);
   const [creatingSubAccount, setCreatingSubAccount] = useState(false);
   const [subAccountError, setSubAccountError] = useState<string | null>(null);
   const [recentTransactions, setRecentTransactions] = useState<TransacaoRecenteCarteira[]>([]);
@@ -435,27 +435,6 @@ const WalletDashboard = () => {
     }
   };
 
-  const fetchBanks = async () => {
-    try {
-      setLoadingBanks(true);
-      setBanksError(null);
-      const data = (await bancosService.getAll()) as {
-        banks?: Array<{ code: string; name: string }>;
-      };
-      const list = Array.isArray(data?.banks) ? data.banks : [];
-      setBanks(
-        list.map((b) => ({
-          code: String(b.code),
-          name: String(b.name),
-        })),
-      );
-    } catch (e: any) {
-      setBanksError(e?.message || 'Erro ao listar bancos');
-    } finally {
-      setLoadingBanks(false);
-    }
-  };
-
   const fetchBankAccounts = async () => {
     try {
       const response = await carteiraService.getBankAccounts();
@@ -620,12 +599,6 @@ const WalletDashboard = () => {
     }
   }, [hasSubAccount, usuario]);
 
-  useEffect(() => {
-    if (showModal === 'addBank') {
-      fetchBanks();
-    }
-  }, [showModal]);
-
   const OverviewTab = () => (
     <div className="space-y-6">
       <div className="bg-gradient-to-br from-blue-600 to-blue-800 rounded-2xl p-6 text-white">
@@ -656,7 +629,7 @@ const WalletDashboard = () => {
             Solicitar Saque
           </button>
           <button
-            onClick={() => setShowModal('addBank')}
+            onClick={() => navigate('/carteira/banco')}
             className="flex-1 bg-blue-700 text-white py-3 rounded-lg font-semibold hover:bg-blue-600 transition-colors flex items-center justify-center gap-2"
           >
             <Plus size={18} />
@@ -1016,7 +989,7 @@ const WalletDashboard = () => {
       <div className="flex justify-between items-center">
         <h3 className="font-semibold text-gray-800">Minhas Contas Bancárias</h3>
         <button
-          onClick={() => setShowModal('addBank')}
+          onClick={() => navigate('/carteira/banco')}
           className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
         >
           <Plus size={18} />
@@ -1155,181 +1128,6 @@ const WalletDashboard = () => {
       </div>
     </div>
   );
-
-  const AddBankModal = () => {
-    const [formData, setFormData] = useState({
-      bank: '',
-      agency: '',
-      agencyDv: '',
-      account: '',
-      accountDv: '',
-      accountType: 'corrente'
-    });
-
-    const handleSubmit = async () => {
-      if (!formData.bank) {
-        alert('Selecione o banco antes de continuar');
-        return;
-      }
-      const bankInfo = banks.find((b) => b.code === formData.bank);
-      if (!bankInfo) {
-        alert('Banco selecionado inválido');
-        return;
-      }
-      try {
-        const payload = {
-          bankCode: bankInfo.code,
-          bankName: bankInfo.name,
-          agency: formData.agency,
-          agencyDv: formData.agencyDv,
-          account: formData.account,
-          accountDv: formData.accountDv,
-          accountType: formData.accountType as 'corrente' | 'poupanca',
-          isDefault: bankAccounts.length === 0,
-        };
-        const saved = await carteiraService.saveBankAccount(payload);
-        const savedConta = {
-          _id: String(saved._id || ''),
-          bankCode: String(saved.bankCode || payload.bankCode),
-          bankName: String(saved.bankName || payload.bankName),
-          agency: String(saved.agency || payload.agency),
-          agencyDv: String(saved.agencyDv || payload.agencyDv),
-          account: String(saved.account || payload.account),
-          accountDv: String(saved.accountDv || payload.accountDv),
-          accountType:
-            saved.accountType === 'poupanca'
-              ? 'poupanca'
-              : (payload.accountType as 'corrente' | 'poupanca'),
-          isDefault:
-            typeof saved.isDefault === 'boolean'
-              ? saved.isDefault
-              : payload.isDefault,
-        };
-        setBankAccounts((prev) => {
-          const withoutDefault = savedConta.isDefault
-            ? prev.map((c) => ({ ...c, isDefault: false }))
-            : prev;
-          return [savedConta, ...withoutDefault];
-        });
-        alert('Conta bancária adicionada com sucesso!');
-        setShowModal(null);
-        setFormData({
-          bank: '',
-          agency: '',
-          agencyDv: '',
-          account: '',
-          accountDv: '',
-          accountType: 'corrente',
-        });
-      } catch (e: any) {
-        const message =
-          e?.response?.data?.message ||
-          e?.message ||
-          'Erro ao salvar conta bancária';
-        alert(message);
-      }
-    };
-
-    return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-        <div className="bg-white rounded-2xl max-w-md w-full p-6 max-h-[90vh] overflow-y-auto">
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="text-xl font-bold text-gray-800">Adicionar Conta Bancária</h3>
-            <button onClick={() => setShowModal(null)} className="text-gray-400 hover:text-gray-600">
-              <X size={24} />
-            </button>
-          </div>
-
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Banco</label>
-              <select
-                value={formData.bank}
-                onChange={(e) => setFormData({ ...formData, bank: e.target.value })}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">Selecione o banco</option>
-                {banks.map((b) => (
-                  <option key={b.code} value={b.code}>{b.code} - {b.name}</option>
-                ))}
-              </select>
-              {loadingBanks && (
-                <p className="text-xs text-gray-500 mt-1">Carregando bancos...</p>
-              )}
-              {banksError && (
-                <p className="text-xs text-red-600 mt-1">{banksError}</p>
-              )}
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Agência</label>
-                <input
-                  type="text"
-                  value={formData.agency}
-                  onChange={(e) => setFormData({...formData, agency: e.target.value})}
-                  placeholder="0000"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Dígito</label>
-                <input
-                  type="text"
-                  value={formData.agencyDv}
-                  onChange={(e) => setFormData({...formData, agencyDv: e.target.value})}
-                  placeholder="0"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Conta</label>
-                <input
-                  type="text"
-                  value={formData.account}
-                  onChange={(e) => setFormData({...formData, account: e.target.value})}
-                  placeholder="00000000"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Dígito</label>
-                <input
-                  type="text"
-                  value={formData.accountDv}
-                  onChange={(e) => setFormData({...formData, accountDv: e.target.value})}
-                  placeholder="0"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Tipo de Conta</label>
-              <select 
-                value={formData.accountType}
-                onChange={(e) => setFormData({...formData, accountType: e.target.value})}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="corrente">Conta Corrente</option>
-                <option value="poupanca">Conta Poupança</option>
-              </select>
-            </div>
-
-            <button
-              onClick={handleSubmit}
-              className="w-full py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors"
-            >
-              Adicionar Conta
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  };
 
   if (!hasSubAccount) {
     return (
@@ -1690,7 +1488,6 @@ const WalletDashboard = () => {
       </div>
 
       {showModal === 'withdraw' && <WithdrawModal />}
-      {showModal === 'addBank' && <AddBankModal />}
     </div>
   );
 };

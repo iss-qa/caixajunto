@@ -268,6 +268,7 @@ export function Caixas() {
     const variants: Record<string, 'success' | 'warning' | 'danger' | 'info' | 'gray'> = {
       ativo: 'success',
       aguardando: 'warning',
+      pausado: 'warning',
       rascunho: 'gray',
       finalizado: 'info',
       cancelado: 'danger',
@@ -279,6 +280,7 @@ export function Caixas() {
     const labels: Record<string, string> = {
       ativo: 'Em andamento',
       aguardando: 'Aguardando participantes',
+      pausado: 'Pausado',
       rascunho: 'Não iniciado',
       finalizado: 'Finalizado',
       cancelado: 'Cancelado',

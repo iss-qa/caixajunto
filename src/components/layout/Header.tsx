@@ -26,7 +26,15 @@ export function Header() {
       { path: '/carteira', label: 'Carteira', icon: Wallet },
     ];
 
-    // Se for master, adiciona opção do Painel Master
+    if (usuario?.tipo === 'usuario') {
+      return [
+        { path: '/dashboard', label: 'Home', icon: LayoutDashboard },
+        { path: '/caixas', label: 'Caixas', icon: Wallet },
+        { path: '/contrato', label: 'Contrato', icon: FileText },
+        { path: '/carteira', label: 'Carteira', icon: Wallet },
+      ];
+    }
+
     if (usuario?.tipo === 'master') {
       return [
         { path: '/painel-master', label: 'Painel Master', icon: Crown },

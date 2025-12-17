@@ -37,6 +37,7 @@ import {
   UserCheck,
 } from 'lucide-react';
 import { caixasService, participantesService, usuariosService, cobrancasService, pagamentosService } from '../lib/api';
+import { useAuth } from '../contexts/AuthContext';
 import { DetalhesPagamento } from './DetalhesPagamento';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -137,6 +138,7 @@ const FUNDO_RESERVA = 50;
 export function CaixaDetalhes() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { usuario } = useAuth();
   const [caixa, setCaixa] = useState<Caixa | null>(null);
   const [participantes, setParticipantes] = useState<Participante[]>([]);
   const [loading, setLoading] = useState(true);
@@ -375,11 +377,19 @@ export function CaixaDetalhes() {
 
                     const invoice = invoiceResp?.cobranca || invoiceResp || {};
                     const detail = detailResp?.paymentDetail || detailResp?.detail || detailResp || {};
-
-                    const statusRaw = String(invoice?.status || detail?.status || '').toLowerCase();
+                    const localStatus = String(detailResp?.local?.status || '').toLowerCase();
+                    const statusList = [invoice?.status, detail?.status, localStatus]
+                      .map((s: unknown) => String(s || '').toLowerCase())
+                      .filter(Boolean);
                     const pagos = ['paid', 'liquidated', 'settled', 'pago', 'inqueue', 'aprovado'];
+                    const paidAt =
+                      detail?.payedAt ||
+                      detail?.paidAt ||
+                      detail?.paid_at ||
+                      detailResp?.local?.data_pagamento;
+                    const isPago = Boolean(paidAt) || statusList.some((s) => pagos.includes(s));
 
-                    if (pagos.includes(statusRaw)) {
+                    if (isPago) {
                       markPaid(mes, p._id);
                     }
 
@@ -572,6 +582,26 @@ export function CaixaDetalhes() {
       loadCaixa();
     } catch (error) {
       console.error('Erro ao ativar:', error);
+    }
+  };
+
+  const handlePause = async () => {
+    if (!id) return;
+    try {
+      await caixasService.alterarStatus(id, 'pausado');
+      if (caixa) setCaixa({ ...caixa, status: 'pausado' });
+    } catch (error) {
+      console.error('Erro ao pausar caixa:', error);
+    }
+  };
+
+  const handleResume = async () => {
+    if (!id) return;
+    try {
+      await caixasService.alterarStatus(id, 'ativo');
+      if (caixa) setCaixa({ ...caixa, status: 'ativo' });
+    } catch (error) {
+      console.error('Erro ao reativar caixa:', error);
     }
   };
 
@@ -1069,6 +1099,26 @@ export function CaixaDetalhes() {
           >
             Excluir
           </Button>
+          {usuario?.tipo === 'master' && (
+            caixa?.status === 'ativo' ? (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={handlePause}
+                className="bg-amber-500 text-white hover:bg-amber-600"
+              >
+                Pausar Caixa
+              </Button>
+            ) : caixa?.status === 'pausado' ? (
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={handleResume}
+              >
+                Reativar Caixa
+              </Button>
+            ) : null
+          )}
         </div>
       </div>
 
@@ -1095,6 +1145,11 @@ export function CaixaDetalhes() {
                     <Badge className="bg-white text-green-600">
                       <Play className="w-3 h-3 mr-1" />
                       Em andamento
+                    </Badge>
+                  )}
+                  {caixa?.status === 'pausado' && (
+                    <Badge variant="warning" className="bg-white text-amber-600">
+                      Pausado
                     </Badge>
                   )}
                   <span className="text-white/90 text-sm font-medium border-l border-white/30 pl-2 ml-1">
