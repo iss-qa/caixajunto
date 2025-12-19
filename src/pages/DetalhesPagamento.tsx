@@ -36,7 +36,6 @@ interface Caixa {
   dataInicio?: string
 }
 
-// MELHORIA 1: Estrutura de dados consolidada
 interface CobrancaCompleta {
   id: string
   mes: number
@@ -82,8 +81,8 @@ interface Boleto {
 const TAXA_IPCA_MENSAL = 0.0041
 const TAXA_SERVICO = 5
 const PIX_EXPIRATION_MINUTES = 30
-const POLLING_INTERVAL_MS = 15000 // Aumentado para 15s
-const CACHE_VALIDITY_MS = 30000 // Cache válido por 30s
+const POLLING_INTERVAL_MS = 30000 // Aumentado para 30s
+const CACHE_VALIDITY_MS = 60000 // Cache de 1 minuto
 
 interface DetalhesPagamentoProps {
   isOpen: boolean
@@ -109,27 +108,24 @@ export function DetalhesPagamento({
   const [gerandoCobranca, setGerandoCobranca] = useState(false)
   const [boletoSelecionado, setBoletoSelecionado] = useState<number | null>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
-  
-  // MELHORIA 2: Estado consolidado
   const [cobrancas, setCobrancas] = useState<Map<number, CobrancaCompleta>>(new Map())
-  const cobrancasRef = useRef<Map<number, CobrancaCompleta>>(new Map())
   
-  // MELHORIA 3: Refs para evitar closures obsoletas
+  // Refs para controle de carregamento
   const isLoadingRef = useRef(false)
   const lastLoadTimeRef = useRef<number>(0)
   const abortControllerRef = useRef<AbortController | null>(null)
+  const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const mountedRef = useRef(true)
+  
+  // IDs estáveis para dependências
+  const caixaId = caixa?._id
+  const participanteId = participante?._id
 
-  useEffect(() => {
-    cobrancasRef.current = cobrancas
-  }, [cobrancas])
-
-  // MELHORIA 4: Logger com controle de ambiente
+  // Logger otimizado
   const logger = useMemo(() => ({
-    group: (title: string, data: Record<string, any>) => {
+    log: (message: string, data?: any) => {
       if (import.meta.env.MODE === 'development') {
-        console.group(`💳 ${title}`)
-        Object.entries(data).forEach(([k, v]) => console.log(`  ${k}:`, v))
-        console.groupEnd()
+        console.log(`💳 ${message}`, data)
       }
     },
     error: (message: string, error?: any) => {
@@ -140,14 +136,14 @@ export function DetalhesPagamento({
     }
   }), [])
 
-  // MELHORIA 5: Função de expiração otimizada
+  // Verificar expiração do PIX
   const isPixExpired = useCallback((pix?: CobrancaCompleta['pix']): boolean => {
     if (!pix?.geradoEm) return false
     const minutosDecorridos = (Date.now() - new Date(pix.geradoEm).getTime()) / 60000
     return minutosDecorridos >= PIX_EXPIRATION_MINUTES
   }, [])
 
-  // MELHORIA 6: Normalização de dados centralizada
+  // Normalização de dados
   const normalizarCobranca = useCallback((
     invoice: any, 
     mes: number, 
@@ -158,8 +154,6 @@ export function DetalhesPagamento({
       const valorCents = tx?.value ?? invoice?.totalValue ?? 0
 
       const dueDateRaw = invoice?.dueDate || invoice?.vencimento
-      
-      // Normalizar datas
       const pixGeradoEm = tx?.createdAt || tx?.created_at || invoice?.createdAt || invoice?.created_at
       
       // Normalizar status
@@ -171,12 +165,9 @@ export function DetalhesPagamento({
       ]
         .map((s) => String(s || '').toLowerCase())
         .filter(Boolean)
+      
       const paidStatuses = ['paid', 'liquidated', 'settled', 'pago', 'inqueue', 'aprovado']
-      const paidAt =
-        invoice?.payedAt ||
-        invoice?.paidAt ||
-        invoice?.paid_at ||
-        invoice?.local?.data_pagamento
+      const paidAt = invoice?.payedAt || invoice?.paidAt || invoice?.paid_at || invoice?.local?.data_pagamento
       const statusPago = Boolean(paidAt) || statusSources.some((s) => paidStatuses.includes(s))
       
       // PIX
@@ -208,7 +199,6 @@ export function DetalhesPagamento({
         ultimaAtualizacao: Date.now()
       }
 
-      // Adicionar detalhes de pagamento se pago
       if (statusPago) {
         cobranca.detalhePagamento = {
           pagoEm: paidAt,
@@ -226,23 +216,27 @@ export function DetalhesPagamento({
     }
   }, [logger])
 
-  // MELHORIA 7: Carregamento otimizado com cache e debounce
+  // 🔥 FUNÇÃO PRINCIPAL DE CARREGAMENTO - OTIMIZADA
   const loadPaymentDetails = useCallback(async (forceRefresh = false) => {
-    if (!caixa?._id || !participante?._id) return
+    // Verificações iniciais
+    if (!caixaId || !participanteId || !mountedRef.current) {
+      return
+    }
     
     // Prevenir múltiplas chamadas simultâneas
     if (isLoadingRef.current) {
-      logger.warn('Carregamento já em andamento, ignorando')
+      logger.warn('Carregamento já em andamento')
       return
     }
 
     // Verificar cache
     const timeSinceLastLoad = Date.now() - lastLoadTimeRef.current
     if (!forceRefresh && timeSinceLastLoad < CACHE_VALIDITY_MS) {
-      logger.warn('Usando cache', { tempoDecorrido: timeSinceLastLoad })
+      logger.log('Usando cache', { tempoDecorrido: `${Math.round(timeSinceLastLoad / 1000)}s` })
       return
     }
 
+    // Iniciar carregamento
     setIsRefreshing(true)
     isLoadingRef.current = true
     
@@ -253,15 +247,21 @@ export function DetalhesPagamento({
     abortControllerRef.current = new AbortController()
 
     try {
+      logger.log('Iniciando carregamento de cobranças...')
+
+      // 1. Buscar todas as cobranças da associação (UMA VEZ)
       const response = await cobrancasService.getAllByAssociacao({
-        caixaId: caixa._id,
-        participanteId: participante._id,
+        caixaId,
+        participanteId,
       })
 
-      const cobrancasDB = response.cobrancas || []
-      const cobrancasPorMes = new Map<number, any[]>()
+      if (!mountedRef.current) return
 
-      // Agrupar por mês
+      const cobrancasDB = response.cobrancas || []
+      logger.log(`Encontradas ${cobrancasDB.length} cobranças no banco`)
+
+      // 2. Agrupar por mês
+      const cobrancasPorMes = new Map<number, any[]>()
       for (const c of cobrancasDB) {
         const mes = c.mesReferencia
         if (!cobrancasPorMes.has(mes)) {
@@ -270,37 +270,25 @@ export function DetalhesPagamento({
         cobrancasPorMes.get(mes)!.push(c)
       }
 
-      if (cobrancasDB.length === 0) {
-        for (const [mes, cobranca] of cobrancasRef.current.entries()) {
-          if (!cobranca?.id) continue
-          if (!cobrancasPorMes.has(mes)) {
-            cobrancasPorMes.set(mes, [])
-          }
-          cobrancasPorMes.get(mes)!.push({
-            lytexId: cobranca.id,
-            descricao: cobranca.descricao,
-            mesReferencia: mes,
-          })
-        }
-      }
-
-      // MELHORIA 8: Processar em lotes para evitar sobrecarga
+      // 3. Processar cobranças em LOTE (não em loop)
       const novasCobrancas = new Map<number, CobrancaCompleta>()
-      const promessas: Promise<void>[] = []
+      const promises: Promise<void>[] = []
 
       for (const [mes, candidatos] of cobrancasPorMes.entries()) {
+        // Processar cada mês em paralelo
         const promessa = (async () => {
           try {
-            // Processar candidatos em paralelo
+            // Buscar detalhes de todos os candidatos em paralelo
             const resultados = await Promise.allSettled(
               candidatos.map(async (c) => {
                 if (!c.lytexId) return null
 
                 try {
+                  // Buscar invoice e detail em paralelo
                   const [invoiceResp, detailResp] = await Promise.all([
                     cobrancasService.buscar(c.lytexId, {
-                      caixaId: caixa._id,
-                      participanteId: participante._id,
+                      caixaId,
+                      participanteId,
                       mes
                     }),
                     cobrancasService.paymentDetail(c.lytexId)
@@ -317,10 +305,12 @@ export function DetalhesPagamento({
                     lytexStatus: invoice?.status,
                     detailStatus: detail?.status,
                   }
+
                   const normalizada = normalizarCobranca(merged, mes, c.descricao || '')
 
-                  if (normalizada?.status === 'pago') {
-                    onPaidUpdate?.(mes, participante._id)
+                  // Notificar se pago
+                  if (normalizada?.status === 'pago' && mountedRef.current) {
+                    onPaidUpdate?.(mes, participanteId)
                   }
 
                   return normalizada
@@ -338,13 +328,14 @@ export function DetalhesPagamento({
               )
               .map(r => r.value!)
 
+            // Prioridade: pago > não expirado > primeiro disponível
             const candidatoPago = candidatosValidos.find(c => c.status === 'pago')
             const candidatoNaoExpirado = candidatosValidos.find(c => 
               c.pix && !isPixExpired(c.pix)
             )
             const melhorCandidato = candidatoPago || candidatoNaoExpirado || candidatosValidos[0]
 
-            if (melhorCandidato) {
+            if (melhorCandidato && mountedRef.current) {
               novasCobrancas.set(mes, melhorCandidato)
             }
           } catch (error) {
@@ -352,23 +343,19 @@ export function DetalhesPagamento({
           }
         })()
 
-        promessas.push(promessa)
+        promises.push(promessa)
       }
 
-      await Promise.allSettled(promessas)
+      // Aguardar todas as promessas
+      await Promise.allSettled(promises)
 
-      // MELHORIA 9: Atualização de estado otimizada
-      setCobrancas(prev => {
-        const nova = new Map(prev)
-        for (const [mes, cobranca] of novasCobrancas.entries()) {
-          nova.set(mes, cobranca)
-        }
-        return nova
-      })
+      if (!mountedRef.current) return
 
+      // 4. Atualizar estado UMA VEZ
+      setCobrancas(novasCobrancas)
       lastLoadTimeRef.current = Date.now()
-      logger.group('Cobranças carregadas', {
-        participante: participante.usuarioId.nome,
+
+      logger.log('Carregamento completo', {
         total: novasCobrancas.size,
         pagas: Array.from(novasCobrancas.values()).filter(c => c.status === 'pago').length
       })
@@ -378,46 +365,80 @@ export function DetalhesPagamento({
         logger.error('Erro ao carregar detalhes de pagamento', error)
       }
     } finally {
-      setIsRefreshing(false)
+      if (mountedRef.current) {
+        setIsRefreshing(false)
+      }
       isLoadingRef.current = false
     }
-  }, [caixa?._id, participante?._id, normalizarCobranca, isPixExpired, onPaidUpdate, logger])
+  }, [caixaId, participanteId, normalizarCobranca, isPixExpired, onPaidUpdate, logger])
 
-  // MELHORIA 10: Carregamento ao abrir modal (sem polling)
+  // 🔥 EFFECT PRINCIPAL - CARREGA UMA VEZ AO ABRIR
   useEffect(() => {
-    if (!isOpen || !participante) return
+    if (!isOpen || !participanteId) return
 
+    mountedRef.current = true
+    
     // Carregamento inicial
     loadPaymentDetails(true)
 
+    // Cleanup
     return () => {
+      mountedRef.current = false
       if (abortControllerRef.current) {
         abortControllerRef.current.abort()
       }
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current)
+      }
     }
-  }, [isOpen, participante?._id, loadPaymentDetails])
+  }, [isOpen, participanteId]) // Dependências mínimas estáveis
 
+  // 🔥 POLLING OTIMIZADO - APENAS PARA MÊS EXPANDIDO E NÃO PAGO
   useEffect(() => {
-    if (!isOpen || expandedMes === null) return
+    if (!isOpen || expandedMes === null) {
+      // Limpar polling se não há mês expandido
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current)
+        pollingIntervalRef.current = null
+      }
+      return
+    }
 
     const cobranca = cobrancas.get(expandedMes)
-    if (!cobranca || cobranca.status === 'pago') return
+    
+    // Não fazer polling se já está pago
+    if (cobranca?.status === 'pago') {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current)
+        pollingIntervalRef.current = null
+      }
+      return
+    }
 
-    const intervalId = setInterval(() => {
-      void loadPaymentDetails(true)
+    // Iniciar polling
+    logger.log(`Iniciando polling para mês ${expandedMes}`)
+    pollingIntervalRef.current = setInterval(() => {
+      logger.log('Executando polling...')
+      loadPaymentDetails(true)
     }, POLLING_INTERVAL_MS)
 
-    return () => clearInterval(intervalId)
-  }, [isOpen, expandedMes, cobrancas, loadPaymentDetails])
+    // Cleanup
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current)
+        pollingIntervalRef.current = null
+      }
+    }
+  }, [isOpen, expandedMes, cobrancas, loadPaymentDetails, logger])
 
   // Reset ao mudar participante
   useEffect(() => {
     setCobrancas(new Map())
     setExpandedMes(null)
     lastLoadTimeRef.current = 0
-  }, [participante?._id])
+  }, [participanteId])
 
-  // MELHORIA 11: Memoização de cálculos pesados
+  // Cálculo de boletos
   const boletos = useMemo(() => {
     if (!caixa || !participante) return []
 
@@ -465,7 +486,7 @@ export function DetalhesPagamento({
     return resultado
   }, [caixa, participante, cobrancas])
 
-  // MELHORIA 12: Handlers otimizados com useCallback
+  // Handlers
   const handleCopyPix = useCallback(async (mes: number) => {
     const cobranca = cobrancas.get(mes)
     if (!cobranca?.pix?.copiaCola) return
@@ -554,7 +575,6 @@ export function DetalhesPagamento({
     w.close()
   }, [cobrancas])
 
-  // MELHORIA 13: Geração de cobrança com melhor tratamento de erros
   const handleGerarCobranca = useCallback(async (boleto: Boleto) => {
     if (!participante || !caixa) return
 
@@ -596,11 +616,7 @@ export function DetalhesPagamento({
         habilitarBoleto: true,
       }
 
-      logger.group('Gerando cobrança', {
-        participante: participante.usuarioId.nome,
-        mes: boleto.mes,
-        valor: boleto.valorTotal
-      })
+      logger.log('Gerando cobrança', { mes: boleto.mes, valor: boleto.valorTotal })
 
       const response = await cobrancasService.gerar(payload)
 
@@ -608,7 +624,7 @@ export function DetalhesPagamento({
         throw new Error(response.message || 'Erro ao gerar cobrança')
       }
 
-      // Buscar detalhes completos da cobrança
+      // Buscar detalhes completos
       const lytexId = response.cobranca?._id || response.cobranca?.id
       if (lytexId) {
         const invoiceResp = await cobrancasService.buscar(lytexId, {
@@ -616,6 +632,7 @@ export function DetalhesPagamento({
           participanteId: participante._id,
           mes: boleto.mes,
         })
+        
         const cobrancaNormalizada = normalizarCobranca(
           invoiceResp?.cobranca || invoiceResp,
           boleto.mes,
@@ -628,11 +645,7 @@ export function DetalhesPagamento({
           setPaymentTab('pix')
           onRefreshPagamentos?.()
 
-          logger.group('Cobrança criada com sucesso', {
-            id: cobrancaNormalizada.id,
-            mes: boleto.mes,
-            valor: cobrancaNormalizada.valor
-          })
+          logger.log('Cobrança criada', { id: cobrancaNormalizada.id })
         }
       }
 

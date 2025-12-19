@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Wallet, TrendingUp, Download, Plus, Eye, EyeOff, Building2, Check, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { carteiraService, cobrancasService, caixasService, pagamentosService } from '../lib/api';
+import { carteiraService, cobrancasService, caixasService, pagamentosService, subcontasService, bancosService } from '../lib/api';
 import { formatCurrency, formatDate } from '../lib/utils';
 
 type StatusTransacaoCarteira = 'em_dia' | 'atrasado';
@@ -83,7 +83,10 @@ const WalletDashboard = () => {
   const [hasSubAccount, setHasSubAccount] = useState(
     Boolean(usuario?.lytexSubAccountId),
   );
-  const [checkingSubAccount, setCheckingSubAccount] = useState(false);
+  // Inicia como true se não tiver ID, para evitar piscar o formulário antes da verificação
+  const [checkingSubAccount, setCheckingSubAccount] = useState(
+    !usuario?.lytexSubAccountId,
+  );
   const [creatingSubAccount, setCreatingSubAccount] = useState(false);
   const [subAccountError, setSubAccountError] = useState<string | null>(null);
   const [recentTransactions, setRecentTransactions] = useState<TransacaoRecenteCarteira[]>([]);
@@ -94,6 +97,8 @@ const WalletDashboard = () => {
   const [lytexTransactionsError, setLytexTransactionsError] = useState<string | null>(null);
   const [lytexPage, setLytexPage] = useState(1);
   const [lytexHasMore, setLytexHasMore] = useState(false);
+
+
 
   const [accountData, setAccountData] = useState({
     name: usuario?.nome || '',
@@ -111,14 +116,15 @@ const WalletDashboard = () => {
     type: 'pf',
     cpfCnpj: usuario?.cpf || '',
     name: usuario?.nome || '',
+    fantasyName: '',
     cellphone: usuario?.telefone || '',
     email: usuario?.email || '',
     aboutBusiness: 'Prestadora de serviços autônoma',
     branchOfActivity: 'Serviços',
-    webhookUrl: 'https://webhook.site/rafaela-notifications',
-    withdrawValue: 100,
-    numberOfExpectedMonthlyEmissions: 10,
-    expectedMonthlyBilling: 1000,
+    webhookUrl: '',
+    withdrawValue: 50000,
+    numberOfExpectedMonthlyEmissions: 50,
+    expectedMonthlyBilling: 50000,
     addressStreet: 'Rua das Flores',
     addressZone: 'Centro',
     addressCity: 'Lauro de Freitas',
@@ -129,9 +135,22 @@ const WalletDashboard = () => {
     adminCpf: usuario?.cpf || '',
     adminFullName: usuario?.nome || '',
     adminCellphone: usuario?.telefone || '',
-    adminBirthDate: '1990-05-15',
-    adminMotherName: 'Maria Silva Santos',
+    adminBirthDate: '1991-05-15',
+    adminMotherName: 'Maria Jose Silva Santos',
   });
+
+  // Dados bancários para criação da subconta
+  const [banks, setBanks] = useState<Array<{ code: string; name: string }>>([]);
+  const [banksError, setBanksError] = useState<string | null>(null);
+  const [loadingBanks, setLoadingBanks] = useState(false);
+  const [bankSearch, setBankSearch] = useState('');
+  const [bankDropdownOpen, setBankDropdownOpen] = useState(false);
+  const [selectedBankForSub, setSelectedBankForSub] = useState<{ code: string; name: string } | null>(null);
+  const [bankAgency, setBankAgency] = useState('');
+  const [bankAgencyDv, setBankAgencyDv] = useState('');
+  const [bankAccount, setBankAccount] = useState('');
+  const [bankAccountDv, setBankAccountDv] = useState('');
+  const [bankAccountType, setBankAccountType] = useState<'corrente' | 'poupanca'>('corrente');
 
   const [bankAccounts, setBankAccounts] = useState<
     Array<{
@@ -471,10 +490,11 @@ const WalletDashboard = () => {
       }
       setCreatingSubAccount(true);
       setSubAccountError(null);
-      const payload = {
+      const payload: any = {
         type: subForm.type,
         cpfCnpj: subForm.cpfCnpj,
         name: subForm.name,
+        fantasyName: subForm.type === 'pj' ? subForm.fantasyName : undefined,
         cellphone: subForm.cellphone,
         email: subForm.email,
         aboutBusiness: subForm.aboutBusiness,
@@ -508,15 +528,35 @@ const WalletDashboard = () => {
           : undefined,
       };
 
+      // Montar banksAccounts se preenchido
+      if (selectedBankForSub && bankAgency && bankAccount) {
+        payload.banksAccounts = [
+          {
+            owner: {
+              name: subForm.name,
+              type: subForm.type,
+              cpfCnpj: subForm.cpfCnpj,
+            },
+            bank: {
+              code: selectedBankForSub.code,
+              name: selectedBankForSub.name,
+            },
+            agency: { number: bankAgency },
+            creditCard: false,
+            account: { type: bankAccountType, number: bankAccount, dv: bankAccountDv || '0' },
+          },
+        ];
+      }
+
       console.log('[Carteira] Enviando payload de criação de subconta', payload);
 
-      const resp = await carteiraService.createSubAccount(payload);
+      const resp = await subcontasService.createMine(payload);
       console.log('[Carteira] Resposta da API ao criar subconta', resp);
       const subAccountId =
-        (resp && resp.subAccountId) || (resp && resp.id) || undefined;
+        (resp && resp.subconta && (resp.subconta.lytexId || resp.subconta._id)) || (resp && resp.subAccountId) || (resp && resp.id) || undefined;
       if (subAccountId) {
-        updateUsuario({ lytexSubAccountId: subAccountId });
         setHasSubAccount(true);
+        updateUsuario({ lytexSubAccountId: subAccountId });
         console.log(
           '[Carteira] Subconta criada com sucesso, id:',
           subAccountId,
@@ -565,30 +605,46 @@ const WalletDashboard = () => {
 
   useEffect(() => {
     const verificarSubconta = async () => {
+      if (usuario?.lytexSubAccountId) {
+        setHasSubAccount(true);
+        setCheckingSubAccount(false);
+        return;
+      }
+
       try {
-        const data = await carteiraService.getSubAccount();
-        const possui =
-          data &&
-          ((data as any)._id || (data as any).id || (data as any).subAccountId);
-        if (possui) {
+        setCheckingSubAccount(true);
+        setSubAccountError(null);
+        let idSub: string | undefined;
+        // Primeiro tenta local
+        try {
+          const localResp = await subcontasService.getMine();
+          const local = (localResp && localResp.subconta) || null;
+          idSub = local ? (local.lytexId || local._id) : undefined;
+        } catch {}
+        if (!idSub) {
+          const data = await carteiraService.getSubAccount();
+          idSub = (data as any)?.subAccountId || (data as any)?._id || (data as any)?.id;
+        }
+        if (idSub) {
           setHasSubAccount(true);
-          const idSub =
-            (data as any).subAccountId ||
-            (data as any)._id ||
-            (data as any).id;
           if (idSub && !(usuario as any)?.lytexSubAccountId) {
             updateUsuario({ lytexSubAccountId: idSub });
           }
         }
-      } catch {
-        // Se não encontrar subconta, apenas mantém hasSubAccount como está
+      } catch (e: any) {
+        // Se não encontrar, apenas segue o fluxo para permitir criação
+        const message =
+          e?.response?.data?.message || e?.message || 'Erro ao verificar subconta';
+        if (e?.response?.status !== 404) {
+          console.warn('[Carteira] Erro ao verificar subconta:', message);
+        }
+      } finally {
+        setCheckingSubAccount(false);
       }
     };
 
-    if (!hasSubAccount) {
-      verificarSubconta();
-    }
-  }, [hasSubAccount, usuario, updateUsuario]);
+    verificarSubconta();
+  }, [usuario?.lytexSubAccountId, updateUsuario]);
 
   useEffect(() => {
     if (hasSubAccount) {
@@ -1133,7 +1189,7 @@ const WalletDashboard = () => {
     return (
       <div className="min-h-screen bg-gray-50">
         <div className="bg-white border-b border-gray-200">
-          <div className="max-w-4xl mx-auto px-4 py-4">
+          <div className="max-w-6xl mx-auto px-6 py-4">
             <div className="flex items-center justify-between">
               <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
                 <Wallet className="text-blue-600" />
@@ -1143,16 +1199,42 @@ const WalletDashboard = () => {
           </div>
         </div>
 
-        <div className="max-w-2xl mx-auto px-4 py-8">
+        <div className="max-w-6xl mx-auto px-6 py-10">
           <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
-            <h2 className="text-xl font-semibold text-gray-800 mb-2">
-              Crie sua subconta para começar a usar a carteira
-            </h2>
-            <p className="text-sm text-gray-600 mb-6">
-              Precisamos de algumas informações para criar sua subconta no
-              gateway de pagamento. Alguns dados já estão preenchidos com base
-              no seu cadastro.
-            </p>
+            {checkingSubAccount ? (
+              <>
+                <h2 className="text-xl font-semibold text-gray-800 mb-2">
+                  Carregando carteira
+                </h2>
+                <p className="text-sm text-gray-600">
+                  Verificando sua subconta...
+                </p>
+              </>
+            ) : (
+              <>
+                <h2 className="text-2xl font-bold text-gray-900 mb-3">
+                  Crie sua subconta para começar a usar a carteira
+                </h2>
+                <div className="text-sm text-gray-700 mb-6 space-y-2">
+                  <p>
+                    Para que você possa receber seus pontos do caixa de forma automática e segura, precisamos criar sua subconta no nosso sistema de pagamentos.
+                  </p>
+                  <p className="font-medium">Por que isso é importante?</p>
+                  <ul className="list-disc pl-5 space-y-1">
+                    <li>✓ Recebimento automático dos seus valores</li>
+                    <li>✓ Segurança nas transações</li>
+                    <li>✓ Rastreamento completo de todos os pagamentos</li>
+                    <li>✓ Proteção dos seus dados financeiros</li>
+                  </ul>
+                  <p>
+                    Preencha os dados abaixo: Alguns campos já foram preenchidos automaticamente com base no seu cadastro. Verifique se as informações estão corretas e complete os dados que faltam.
+                  </p>
+                </div>
+              </>
+            )}
+
+            {checkingSubAccount ? null : (
+              <>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
               <div>
@@ -1170,7 +1252,7 @@ const WalletDashboard = () => {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  CPF
+                  {subForm.type === 'pj' ? 'CNPJ' : 'CPF'}
                 </label>
                 <input
                   type="text"
@@ -1183,7 +1265,7 @@ const WalletDashboard = () => {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Tipo de conta
+                  Tipo
                 </label>
                 <select
                   value={subForm.type}
@@ -1253,58 +1335,173 @@ const WalletDashboard = () => {
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
+              {subForm.type === 'pj' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Nome Fantasia</label>
+                  <input
+                    type="text"
+                    value={subForm.fantasyName}
+                    onChange={(e) => setSubForm({ ...subForm, fantasyName: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              )}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Valor mínimo para saque
-                </label>
-                <input
-                  type="number"
-                  value={subForm.withdrawValue}
-                  onChange={(e) =>
-                    setSubForm({
-                      ...subForm,
-                      withdrawValue: Number(e.target.value || 0),
-                    })
-                  }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
+            <div className="mt-6">
+              <h3 className="text-sm font-semibold text-gray-800 mb-3">Administrador da conta</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">CPF</label>
+                  <input
+                    type="text"
+                    value={subForm.adminCpf}
+                    onChange={(e) => setSubForm({ ...subForm, adminCpf: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Nome completo</label>
+                  <input
+                    type="text"
+                    value={subForm.adminFullName}
+                    onChange={(e) => setSubForm({ ...subForm, adminFullName: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Emissões mensais esperadas
-                </label>
-                <input
-                  type="number"
-                  value={subForm.numberOfExpectedMonthlyEmissions}
-                  onChange={(e) =>
-                    setSubForm({
-                      ...subForm,
-                      numberOfExpectedMonthlyEmissions: Number(
-                        e.target.value || 0,
-                      ),
-                    })
-                  }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Telefone</label>
+                  <input
+                    type="text"
+                    value={subForm.adminCellphone}
+                    onChange={(e) => setSubForm({ ...subForm, adminCellphone: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Data de nascimento</label>
+                  <input
+                    type="date"
+                    value={subForm.adminBirthDate}
+                    onChange={(e) => setSubForm({ ...subForm, adminBirthDate: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Nome da mãe</label>
+                  <input
+                    type="text"
+                    value={subForm.adminMotherName}
+                    onChange={(e) => setSubForm({ ...subForm, adminMotherName: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Faturamento mensal esperado
-                </label>
-                <input
-                  type="number"
-                  value={subForm.expectedMonthlyBilling}
-                  onChange={(e) =>
-                    setSubForm({
-                      ...subForm,
-                      expectedMonthlyBilling: Number(e.target.value || 0),
-                    })
-                  }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
+            </div>
+
+            {/* Dados Bancários */}
+            <div className="mt-6">
+              <h3 className="text-sm font-semibold text-gray-800 mb-3">Dados bancários</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div className="relative">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Banco</label>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      setBankDropdownOpen(!bankDropdownOpen);
+                      try {
+                        setLoadingBanks(true);
+                        setBanksError(null);
+                        const resp = await bancosService.getAll(bankSearch || undefined);
+                        const list = Array.isArray(resp?.banks) ? resp.banks : (Array.isArray(resp) ? resp : []);
+                        setBanks(list.map((b: any) => ({ code: String(b.code || b.codigo || ''), name: String(b.name || b.nome || '') })));
+                      } catch (e: any) {
+                        setBanksError(e?.response?.data?.message || e?.message || 'Erro ao carregar bancos');
+                      } finally {
+                        setLoadingBanks(false);
+                      }
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg flex items-center justify-between"
+                  >
+                    <span className={selectedBankForSub ? 'text-gray-900' : 'text-gray-400'}>
+                      {selectedBankForSub ? `${selectedBankForSub.code} - ${selectedBankForSub.name}` : 'Selecione o banco'}
+                    </span>
+                    <svg className={`w-4 h-4 text-gray-400 ${bankDropdownOpen ? 'rotate-180' : ''}`} viewBox="0 0 20 20"><path d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 10.168l3.71-2.94a.75.75 0 0 1 .94 1.17l-4.25 3.37a.75.75 0 0 1-.94 0l-4.25-3.37a.75.75 0 0 1-.02-1.06Z"/></svg>
+                  </button>
+                  {bankDropdownOpen && (
+                    <div className="absolute z-50 mt-2 w-full bg-white border border-gray-200 rounded-xl shadow-xl">
+                      <div className="p-2 border-b border-gray-100">
+                        <input
+                          type="text"
+                          value={bankSearch}
+                          onChange={async (e) => {
+                            const term = e.target.value;
+                            setBankSearch(term);
+                            try {
+                              setLoadingBanks(true);
+                              const resp = await bancosService.getAll(term || undefined);
+                              const list = Array.isArray(resp?.banks) ? resp.banks : (Array.isArray(resp) ? resp : []);
+                              setBanks(list.map((b: any) => ({ code: String(b.code || b.codigo || ''), name: String(b.name || b.nome || '') })));
+                            } catch (err: any) {
+                              setBanksError(err?.response?.data?.message || err?.message || 'Erro ao buscar bancos');
+                            } finally {
+                              setLoadingBanks(false);
+                            }
+                          }}
+                          placeholder="Buscar por nome ou código..."
+                          className="w-full px-3 py-2 border border-gray-200 rounded-lg"
+                          autoFocus
+                        />
+                      </div>
+                      <div className="max-h-64 overflow-y-auto">
+                        {loadingBanks ? (
+                          <div className="p-4 text-center text-gray-500">Carregando bancos...</div>
+                        ) : banksError ? (
+                          <div className="p-4 text-center text-red-600">{banksError}</div>
+                        ) : banks.filter(b => {
+                            const term = bankSearch.trim().toLowerCase();
+                            return !term || b.name.toLowerCase().includes(term) || b.code.toLowerCase().includes(term);
+                          }).map((b, idx) => (
+                          <button
+                            key={`${b.code}-${idx}`}
+                            type="button"
+                            onClick={() => { setSelectedBankForSub(b); setBankDropdownOpen(false); }}
+                            className="w-full text-left px-3 py-2 hover:bg-gray-50"
+                          >
+                            {b.code} - {b.name}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de conta</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button type="button" onClick={() => setBankAccountType('corrente')} className={`px-3 py-2 rounded-lg border ${bankAccountType==='corrente'?'border-blue-500 bg-blue-50 text-blue-700':'border-gray-300 text-gray-700'}`}>Conta Corrente</button>
+                    <button type="button" onClick={() => setBankAccountType('poupanca')} className={`px-3 py-2 rounded-lg border ${bankAccountType==='poupanca'?'border-blue-500 bg-blue-50 text-blue-700':'border-gray-300 text-gray-700'}`}>Conta Poupança</button>
+                  </div>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Agência</label>
+                  <input type="text" value={bankAgency} onChange={(e)=>setBankAgency(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Dígito</label>
+                  <input type="text" value={bankAgencyDv} onChange={(e)=>setBankAgencyDv(e.target.value)} maxLength={1} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-center" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Conta</label>
+                  <input type="text" value={bankAccount} onChange={(e)=>setBankAccount(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Dígito da conta</label>
+                  <input type="text" value={bankAccountDv} onChange={(e)=>setBankAccountDv(e.target.value)} maxLength={2} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-center" />
+                </div>
               </div>
             </div>
 
@@ -1374,9 +1571,28 @@ const WalletDashboard = () => {
                   <input
                     type="text"
                     value={subForm.addressZip}
-                    onChange={(e) =>
-                      setSubForm({ ...subForm, addressZip: e.target.value })
-                    }
+                    onChange={(e) => {
+                      const digits = e.target.value.replace(/\D/g, '').slice(0, 8);
+                      setSubForm({ ...subForm, addressZip: digits });
+                    }}
+                    onBlur={async () => {
+                      const cep = String(subForm.addressZip || '').replace(/\D/g, '');
+                      if (cep.length !== 8) return;
+                      try {
+                        const resp = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+                        const data = await resp.json();
+                        if (!data?.erro) {
+                          setSubForm({
+                            ...subForm,
+                            addressStreet: data.logradouro || subForm.addressStreet,
+                            addressZone: data.bairro || subForm.addressZone,
+                            addressCity: data.localidade || subForm.addressCity,
+                            addressState: data.uf || subForm.addressState,
+                          });
+                        }
+                      } catch {}
+                    }}
+                    placeholder="00000000"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
@@ -1425,6 +1641,8 @@ const WalletDashboard = () => {
             >
               {creatingSubAccount ? 'Criando subconta...' : 'Criar Subconta'}
             </button>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -1445,7 +1663,7 @@ const WalletDashboard = () => {
       </div>
 
       <div className="bg-white border-b border-gray-200">
-        <div className="max-w-4xl mx-auto px-4">
+        <div className="max-w-6xl mx-auto px-6">
           <div className="flex gap-6">
             <button
               onClick={() => setActiveTab('overview')}

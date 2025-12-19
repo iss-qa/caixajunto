@@ -53,6 +53,16 @@ const CarteiraBanco = () => {
 
   const [bankAccounts, setBankAccounts] = useState<ContaBancariaApi[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [showForm, setShowForm] = useState(true);
+  const [confirmDelete, setConfirmDelete] = useState<ContaBancariaApi | null>(null);
+
+  useEffect(() => {
+    if (!successMessage) return;
+    const timer = setTimeout(() => {
+      setSuccessMessage(null);
+    }, 120000);
+    return () => clearTimeout(timer);
+  }, [successMessage]);
 
   useEffect(() => {
     const loadBanks = async () => {
@@ -62,6 +72,8 @@ const CarteiraBanco = () => {
         const response = await bancosService.getAll();
         const listRaw = Array.isArray(response?.banks)
           ? response.banks
+          : Array.isArray(response?.data)
+          ? response.data
           : Array.isArray(response)
           ? response
           : [];
@@ -108,8 +120,10 @@ const CarteiraBanco = () => {
             isDefault: Boolean(c.isDefault),
           })),
         );
+        setShowForm(list.length === 0);
       } catch {
         setBankAccounts([]);
+        setShowForm(true);
       }
     };
 
@@ -214,6 +228,7 @@ const CarteiraBanco = () => {
       );
 
       resetForm();
+      setShowForm(false);
     } catch (e) {
       const error = e as { response?: { data?: { message?: string } }; message?: string };
       const message =
@@ -239,6 +254,9 @@ const CarteiraBanco = () => {
       accountType: conta.accountType,
     });
     setEditingId(conta._id || null);
+    setShowForm(true);
+    setSuccessMessage(null);
+    setSaveError(null);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -288,6 +306,48 @@ const CarteiraBanco = () => {
     }
   };
 
+  const handleMakeDefault = async (conta: ContaBancariaApi) => {
+    if (!conta._id) return;
+    try {
+      setSaving(true);
+      setSaveError(null);
+      await carteiraService.updateBankAccount(conta._id, { isDefault: true });
+
+      const response = await carteiraService.getBankAccounts();
+      const list = Array.isArray(response)
+        ? response
+        : Array.isArray(response?.contas)
+        ? response.contas
+        : response?.data && Array.isArray(response.data)
+        ? response.data
+        : [];
+      setBankAccounts(
+        list.map((c: any) => ({
+          _id: String(c._id || ''),
+          bankCode: String(c.bankCode || ''),
+          bankName: String(c.bankName || ''),
+          agency: String(c.agency || ''),
+          agencyDv: String(c.agencyDv || ''),
+          account: String(c.account || ''),
+          accountDv: String(c.accountDv || ''),
+          accountType:
+            c.accountType === 'poupanca' ? 'poupanca' : ('corrente' as TipoConta),
+          isDefault: Boolean(c.isDefault),
+        })),
+      );
+      setSuccessMessage('Conta marcada como principal');
+    } catch (e) {
+      const error = e as { response?: { data?: { message?: string } }; message?: string };
+      const message =
+        error.response?.data?.message ||
+        error.message ||
+        'Erro ao definir conta principal';
+      setSaveError(message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
       {/* Header */}
@@ -312,8 +372,21 @@ const CarteiraBanco = () => {
         </div>
       </div>
 
-      {/* Form */}
+      {/* Content */}
       <div className="max-w-4xl mx-auto px-4 py-8">
+        {(!showForm && bankAccounts.length > 0) && (
+          <div className="mb-6 flex justify-end">
+            <button
+              type="button"
+              onClick={() => { setShowForm(true); resetForm(); setSuccessMessage(null); setSaveError(null); }}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              Adicionar Nova Conta
+            </button>
+          </div>
+        )}
+
+        {showForm && (
         <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
           <div className="p-8">
             <div className="space-y-6">
@@ -526,12 +599,13 @@ const CarteiraBanco = () => {
                     Salvando...
                   </span>
                 ) : (
-                  'Adicionar Conta Bancária'
+                  editingId ? 'Atualizar Conta Bancária' : 'Adicionar Conta Bancária'
                 )}
               </button>
             </div>
           </div>
         </div>
+        )}
 
         <div className="mt-6 p-4 bg-blue-50 border border-blue-100 rounded-xl">
           <p className="text-sm text-blue-800">
@@ -585,6 +659,15 @@ const CarteiraBanco = () => {
                         </span>
                       )}
                       <div className="flex gap-2">
+                        {!conta.isDefault && (
+                          <button
+                            type="button"
+                            onClick={() => handleMakeDefault(conta)}
+                            className="px-3 py-1 text-xs rounded-lg border border-blue-200 text-blue-600 hover:bg-blue-50 flex items-center gap-1"
+                          >
+                            Tornar Principal
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={() => handleEdit(conta)}
@@ -595,7 +678,7 @@ const CarteiraBanco = () => {
                         </button>
                         <button
                           type="button"
-                          onClick={() => handleDelete(conta)}
+                          onClick={() => setConfirmDelete(conta)}
                           className="px-3 py-1 text-xs rounded-lg border border-red-200 text-red-600 hover:bg-red-50 flex items-center gap-1"
                         >
                           <Trash2 size={14} />
@@ -606,6 +689,32 @@ const CarteiraBanco = () => {
                   </div>
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+        {confirmDelete && (
+          <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
+            <div className="bg-white rounded-2xl w-full max-w-md p-6">
+              <h3 className="text-lg font-semibold text-gray-800 mb-2">Remover conta bancária</h3>
+              <p className="text-sm text-gray-600 mb-6">
+                Tem certeza que deseja remover a conta {confirmDelete.bankName} ({confirmDelete.bankCode}) agência {confirmDelete.agency}-{confirmDelete.agencyDv}, conta {confirmDelete.account}-{confirmDelete.accountDv}?
+              </p>
+              <div className="flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setConfirmDelete(null)}
+                  className="px-4 py-2 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDelete(confirmDelete)}
+                  className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700"
+                >
+                  Remover
+                </button>
+              </div>
             </div>
           </div>
         )}

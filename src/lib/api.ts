@@ -293,8 +293,14 @@ export const cobrancasService = {
 
 // Bancos (Lytex - via backend)
 export const bancosService = {
-  getAll: async () => {
-    const response = await api.get('/bancos');
+  getAll: async (search?: string) => {
+    const response = await api.get('/bancos', { params: search ? { search } : undefined });
+    return response.data;
+  },
+  getAccounts: async (subrecipientid?: string) => {
+    const response = await api.get('/bancos/contas', {
+      params: subrecipientid ? { subrecipientid } : undefined,
+    });
     return response.data;
   },
 };
@@ -326,6 +332,21 @@ export const carteiraService = {
   },
 };
 
+export const subcontasService = {
+  getMine: async () => {
+    const response = await api.get('/subcontas/me');
+    return response.data;
+  },
+  createMine: async (data: any) => {
+    const response = await api.post('/subcontas/me', data);
+    return response.data;
+  },
+  getByLytexId: async (lytexId: string) => {
+    const response = await api.get(`/subcontas/${lytexId}`);
+    return response.data;
+  },
+};
+
 export const splitService = {
   calculate: async (params: { caixaId: string; mes?: number }) => {
     const response = await api.get('/split/calculate', {
@@ -347,5 +368,24 @@ export const splitService = {
         recipientId?: string;
       }>;
     };
+  },
+};
+
+export const splitConfigService = {
+  getByCaixa: async (caixaId: string) => {
+    const response = await api.get(`/split-config/${caixaId}`);
+    return response.data;
+  },
+  saveForCaixa: async (
+    caixaId: string,
+    data: {
+      taxaServicoSubId?: string;
+      fundoReservaSubId?: string;
+      adminSubId?: string;
+      participantesMesOrdem?: string[];
+    },
+  ) => {
+    const response = await api.post(`/split-config/${caixaId}`, data);
+    return response.data;
   },
 };
