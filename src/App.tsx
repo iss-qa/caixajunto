@@ -13,6 +13,10 @@ import { Notificacoes } from './pages/Notificacoes';
 import { Pagamentos } from './pages/Pagamentos';
 import { PainelMaster } from './pages/PainelMaster';
 import { Contrato } from './pages/Contrato';
+import Carteira from './pages/Carteira';
+import CarteiraBanco from './pages/CarteiraBanco';
+import SplitConfig from './pages/SplitConfig';
+import GerenciarSplit from './pages/GerenciarSplit';
 
 // Protected Route Component
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -86,20 +90,48 @@ function AppRoutes() {
       >
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/caixas" element={<Caixas />} />
-        <Route path="/caixas/novo" element={<NovoCaixa />} />
+        <Route path="/caixas/novo" element={
+          <RoleRoute allow={["administrador", "master"]}>
+            <NovoCaixa />
+          </RoleRoute>
+        } />
         <Route path="/caixas/:id" element={<CaixaDetalhes />} />
-        <Route path="/participantes" element={<Participantes />} />
+        <Route path="/participantes" element={
+          <RoleRoute allow={["administrador", "master"]}>
+            <Participantes />
+          </RoleRoute>
+        } />
         <Route path="/contrato" element={<Contrato />} />
+        <Route path="/carteira" element={<Carteira />} />
+        <Route path="/carteira/banco" element={<CarteiraBanco />} />
+        <Route path="/painel-master/split" element={
+          <RoleRoute allow={["master"]}>
+            <SplitConfig />
+          </RoleRoute>
+        } />
+        <Route path="/painel-master/split/gerenciar" element={
+          <RoleRoute allow={["master"]}>
+            <GerenciarSplit />
+          </RoleRoute>
+        } />
         <Route path="/perfil" element={<Perfil />} />
         <Route path="/notificacoes" element={<Notificacoes />} />
-        <Route path="/pagamentos" element={<Pagamentos />} />
+        <Route path="/pagamentos" element={
+          <RoleRoute allow={["administrador", "master"]}>
+            <Pagamentos />
+          </RoleRoute>
+        } />
         <Route path="/configuracoes" element={<Perfil />} />
-        <Route path="/painel-master" element={<PainelMaster />} />
+        <Route path="/painel-master" element={
+          <RoleRoute allow={["master"]}>
+            <PainelMaster />
+          </RoleRoute>
+        } />
       </Route>
 
       {/* Redirect root to dashboard or login */}
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
-      
+
       {/* 404 - Not Found */}
       <Route
         path="*"
@@ -131,3 +163,11 @@ function App() {
 }
 
 export default App;
+
+function RoleRoute({ children, allow }: { children: React.ReactNode; allow: Array<'usuario' | 'administrador' | 'master'> }) {
+  const { usuario } = useAuth();
+  if (!usuario || !allow.includes(usuario.tipo)) {
+    return <Navigate to="/dashboard" replace />;
+  }
+  return <>{children}</>;
+}

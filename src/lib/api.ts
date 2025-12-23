@@ -161,6 +161,10 @@ export const pagamentosService = {
     const response = await api.patch(`/pagamentos/${id}/comprovante`, { comprovanteUrl });
     return response.data;
   },
+  atualizarObservacao: async (id: string, observacao: string) => {
+    const response = await api.patch(`/pagamentos/${id}`, { observacao });
+    return response.data;
+  },
   aprovar: async (id: string) => {
     const response = await api.patch(`/pagamentos/${id}/aprovar`);
     return response.data;
@@ -241,10 +245,10 @@ export const cobrancasService = {
     if (context?.caixaId) params.append('caixaId', context.caixaId);
     if (context?.participanteId) params.append('participanteId', context.participanteId);
     if (context?.mes) params.append('mes', String(context.mes));
-    
+
     const queryString = params.toString();
     const url = `/cobrancas/${id}${queryString ? `?${queryString}` : ''}`;
-    
+
     const response = await api.get(url);
     return response.data;
   },
@@ -277,4 +281,140 @@ export const cobrancasService = {
     );
     return response.data;
   },
+  wallet: async () => {
+    const response = await api.get('/cobrancas/wallet');
+    return response.data;
+  },
+  transactions: async (params?: { page?: number; limit?: number }) => {
+    const response = await api.get('/cobrancas/transactions', { params });
+    return response.data;
+  },
 };
+
+// Bancos (Lytex - via backend)
+export const bancosService = {
+  getAll: async (search?: string) => {
+    const response = await api.get('/bancos', { params: search ? { search } : undefined });
+    return response.data;
+  },
+  getAccounts: async (subrecipientid?: string) => {
+    const response = await api.get('/bancos/contas', {
+      params: subrecipientid ? { subrecipientid } : undefined,
+    });
+    return response.data;
+  },
+};
+
+export const carteiraService = {
+  createSubAccount: async (data: any) => {
+    const response = await api.post('/usuarios/me/subconta', data);
+    return response.data;
+  },
+  getSubAccount: async () => {
+    const response = await api.get('/usuarios/me/subconta');
+    return response.data;
+  },
+  getBankAccounts: async () => {
+    const response = await api.get('/usuarios/me/contas-bancarias');
+    return response.data;
+  },
+  saveBankAccount: async (data: any) => {
+    const response = await api.post('/usuarios/me/contas-bancarias', data);
+    return response.data;
+  },
+  updateBankAccount: async (id: string, data: any) => {
+    const response = await api.patch(`/usuarios/me/contas-bancarias/${id}`, data);
+    return response.data;
+  },
+  deleteBankAccount: async (id: string) => {
+    const response = await api.delete(`/usuarios/me/contas-bancarias/${id}`);
+    return response.data;
+  },
+};
+
+export const subcontasService = {
+  getAll: async () => {
+    const response = await api.get('/subcontas');
+    return response.data;
+  },
+  getMine: async () => {
+    const response = await api.get('/subcontas/me');
+    return response.data;
+  },
+  createMine: async (data: any) => {
+    const response = await api.post('/subcontas/me', data);
+    return response.data;
+  },
+  getByLytexId: async (lytexId: string) => {
+    const response = await api.get(`/subcontas/${lytexId}`);
+    return response.data;
+  },
+  checkByCpf: async (cpf: string) => {
+    const response = await api.get(`/subcontas/check/${cpf}`);
+    return response.data;
+  },
+};
+
+export const splitService = {
+  calculate: async (params: { caixaId: string; mes?: number }) => {
+    const response = await api.get('/split/calculate', {
+      params: { caixaId: params.caixaId, mes: params.mes ?? 1 },
+    });
+    return response.data as {
+      caixaId: string;
+      tipoParcela: 'primeira' | 'intermediaria' | 'ultima';
+      participantes: number;
+      meses: number;
+      valorCaixa: number;
+      valorParcela: number;
+      totalArrecadado: number;
+      distribuicao: Array<{
+        chave: 'participante' | 'taxa' | 'fundo_reserva' | 'admin';
+        descricao: string;
+        percentual: number;
+        valor: number;
+        recipientId?: string;
+      }>;
+    };
+  },
+};
+
+export const splitConfigService = {
+  getAll: async () => {
+    const response = await api.get('/split-config');
+    return response.data;
+  },
+  getByCaixa: async (caixaId: string) => {
+    const response = await api.get(`/split-config/${caixaId}`);
+    return response.data;
+  },
+  saveForCaixa: async (
+    caixaId: string,
+    data: {
+      taxaServicoSubId?: string;
+      fundoReservaSubId?: string;
+      adminSubId?: string;
+      participantesMesOrdem?: string[];
+    },
+  ) => {
+    const response = await api.post(`/split-config/${caixaId}`, data);
+    return response.data;
+  },
+  update: async (
+    id: string,
+    data: {
+      taxaServicoSubId?: string;
+      fundoReservaSubId?: string;
+      adminSubId?: string;
+      participantesMesOrdem?: string[];
+    },
+  ) => {
+    const response = await api.put(`/split-config/${id}`, data);
+    return response.data;
+  },
+  delete: async (id: string) => {
+    const response = await api.delete(`/split-config/${id}`);
+    return response.data;
+  },
+};
+

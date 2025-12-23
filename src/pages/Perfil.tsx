@@ -17,19 +17,37 @@ import {
   Upload,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { caixasService, usuariosService } from '../lib/api';
+import { caixasService, usuariosService, carteiraService } from '../lib/api';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Avatar } from '../components/ui/Avatar';
 import { Badge } from '../components/ui/Badge';
 import { Modal } from '../components/ui/Modal';
 import { Input } from '../components/ui/Input';
-import { formatCurrency } from '../lib/utils';
+import { formatCurrency, formatDate } from '../lib/utils';
+
+interface LytexSubAccountInfo {
+  _id: string;
+  type?: string;
+  typeAccount?: string;
+  cpfCnpj?: string;
+  fantasyName?: string;
+  corporateName?: string;
+  name?: string;
+  openedAt?: string;
+  address?: {
+    street?: string;
+    number?: string;
+    zone?: string;
+    city?: string;
+    state?: string;
+    zip?: string;
+  };
+}
 
 const menuItems = [
   { icon: Bell, label: 'Notificações', path: '/notificacoes', badge: '3' },
   { icon: Shield, label: 'Segurança', path: '/seguranca' },
-  { icon: CreditCard, label: 'Chave Pix', path: '/pix' },
   { icon: HelpCircle, label: 'Ajuda', path: '/ajuda' },
   { icon: FileText, label: 'Termos de Uso', path: '/termos' },
 ];
@@ -48,6 +66,9 @@ export function Perfil() {
     telefone: usuario?.telefone || '',
     chavePix: usuario?.chavePix || '',
   });
+  const [lytexSubAccount, setLytexSubAccount] =
+    useState<LytexSubAccountInfo | null>(null);
+  const [loadingSubAccount, setLoadingSubAccount] = useState(false);
 
   useEffect(() => {
     loadDados();
@@ -101,6 +122,63 @@ export function Perfil() {
   };
 
   const nivel = getNivelLabel(usuario?.caixasConcluidos || 0);
+
+  const formatCpfCnpj = (value?: string) => {
+    if (!value) return '';
+    const digits = value.replace(/\D/g, '');
+    if (digits.length === 11) {
+      return digits.replace(
+        /(\d{3})(\d{3})(\d{3})(\d{2})/,
+        '$1.$2.$3-$4',
+      );
+    }
+    if (digits.length === 14) {
+      return digits.replace(
+        /(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/,
+        '$1.$2.$3/$4-$5',
+      );
+    }
+    return value;
+  };
+
+  const formatAddress = (sub: LytexSubAccountInfo | null) => {
+    const address = sub?.address;
+    if (!address) return '';
+    const parts = [
+      address.street,
+      address.number,
+      address.zone,
+      address.city,
+      address.state,
+      address.zip,
+    ].filter(Boolean);
+    return parts.join(', ');
+  };
+
+  useEffect(() => {
+    const fetchSubAccount = async () => {
+      if (usuario?.tipo !== 'master') {
+        setLytexSubAccount(null);
+        return;
+      }
+      try {
+        setLoadingSubAccount(true);
+        const data = await carteiraService.getSubAccount();
+        if (data && (data as LytexSubAccountInfo)._id) {
+          setLytexSubAccount(data as LytexSubAccountInfo);
+        } else {
+          setLytexSubAccount(null);
+        }
+      } catch (error) {
+        console.error('Erro ao carregar subconta Lytex:', error);
+        setLytexSubAccount(null);
+      } finally {
+        setLoadingSubAccount(false);
+      }
+    };
+
+    fetchSubAccount();
+  }, [usuario?.tipo]);
 
   const handleSaveProfile = async () => {
     try {
@@ -282,6 +360,53 @@ export function Perfil() {
                 <p className="font-medium text-gray-900">{usuario?.chavePix || 'Não configurada'}</p>
               </div>
             </div>
+            {usuario?.tipo === 'master' && (
+              <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-xl">
+                <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                  <CreditCard className="w-5 h-5 text-green-600" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-xs text-gray-500">Conta PJ no Gateway LyTex</p>
+                  {loadingSubAccount && (
+                    <p className="text-xs text-gray-400 mt-1">Carregando dados da conta...</p>
+                  )}
+                  {!loadingSubAccount && lytexSubAccount && (
+                    <>
+                      <p className="font-medium text-gray-900">
+                        {lytexSubAccount.fantasyName ||
+                          lytexSubAccount.corporateName ||
+                          lytexSubAccount.name}
+                      </p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        ID: {lytexSubAccount._id}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        Tipo: {lytexSubAccount.typeAccount || lytexSubAccount.type}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        CNPJ: {formatCpfCnpj(lytexSubAccount.cpfCnpj)}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        Abertura:{' '}
+                        {lytexSubAccount.openedAt
+                          ? formatDate(lytexSubAccount.openedAt)
+                          : 'Não informado'}
+                      </p>
+                      {formatAddress(lytexSubAccount) && (
+                        <p className="text-xs text-gray-500">
+                          Endereço: {formatAddress(lytexSubAccount)}
+                        </p>
+                      )}
+                    </>
+                  )}
+                  {!loadingSubAccount && !lytexSubAccount && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      Conta LyTex ainda não configurada.
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </Card>
       </motion.div>

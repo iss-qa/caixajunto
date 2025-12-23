@@ -15,9 +15,11 @@ import {
   Camera,
   AlertTriangle,
   CheckCircle2,
+  MapPin,
+  Home,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { usuariosService, participantesService } from '../lib/api';
+import { usuariosService, participantesService, caixasService } from '../lib/api';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
@@ -26,7 +28,6 @@ import { Modal } from '../components/ui/Modal';
 import { Input } from '../components/ui/Input';
 import { CardSkeleton } from '../components/ui/Skeleton';
 import { EmptyState } from '../components/ui/EmptyState';
-import { formatCurrency, cn } from '../lib/utils';
 
 interface Usuario {
   _id: string;
@@ -39,8 +40,33 @@ interface Usuario {
   score: number;
   picture?: string;
   lytexClientId?: string;
-  caixaNome?: string; // Nome do caixa vinculado
-  caixaId?: string; // ID do caixa vinculado
+  caixaNome?: string;
+  caixaId?: string;
+  adminNome?: string;
+  criadoPorId?: string;
+  criadoPorNome?: string;
+  address?: {
+    street?: string;
+    zone?: string;
+    city?: string;
+    state?: string;
+    number?: string;
+    complement?: string;
+    zip?: string;
+  };
+}
+
+interface CaixaResumo {
+  _id: string;
+  nome: string;
+  adminId?:
+  | {
+    _id?: string;
+    nome?: string;
+    email?: string;
+    telefone?: string;
+  }
+  | string;
 }
 
 // Função auxiliar para remover formatação do CPF
@@ -73,12 +99,12 @@ const maskPhone = (value: string): string => {
 // Função para validar CPF
 const validarCPF = (cpf: string): boolean => {
   const digits = cpf.replace(/\D/g, '');
-  
+
   if (digits.length !== 11) return false;
-  
+
   // Verifica se todos os dígitos são iguais
   if (/^(\d)\1+$/.test(digits)) return false;
-  
+
   // Validação do primeiro dígito verificador
   let soma = 0;
   for (let i = 0; i < 9; i++) {
@@ -87,7 +113,7 @@ const validarCPF = (cpf: string): boolean => {
   let resto = (soma * 10) % 11;
   if (resto === 10 || resto === 11) resto = 0;
   if (resto !== parseInt(digits[9])) return false;
-  
+
   // Validação do segundo dígito verificador
   soma = 0;
   for (let i = 0; i < 10; i++) {
@@ -96,7 +122,7 @@ const validarCPF = (cpf: string): boolean => {
   resto = (soma * 10) % 11;
   if (resto === 10 || resto === 11) resto = 0;
   if (resto !== parseInt(digits[10])) return false;
-  
+
   return true;
 };
 
@@ -111,7 +137,9 @@ export function Participantes() {
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedParticipante, setSelectedParticipante] = useState<Usuario | null>(null);
   const [imagePreview, setImagePreview] = useState<string>('');
-  
+  const [caixas, setCaixas] = useState<CaixaResumo[]>([]);
+  const [selectedCaixaId, setSelectedCaixaId] = useState('');
+
   const [formData, setFormData] = useState({
     nome: '',
     email: '',
@@ -119,6 +147,16 @@ export function Participantes() {
     cpf: '',
     chavePix: '',
     picture: '',
+    senha: '',
+    address: {
+      street: '',
+      zone: '',
+      city: '',
+      state: '',
+      number: '',
+      complement: '',
+      zip: '',
+    },
   });
 
   useEffect(() => {
@@ -128,30 +166,121 @@ export function Participantes() {
   const loadParticipantes = async () => {
     try {
       setLoading(true);
-      
+
       // Buscar todos os usuários do tipo 'usuario'
       const responseUsuarios = await usuariosService.getAll();
       const listaUsuarios = Array.isArray(responseUsuarios) ? responseUsuarios : responseUsuarios.usuarios || [];
       const usuarios = listaUsuarios.filter((u: any) => u.tipo === 'usuario');
-      
+
       // Buscar todos os participantes (vínculos)
       const responseParticipantes = await participantesService.getAll();
       const listaParticipantes = Array.isArray(responseParticipantes) ? responseParticipantes : responseParticipantes.participantes || [];
-      
-      // Combinar usuários com seus caixas
+
+      console.log('🔍 ===== PARTICIPANTES API RESPONSE =====');
+      console.log('📊 Total participantes:', listaParticipantes.length);
+      if (listaParticipantes.length > 0) {
+        console.log('📋 Primeiro participante:', JSON.stringify(listaParticipantes[0], null, 2));
+      }
+
+      // Combinar usuários com seus caixas - SIMPLIFIED
       const participantesComCaixa = usuarios.map((usuario: any) => {
-        const vinculo = listaParticipantes.find((p: any) => 
-          p.usuarioId === usuario._id || p.usuarioId?._id === usuario._id
-        );
-        
+        // Find vinculo for this usuario
+        const vinculo = listaParticipantes.find((p: any) => {
+          const pUsuarioId = p.usuarioId?._id || p.usuarioId;
+          return String(pUsuarioId) === String(usuario._id);
+        });
+
+        let caixaNome = '';
+        let caixaId = '';
+        let adminNome = '';
+
+        if (vinculo) {
+          // Extract caixa info directly from populated vinculo
+          if (vinculo.caixaId) {
+            if (typeof vinculo.caixaId === 'object') {
+              // caixaId is populated - use it directly!
+              caixaId = vinculo.caixaId._id || '';
+              caixaNome = vinculo.caixaId.nome || '';
+
+              // Try to get admin name if available
+              if (vinculo.caixaId.adminId) {
+                if (typeof vinculo.caixaId.adminId === 'object') {
+                  adminNome = vinculo.caixaId.adminId.nome || '';
+                } else if (caixasPorId[caixaId]) {
+                  const caixaInfo = caixasPorId[caixaId];
+                  if (typeof caixaInfo.adminId === 'object') {
+                    adminNome = caixaInfo.adminId.nome || '';
+                  }
+                }
+              }
+            } else {
+              // caixaId is just a string ID - look it up
+              caixaId = String(vinculo.caixaId);
+              const caixaInfo = caixasPorId[caixaId];
+              if (caixaInfo) {
+                caixaNome = caixaInfo.nome || '';
+                if (typeof caixaInfo.adminId === 'object') {
+                  adminNome = caixaInfo.adminId.nome || '';
+                }
+              }
+            }
+          }
+        }
+
         return {
           ...usuario,
-          caixaNome: vinculo?.caixaId?.nome || vinculo?.caixaNome || '',
-          caixaId: vinculo?.caixaId?._id || vinculo?.caixaId || '',
+          caixaNome,
+          caixaId,
+          adminNome: adminNome || usuario.criadoPorNome || '',
         };
       });
-      
-      setParticipantes(participantesComCaixa);
+
+      console.log('\n📊 ===== RESULTADO FINAL =====');
+      participantesComCaixa.forEach((p: any) => {
+        console.log(`${p.nome}: ${p.caixaNome || '❌ SEM CAIXA'}`);
+      });
+      console.log('🔍 ===== FIM =====\n');
+
+      // Buscar caixas para mapear nomes e administradores
+      let caixasPorId: Record<string, CaixaResumo> = {};
+      try {
+        let respCaixas: any;
+        if (usuarioLogado?.tipo === 'master') {
+          respCaixas = await caixasService.getAll();
+        } else {
+          // Administrador: pega apenas seus caixas; fallback para getAll se necessário
+          try {
+            respCaixas = await caixasService.getByAdmin(usuarioLogado!._id);
+          } catch (e) {
+            respCaixas = await caixasService.getAll();
+          }
+        }
+        const listaCaixas = (Array.isArray(respCaixas) ? respCaixas : respCaixas.caixas || []) as CaixaResumo[];
+        // Expor caixas disponíveis para o combo (exclui em andamento)
+        setCaixas(listaCaixas.filter((c: any) => String(c.status || '') !== 'ativo'));
+        caixasPorId = listaCaixas.reduce((map: Record<string, CaixaResumo>, c: CaixaResumo) => {
+          if (c && c._id) {
+            map[c._id] = c;
+          }
+          return map;
+        }, {});
+      } catch (e) {
+        console.error('Erro ao carregar caixas para mapear administradores:', e);
+      }
+
+
+      // Filter participants based on user type
+      let filteredParticipantes = participantesComCaixa;
+
+      // Administrators only see participants they created
+      if (usuarioLogado?.tipo === 'administrador') {
+        filteredParticipantes = participantesComCaixa.filter((p: any) =>
+          p.criadoPorId === usuarioLogado._id
+        );
+      }
+      // Master users see all participants (no filter)
+
+      setParticipantes(filteredParticipantes);
     } catch (error) {
       console.error('Erro ao carregar participantes:', error);
       // Fallback para mock
@@ -201,7 +330,7 @@ export function Participantes() {
           canvas.height = height;
           const ctx = canvas.getContext('2d');
           ctx?.drawImage(img, 0, 0, width, height);
-          
+
           const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7);
           resolve(compressedBase64);
         };
@@ -238,7 +367,7 @@ export function Participantes() {
   const handleCpfChange = (value: string) => {
     const masked = maskCPF(value);
     setFormData({ ...formData, cpf: masked });
-    
+
     // Validar CPF quando tiver 14 caracteres (com máscara)
     const digits = value.replace(/\D/g, '');
     if (digits.length === 11) {
@@ -265,6 +394,13 @@ export function Participantes() {
       return;
     }
 
+    // Validar senha
+    if (!formData.senha || formData.senha.length < 6) {
+      setErrorMessage('Defina uma senha com pelo menos 6 caracteres.');
+      setShowErrorModal(true);
+      return;
+    }
+
     // Validar CPF se fornecido
     const cpfDigits = formData.cpf ? formatCPF(formData.cpf) : '';
     if (cpfDigits && cpfDigits.length === 11 && !validarCPF(cpfDigits)) {
@@ -282,14 +418,39 @@ export function Participantes() {
     }
 
     try {
+      // Preparar dados com criadoPorId do usuário logado
+      const zipDigits = formData.address.zip.replace(/\D/g, '');
       const newUser = await usuariosService.create({
-        ...formData,
-        cpf: cpfDigits,
+        nome: formData.nome,
+        email: formData.email,
         telefone: telefoneDigits,
+        cpf: cpfDigits,
+        chavePix: formData.chavePix,
+        picture: formData.picture,
+        senha: formData.senha,
         tipo: 'usuario',
-        senha: 'Senha@123', // Senha padrão
+        criadoPorId: usuarioLogado?._id || '',
+        criadoPorNome: usuarioLogado?.nome || '',
+        address: {
+          street: formData.address.street,
+          zone: formData.address.zone,
+          city: formData.address.city,
+          state: formData.address.state,
+          number: formData.address.number,
+          complement: formData.address.complement,
+          zip: zipDigits,
+        },
       });
-      
+
+      if (selectedCaixaId) {
+        await participantesService.create({
+          caixaId: selectedCaixaId,
+          usuarioId: newUser._id,
+          aceite: true,
+          status: 'ativo',
+        });
+      }
+
       await loadParticipantes();
       setShowAddModal(false);
       resetForm();
@@ -327,6 +488,8 @@ export function Participantes() {
         ...formData,
         cpf: cpfDigits,
         telefone: telefoneDigits,
+        // Envia senha somente se informada
+        ...(formData.senha ? { senha: formData.senha } : {}),
       });
       await loadParticipantes();
       setShowEditModal(false);
@@ -369,6 +532,16 @@ export function Participantes() {
       cpf: participante.cpf || '',
       chavePix: participante.chavePix || '',
       picture: participante.picture || '',
+      senha: '',
+      address: {
+        street: participante.address?.street || (participante as any).endereco || '',
+        zone: participante.address?.zone || '',
+        city: participante.address?.city || (participante as any).cidade || '',
+        state: participante.address?.state || (participante as any).estado || '',
+        number: participante.address?.number || '',
+        complement: participante.address?.complement || '',
+        zip: participante.address?.zip || (participante as any).cep || '',
+      },
     });
     setImagePreview(participante.picture || '');
     setShowEditModal(true);
@@ -392,9 +565,20 @@ export function Participantes() {
       cpf: '',
       chavePix: '',
       picture: '',
+      senha: '',
+      address: {
+        street: '',
+        zone: '',
+        city: '',
+        state: '',
+        number: '',
+        complement: '',
+        zip: '',
+      },
     });
     setImagePreview('');
     setCpfError('');
+    setSelectedCaixaId('');
   };
 
   const filteredParticipantes = participantes.filter((p) =>
@@ -466,6 +650,9 @@ export function Participantes() {
                   <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Chave PIX</th>
                   <th className="text-center py-3 px-4 text-sm font-semibold text-gray-700">Score</th>
                   <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Caixa</th>
+                  {usuarioLogado?.tipo === 'master' && (
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Gerenciado por</th>
+                  )}
                   <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700">Ações</th>
                 </tr>
               </thead>
@@ -525,6 +712,12 @@ export function Participantes() {
                         <span className="text-xs text-gray-400">Sem caixa</span>
                       )}
                     </td>
+                    {usuarioLogado?.tipo === 'master' && (
+                      <td className="py-3 px-4 text-sm text-gray-600">
+                        {participante.adminNome || participante.criadoPorNome || '-'}
+                      </td>
+                    )}
+
                     <td className="py-3 px-4">
                       <div className="flex items-center justify-end gap-2">
                         <Button
@@ -566,84 +759,270 @@ export function Participantes() {
           resetForm();
         }}
         title="Adicionar Participante"
-        size="lg"
+        size="xl"
       >
-        <div className="space-y-4">
-          {/* Upload de Foto */}
-          <div className="flex flex-col items-center gap-3 py-4">
-            <div className="relative">
-              <Avatar
-                src={imagePreview}
-                name={formData.nome || 'Participante'}
-                size="xl"
-              />
-              <label
-                htmlFor="picture-upload-add"
-                className="absolute bottom-0 right-0 bg-green-500 text-white p-2 rounded-full cursor-pointer hover:bg-green-600 transition-colors"
-              >
-                <Camera className="w-4 h-4" />
-              </label>
-              <input
-                id="picture-upload-add"
-                type="file"
-                accept="image/*"
-                onChange={handleImageUpload}
-                className="hidden"
-              />
+        <div className="space-y-6 px-1">
+          {/* Header com Foto e Campos Principais */}
+          <div className="flex flex-col md:flex-row gap-6">
+            {/* Esquerda: Foto */}
+            <div className="flex flex-col items-center gap-3 pt-2 w-full md:w-auto flex-shrink-0">
+              <div className="relative">
+                <Avatar
+                  src={imagePreview}
+                  name={formData.nome || 'Participante'}
+                  size="xl"
+                />
+                <label
+                  htmlFor="picture-upload-add"
+                  className="absolute bottom-0 right-0 bg-green-500 text-white p-2 rounded-full cursor-pointer hover:bg-green-600 transition-colors shadow-lg"
+                >
+                  <Camera className="w-4 h-4" />
+                </label>
+                <input
+                  id="picture-upload-add"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageUpload}
+                  className="hidden"
+                />
+              </div>
+              <p className="text-xs text-gray-500">Foto</p>
             </div>
-            <p className="text-xs text-gray-500">Clique no ícone para adicionar uma foto</p>
-          </div>
 
-          <Input
-            label="Nome Completo *"
-            placeholder="Nome do participante"
-            leftIcon={<User className="w-4 h-4" />}
-            value={formData.nome}
-            onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
-          />
-          <Input
-            label="Email *"
-            type="email"
-            placeholder="email@exemplo.com"
-            leftIcon={<Mail className="w-4 h-4" />}
-            value={formData.email}
-            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-          />
-          <div className="grid grid-cols-2 gap-4">
-            <Input
-              label="Telefone *"
-              placeholder="(11) 99999-9999"
-              leftIcon={<Phone className="w-4 h-4" />}
-              value={formData.telefone}
-              onChange={(e) => handlePhoneChange(e.target.value)}
-              maxLength={15}
-            />
-            <div>
+            {/* Direita: Campos Principais */}
+            <div className="flex-1 space-y-4">
               <Input
-                label="CPF"
-                placeholder="000.000.000-00"
-                value={formData.cpf}
-                onChange={(e) => handleCpfChange(e.target.value)}
-                maxLength={14}
-                className={cpfError ? 'border-red-500' : ''}
+                label="Nome Completo *"
+                placeholder="Nome do participante"
+                leftIcon={<User className="w-4 h-4" />}
+                value={formData.nome}
+                onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
               />
-              {cpfError && (
-                <p className="text-red-500 text-xs mt-1">{cpfError}</p>
-              )}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Input
+                  label="Email *"
+                  type="email"
+                  placeholder="email@exemplo.com"
+                  leftIcon={<Mail className="w-4 h-4" />}
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                />
+                <Input
+                  label="Telefone *"
+                  placeholder="(11) 99999-9999"
+                  leftIcon={<Phone className="w-4 h-4" />}
+                  value={formData.telefone}
+                  onChange={(e) => handlePhoneChange(e.target.value)}
+                  maxLength={15}
+                />
+              </div>
+              <div>
+                <Input
+                  label="CPF"
+                  placeholder="000.000.000-00"
+                  value={formData.cpf}
+                  onChange={(e) => handleCpfChange(e.target.value)}
+                  maxLength={14}
+                  className={cpfError ? 'border-red-500' : ''}
+                />
+                {cpfError && (
+                  <p className="text-red-500 text-xs mt-1">{cpfError}</p>
+                )}
+              </div>
             </div>
           </div>
-          <Input
-            label="Chave PIX"
-            placeholder="CPF, email, telefone ou chave aleatória"
-            leftIcon={<CreditCard className="w-4 h-4" />}
-            value={formData.chavePix}
-            onChange={(e) => setFormData({ ...formData, chavePix: e.target.value })}
-          />
 
-          <div className="flex gap-3 pt-4">
+          {/* Dados Financeiros e Senha */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-gray-50 p-4 rounded-xl border border-gray-100">
+            <Input
+              label="Chave PIX"
+              placeholder="Chave PIX"
+              leftIcon={<CreditCard className="w-4 h-4" />}
+              value={formData.chavePix}
+              onChange={(e) => setFormData({ ...formData, chavePix: e.target.value })}
+            />
+            <Input
+              label="Senha *"
+              type="password"
+              placeholder="Defina a senha"
+              value={formData.senha}
+              onChange={(e) => setFormData({ ...formData, senha: e.target.value })}
+            />
+          </div>
+
+          {/* Seção de Endereço */}
+          {/* Seção de Endereço */}
+          <div className="border-t border-gray-100 pt-5">
+            <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
+              <Home className="w-4 h-4" />
+              Endereço Completo
+            </h3>
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="md:col-span-1">
+                  <Input
+                    label="CEP"
+                    placeholder="00000-000"
+                    leftIcon={<MapPin className="w-4 h-4" />}
+                    value={formData.address.zip}
+                    onChange={(e) => {
+                      const digits = e.target.value.replace(/\D/g, '').slice(0, 8);
+                      const masked = digits.replace(/(\d{5})(\d)/, '$1-$2');
+                      setFormData({
+                        ...formData,
+                        address: { ...formData.address, zip: masked },
+                      });
+                    }}
+                    maxLength={9}
+                  />
+                </div>
+                <div className="md:col-span-3">
+                  <Input
+                    label="Rua / Logradouro"
+                    placeholder="Nome da rua"
+                    value={formData.address.street}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        address: { ...formData.address, street: e.target.value },
+                      })
+                    }
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="md:col-span-1">
+                  <Input
+                    label="Número"
+                    placeholder="123"
+                    value={formData.address.number}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        address: { ...formData.address, number: e.target.value },
+                      })
+                    }
+                  />
+                </div>
+                <div className="md:col-span-1">
+                  <Input
+                    label="Complemento"
+                    placeholder="Apto 101"
+                    value={formData.address.complement}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        address: { ...formData.address, complement: e.target.value },
+                      })
+                    }
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <Input
+                    label="Bairro"
+                    placeholder="Bairro"
+                    value={formData.address.zone}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        address: { ...formData.address, zone: e.target.value },
+                      })
+                    }
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="md:col-span-3">
+                  <Input
+                    label="Cidade"
+                    placeholder="Cidade"
+                    value={formData.address.city}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        address: { ...formData.address, city: e.target.value },
+                      })
+                    }
+                  />
+                </div>
+                <div className="md:col-span-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Estado
+                  </label>
+                  <select
+                    className="w-full h-[42px] px-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 bg-white"
+                    value={formData.address.state}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        address: { ...formData.address, state: e.target.value },
+                      })
+                    }
+                  >
+                    <option value="">UF</option>
+                    <option value="AC">AC</option>
+                    <option value="AL">AL</option>
+                    <option value="AP">AP</option>
+                    <option value="AM">AM</option>
+                    <option value="BA">BA</option>
+                    <option value="CE">CE</option>
+                    <option value="DF">DF</option>
+                    <option value="ES">ES</option>
+                    <option value="GO">GO</option>
+                    <option value="MA">MA</option>
+                    <option value="MT">MT</option>
+                    <option value="MS">MS</option>
+                    <option value="MG">MG</option>
+                    <option value="PA">PA</option>
+                    <option value="PB">PB</option>
+                    <option value="PR">PR</option>
+                    <option value="PE">PE</option>
+                    <option value="PI">PI</option>
+                    <option value="RJ">RJ</option>
+                    <option value="RN">RN</option>
+                    <option value="RS">RS</option>
+                    <option value="RO">RO</option>
+                    <option value="RR">RR</option>
+                    <option value="SC">SC</option>
+                    <option value="SP">SP</option>
+                    <option value="SE">SE</option>
+                    <option value="TO">TO</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {(usuarioLogado?.tipo === 'master' || usuarioLogado?.tipo === 'administrador') && caixas.length > 0 && (
+            <div className="bg-green-50 p-4 rounded-xl border border-green-100">
+              <label className="block text-sm font-medium text-green-800 mb-1">
+                Vincular ao Caixa
+              </label>
+              <select
+                className="w-full px-3 py-2 border border-green-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 bg-white"
+                value={selectedCaixaId}
+                onChange={(e) => setSelectedCaixaId(e.target.value)}
+              >
+                <option value="">Sem caixa (apenas cadastrar usuário)</option>
+                {caixas.filter((c: any) => String((c as any).status || '') !== 'ativo').map((c) => (
+                  <option key={c._id} value={c._id}>
+                    {c.nome}
+                    {c.adminId && typeof c.adminId === 'object' && c.adminId.nome
+                      ? ` • Admin: ${c.adminId.nome}`
+                      : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <div className="flex gap-3 pt-6 border-t border-gray-100">
             <Button
               variant="secondary"
               className="flex-1"
+              size="lg"
               onClick={() => {
                 setShowAddModal(false);
                 resetForm();
@@ -655,6 +1034,7 @@ export function Participantes() {
             <Button
               variant="primary"
               className="flex-1"
+              size="lg"
               onClick={handleAdd}
               disabled={!formData.nome || !formData.email || !formData.telefone || !!cpfError}
             >
@@ -673,84 +1053,247 @@ export function Participantes() {
           resetForm();
         }}
         title="Editar Participante"
-        size="lg"
+        size="xl"
       >
-        <div className="space-y-4">
-          {/* Upload de Foto */}
-          <div className="flex flex-col items-center gap-3 py-4">
-            <div className="relative">
-              <Avatar
-                src={imagePreview}
-                name={formData.nome || 'Participante'}
-                size="xl"
-              />
-              <label
-                htmlFor="picture-upload-edit"
-                className="absolute bottom-0 right-0 bg-green-500 text-white p-2 rounded-full cursor-pointer hover:bg-green-600 transition-colors"
-              >
-                <Camera className="w-4 h-4" />
-              </label>
-              <input
-                id="picture-upload-edit"
-                type="file"
-                accept="image/*"
-                onChange={handleImageUpload}
-                className="hidden"
-              />
+        <div className="space-y-6 px-1">
+          {/* Header com Foto e Campos Principais */}
+          <div className="flex flex-col md:flex-row gap-6">
+            {/* Esquerda: Foto */}
+            <div className="flex flex-col items-center gap-3 pt-2 w-full md:w-auto flex-shrink-0">
+              <div className="relative">
+                <Avatar
+                  src={imagePreview}
+                  name={formData.nome || 'Participante'}
+                  size="xl"
+                />
+                <label
+                  htmlFor="picture-upload-edit"
+                  className="absolute bottom-0 right-0 bg-green-500 text-white p-2 rounded-full cursor-pointer hover:bg-green-600 transition-colors shadow-lg"
+                >
+                  <Camera className="w-4 h-4" />
+                </label>
+                <input
+                  id="picture-upload-edit"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageUpload}
+                  className="hidden"
+                />
+              </div>
+              <p className="text-xs text-gray-500">Alterar foto</p>
             </div>
-            <p className="text-xs text-gray-500">Clique no ícone para alterar a foto</p>
-          </div>
 
-          <Input
-            label="Nome Completo *"
-            placeholder="Nome do participante"
-            leftIcon={<User className="w-4 h-4" />}
-            value={formData.nome}
-            onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
-          />
-          <Input
-            label="Email *"
-            type="email"
-            placeholder="email@exemplo.com"
-            leftIcon={<Mail className="w-4 h-4" />}
-            value={formData.email}
-            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-          />
-          <div className="grid grid-cols-2 gap-4">
-            <Input
-              label="Telefone *"
-              placeholder="(11) 99999-9999"
-              leftIcon={<Phone className="w-4 h-4" />}
-              value={formData.telefone}
-              onChange={(e) => handlePhoneChange(e.target.value)}
-              maxLength={15}
-            />
-            <div>
+            {/* Direita: Campos Principais */}
+            <div className="flex-1 space-y-4">
               <Input
-                label="CPF"
-                placeholder="000.000.000-00"
-                value={formData.cpf}
-                onChange={(e) => handleCpfChange(e.target.value)}
-                maxLength={14}
-                className={cpfError ? 'border-red-500' : ''}
+                label="Nome Completo *"
+                placeholder="Nome do participante"
+                leftIcon={<User className="w-4 h-4" />}
+                value={formData.nome}
+                onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
               />
-              {cpfError && (
-                <p className="text-red-500 text-xs mt-1">{cpfError}</p>
-              )}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Input
+                  label="Email *"
+                  type="email"
+                  placeholder="email@exemplo.com"
+                  leftIcon={<Mail className="w-4 h-4" />}
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                />
+                <Input
+                  label="Telefone *"
+                  placeholder="(11) 99999-9999"
+                  leftIcon={<Phone className="w-4 h-4" />}
+                  value={formData.telefone}
+                  onChange={(e) => handlePhoneChange(e.target.value)}
+                  maxLength={15}
+                />
+              </div>
+              <div>
+                <Input
+                  label="CPF"
+                  placeholder="000.000.000-00"
+                  value={formData.cpf}
+                  onChange={(e) => handleCpfChange(e.target.value)}
+                  maxLength={14}
+                  className={cpfError ? 'border-red-500' : ''}
+                />
+                {cpfError && (
+                  <p className="text-red-500 text-xs mt-1">{cpfError}</p>
+                )}
+              </div>
             </div>
           </div>
-          <Input
-            label="Chave PIX"
-            placeholder="CPF, email, telefone ou chave aleatória"
-            leftIcon={<CreditCard className="w-4 h-4" />}
-            value={formData.chavePix}
-            onChange={(e) => setFormData({ ...formData, chavePix: e.target.value })}
-          />
 
-          <div className="flex gap-3 pt-4">
+          {/* Dados Financeiros e Senha */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-gray-50 p-4 rounded-xl border border-gray-100">
+            <Input
+              label="Chave PIX"
+              placeholder="Chave PIX"
+              leftIcon={<CreditCard className="w-4 h-4" />}
+              value={formData.chavePix}
+              onChange={(e) => setFormData({ ...formData, chavePix: e.target.value })}
+            />
+            {/* Nota: Senha geralmente não é exibida na edição por segurança, mas o usuário pediu para manter os campos iguais. Podemos deixar vazio para não alterar ou permitir redefinir. */}
+            <Input
+              label="Nova Senha"
+              type="password"
+              placeholder="Deixe em branco para manter a atual"
+              value={formData.senha}
+              onChange={(e) => setFormData({ ...formData, senha: e.target.value })}
+            />
+          </div>
+
+          {/* Seção de Endereço */}
+          <div className="border-t border-gray-100 pt-5">
+            <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
+              <Home className="w-4 h-4" />
+              Endereço Completo
+            </h3>
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="md:col-span-1">
+                  <Input
+                    label="CEP"
+                    placeholder="00000-000"
+                    leftIcon={<MapPin className="w-4 h-4" />}
+                    value={formData.address.zip}
+                    onChange={(e) => {
+                      const digits = e.target.value.replace(/\D/g, '').slice(0, 8);
+                      const masked = digits.replace(/(\d{5})(\d)/, '$1-$2');
+                      setFormData({
+                        ...formData,
+                        address: { ...formData.address, zip: masked },
+                      });
+                    }}
+                    maxLength={9}
+                  />
+                </div>
+                <div className="md:col-span-3">
+                  <Input
+                    label="Rua / Logradouro"
+                    placeholder="Nome da rua"
+                    value={formData.address.street}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        address: { ...formData.address, street: e.target.value },
+                      })
+                    }
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="md:col-span-1">
+                  <Input
+                    label="Número"
+                    placeholder="123"
+                    value={formData.address.number}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        address: { ...formData.address, number: e.target.value },
+                      })
+                    }
+                  />
+                </div>
+                <div className="md:col-span-1">
+                  <Input
+                    label="Complemento"
+                    placeholder="Apto 101"
+                    value={formData.address.complement}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        address: { ...formData.address, complement: e.target.value },
+                      })
+                    }
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <Input
+                    label="Bairro"
+                    placeholder="Bairro"
+                    value={formData.address.zone}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        address: { ...formData.address, zone: e.target.value },
+                      })
+                    }
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="md:col-span-3">
+                  <Input
+                    label="Cidade"
+                    placeholder="Cidade"
+                    value={formData.address.city}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        address: { ...formData.address, city: e.target.value },
+                      })
+                    }
+                  />
+                </div>
+                <div className="md:col-span-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Estado
+                  </label>
+                  <select
+                    className="w-full h-[42px] px-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 bg-white"
+                    value={formData.address.state}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        address: { ...formData.address, state: e.target.value },
+                      })
+                    }
+                  >
+                    <option value="">UF</option>
+                    <option value="AC">AC</option>
+                    <option value="AL">AL</option>
+                    <option value="AP">AP</option>
+                    <option value="AM">AM</option>
+                    <option value="BA">BA</option>
+                    <option value="CE">CE</option>
+                    <option value="DF">DF</option>
+                    <option value="ES">ES</option>
+                    <option value="GO">GO</option>
+                    <option value="MA">MA</option>
+                    <option value="MT">MT</option>
+                    <option value="MS">MS</option>
+                    <option value="MG">MG</option>
+                    <option value="PA">PA</option>
+                    <option value="PB">PB</option>
+                    <option value="PR">PR</option>
+                    <option value="PE">PE</option>
+                    <option value="PI">PI</option>
+                    <option value="RJ">RJ</option>
+                    <option value="RN">RN</option>
+                    <option value="RS">RS</option>
+                    <option value="RO">RO</option>
+                    <option value="RR">RR</option>
+                    <option value="SC">SC</option>
+                    <option value="SP">SP</option>
+                    <option value="SE">SE</option>
+                    <option value="TO">TO</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex gap-3 pt-6 border-t border-gray-100">
             <Button
               variant="secondary"
               className="flex-1"
+              size="lg"
               onClick={() => {
                 setShowEditModal(false);
                 setSelectedParticipante(null);
@@ -763,6 +1306,7 @@ export function Participantes() {
             <Button
               variant="primary"
               className="flex-1"
+              size="lg"
               onClick={handleEdit}
               disabled={!formData.nome || !formData.email || !formData.telefone || !!cpfError}
             >
@@ -889,7 +1433,7 @@ export function Participantes() {
               )}
             </div>
 
-            
+
           </div>
         )}
       </Modal>

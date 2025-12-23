@@ -23,7 +23,7 @@ import { Badge } from '../components/ui/Badge';
 import { EmptyState } from '../components/ui/EmptyState';
 import { CardSkeleton } from '../components/ui/Skeleton';
 import { ProgressBar } from '../components/ui/ProgressBar';
-import { formatCurrency, cn } from '../lib/utils';
+import { formatCurrency, cn, calculateCurrentPeriod } from '../lib/utils';
 
 interface Caixa {
   _id: string;
@@ -40,13 +40,14 @@ interface Caixa {
   codigoConvite: string;
   participantesAtivos?: number;
   stats?: { pagos: number; pendentes: number };
+  adminNome?: string;
 }
 
 const statusFilters = [
   { value: '', label: 'Todos' },
-  { value: 'ativo', label: 'Ativos' },
-  { value: 'aguardando', label: 'Aguardando' },
-  { value: 'rascunho', label: 'Rascunhos' },
+  { value: 'ativo', label: 'Em Andamento' },
+  { value: 'aguardando', label: 'Aguardando Participantes' },
+  { value: 'nao_iniciados', label: 'Não iniciados' },
   { value: 'finalizado', label: 'Finalizados' },
 ];
 
@@ -82,26 +83,58 @@ export function Caixas() {
     try {
       setLoading(true);
       if (usuario.tipo === 'usuario') {
-        // Participante comum: busca os caixas em que participa
         const participacoes = await participantesService.getByUsuario(usuario._id);
         const lista = Array.isArray(participacoes) ? participacoes : participacoes?.participacoes || [];
-        const caixasList = lista.map((p: any) => ({
-          _id: p.caixaId?._id || p.caixaId || `caixa-${p._id}`,
-          nome: p.caixaId?.nome || p.nomeCaixa || 'Caixa',
-          descricao: p.caixaId?.descricao,
-          valorTotal: p.caixaId?.valorTotal || 0,
-          valorParcela: p.caixaId?.valorParcela || 0,
-          qtdParticipantes: p.caixaId?.qtdParticipantes || p.qtdParticipantes || 0,
-          duracaoMeses: p.caixaId?.duracaoMeses || p.duracaoMeses || 0,
-          status: p.caixaId?.status || 'aguardando',
-          mesAtual: p.caixaId?.mesAtual || 1,
-          tipo: p.caixaId?.tipo || p.tipo || 'mensal',
-          codigoConvite: p.caixaId?.codigoConvite || '',
-          participantesAtivos: p.caixaId?.qtdParticipantes || p.qtdParticipantes || 0,
-        }));
-        setCaixas(caixasList);
+        const caixasList = lista.map((p: any) => {
+          const caixaData = p.caixaId || {};
+
+          return {
+            _id: caixaData._id || p.caixaId || `caixa-${p._id}`,
+            nome: caixaData.nome || p.nomeCaixa || 'Caixa',
+            descricao: caixaData.descricao,
+            valorTotal: caixaData.valorTotal || 0,
+            valorParcela: caixaData.valorParcela || 0,
+            qtdParticipantes: caixaData.qtdParticipantes,
+            duracaoMeses: caixaData.duracaoMeses,
+            status: caixaData.status || 'aguardando',
+            mesAtual: caixaData.mesAtual || 1,
+            tipo: caixaData.tipo || 'mensal',
+            dataInicio: caixaData.dataInicio,
+            codigoConvite: caixaData.codigoConvite || '',
+            participantesAtivos: caixaData.participantesAtivos || 0,
+            adminNome: caixaData.adminId?.nome || '',
+          };
+        });
+
+        // Fetch full caixa details for missing fields
+        const caixasComDetalhes = await Promise.all(
+          caixasList.map(async (c: Caixa) => {
+            try {
+              if (!c.qtdParticipantes || !c.duracaoMeses) {
+                const fullCaixa = await caixasService.getById(c._id);
+                return {
+                  ...c,
+                  qtdParticipantes: fullCaixa.qtdParticipantes || 0,
+                  duracaoMeses: fullCaixa.duracaoMeses || 0,
+                  participantesAtivos: fullCaixa.participantesAtivos || c.participantesAtivos || 0,
+                };
+              }
+              return c;
+            } catch (error) {
+              console.error(`Error fetching caixa ${c._id}:`, error);
+              return c;
+            }
+          })
+        );
+
+        setCaixas(caixasComDetalhes);
       } else {
-        const response = await caixasService.getByAdmin(usuario._id);
+        let response;
+        if (usuario.tipo === 'master') {
+          response = await caixasService.getAll();
+        } else {
+          response = await caixasService.getByAdmin(usuario._id);
+        }
         const caixasList = Array.isArray(response) ? response : response.caixas || [];
         const caixasComParticipantes = caixasList.map((c: any) => ({
           _id: c._id,
@@ -117,6 +150,7 @@ export function Caixas() {
           dataInicio: c.dataInicio,
           codigoConvite: c.codigoConvite,
           participantesAtivos: getParticipantesCount(c._id) || c.participantesAtivos || c.qtdParticipantes || 0,
+          adminNome: typeof c.adminId === 'string' ? '' : c.adminId?.nome || '',
         }));
 
         const stats = await Promise.all(
@@ -235,7 +269,7 @@ export function Caixas() {
             return u ? { ...cx, stats: { pagos: u.pagos, pendentes: u.pendentes } } : cx;
           })
         );
-      } catch {}
+      } catch { }
     };
     timer = setInterval(refreshStats, 5000);
     return () => {
@@ -244,14 +278,23 @@ export function Caixas() {
   }, [caixas]);
   const filteredCaixas = caixas.filter((caixa) => {
     const matchesSearch = caixa.nome.toLowerCase().includes(search.toLowerCase());
-    const matchesStatus = !statusFilter || caixa.status === statusFilter;
-    return matchesSearch && matchesStatus;
+    if (!statusFilter) return matchesSearch;
+    if (statusFilter === 'ativo') return matchesSearch && caixa.status === 'ativo';
+    if (statusFilter === 'aguardando') return matchesSearch && caixa.status === 'aguardando';
+    if (statusFilter === 'finalizado') return matchesSearch && caixa.status === 'finalizado';
+    if (statusFilter === 'nao_iniciados') {
+      const participantesAtivos = caixa.participantesAtivos || 0;
+      const isCompleto = participantesAtivos >= (caixa.qtdParticipantes || 0);
+      return matchesSearch && isCompleto && caixa.status !== 'ativo';
+    }
+    return matchesSearch;
   });
 
   const getStatusBadge = (status: string) => {
     const variants: Record<string, 'success' | 'warning' | 'danger' | 'info' | 'gray'> = {
       ativo: 'success',
       aguardando: 'warning',
+      pausado: 'warning',
       rascunho: 'gray',
       finalizado: 'info',
       cancelado: 'danger',
@@ -261,30 +304,35 @@ export function Caixas() {
 
   const getStatusLabel = (status: string) => {
     const labels: Record<string, string> = {
-      ativo: 'Ativo',
-      aguardando: 'Aguardando',
-      rascunho: 'Rascunho',
+      ativo: 'Em andamento',
+      aguardando: 'Aguardando participantes',
+      pausado: 'Pausado',
+      rascunho: 'Não iniciado',
       finalizado: 'Finalizado',
       cancelado: 'Cancelado',
     };
     return labels[status] || status;
   };
 
-  // Ordenar caixas: sem participantes primeiro, incompletos depois
+  // Ordenar caixas: Em andamento primeiro; entre eles, mais pagos primeiro
   const sortedCaixas = [...filteredCaixas].sort((a, b) => {
+    const aAtivo = a.status === 'ativo' ? 1 : 0;
+    const bAtivo = b.status === 'ativo' ? 1 : 0;
+    if (aAtivo !== bAtivo) return bAtivo - aAtivo; // ativos primeiro
+
+    if (aAtivo === 1 && bAtivo === 1) {
+      const pagosA = a.stats?.pagos || 0;
+      const pagosB = b.stats?.pagos || 0;
+      if (pagosA !== pagosB) return pagosB - pagosA; // mais pagos primeiro
+    }
+
+    // Fallback: completos, depois incompletos
     const aParticipantes = a.participantesAtivos || 0;
     const bParticipantes = b.participantesAtivos || 0;
-    
-    // Sem participantes primeiro
-    if (aParticipantes === 0 && bParticipantes > 0) return -1;
-    if (bParticipantes === 0 && aParticipantes > 0) return 1;
-    
-    // Depois incompletos
     const aIncompleto = aParticipantes < a.qtdParticipantes;
     const bIncompleto = bParticipantes < b.qtdParticipantes;
-    if (aIncompleto && !bIncompleto) return -1;
-    if (bIncompleto && !aIncompleto) return 1;
-    
+    if (aIncompleto && !bIncompleto) return 1;
+    if (bIncompleto && !aIncompleto) return -1;
     return 0;
   });
 
@@ -356,7 +404,16 @@ export function Caixas() {
             const semParticipantes = participantesAtivos === 0;
             const isIncompleto = participantesFaltando > 0 && !semParticipantes;
             const isCompleto = participantesFaltando === 0;
-            
+            const periodoAtual = calculateCurrentPeriod(
+              caixa.tipo,
+              caixa.dataInicio,
+              caixa.duracaoMeses,
+              caixa.mesAtual || 1
+            );
+            const totalPagamentos = (caixa.qtdParticipantes || 0) * (caixa.duracaoMeses || 0);
+            const pagos = caixa.stats?.pagos || 0;
+            const pendentes = Math.max(0, totalPagamentos - pagos);
+
             return (
               <motion.div
                 key={caixa._id}
@@ -368,14 +425,14 @@ export function Caixas() {
                   hover
                   onClick={() => navigate(`/caixas/${caixa._id}`)}
                   className={cn(
-                    'min-h-[220px]',
+                    'min-h-[240px] h-full',
                     semParticipantes && 'ring-2 ring-red-300 bg-gradient-to-br from-red-50 to-white',
                     isIncompleto && 'ring-2 ring-amber-300 bg-gradient-to-br from-amber-50 to-white',
                     !semParticipantes && !isIncompleto && caixa.status === 'ativo' && 'ring-2 ring-green-300 bg-gradient-to-br from-green-50 to-white'
                   )}
                 >
                   {/* Badge de status no topo */}
-                  {semParticipantes && (
+                  {semParticipantes && usuario?.tipo !== 'usuario' && (
                     <div className="flex items-center gap-2 p-2 bg-red-100 rounded-lg mb-3 -mt-1">
                       <AlertTriangle className="w-4 h-4 text-red-600" />
                       <span className="text-xs font-semibold text-red-700">Sem participantes! Adicione agora</span>
@@ -405,14 +462,24 @@ export function Caixas() {
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex-1">
                       <h3 className="font-semibold text-gray-900 mb-1">{caixa.nome}</h3>
-                      <p className="text-sm text-gray-500">
-                        {formatCurrency(caixa.valorTotal)}
-                      </p>
+                      <div className="space-y-1">
+                        <p className="text-lg font-bold text-green-600">
+                          {formatCurrency(caixa.valorTotal)}
+                        </p>
+                        <p className="text-xs text-gray-600">
+                          {caixa.duracaoMeses}x de {formatCurrency(caixa.valorParcela)}
+                        </p>
+                      </div>
+                      {caixa.adminNome && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          Organizado por: {caixa.adminNome}
+                        </p>
+                      )}
                     </div>
                     <div className="flex flex-col gap-1 items-end">
                       {caixa.status === 'ativo' ? (
                         <Badge variant="success" size="sm">
-                          {caixa.tipo === 'semanal' ? 'Semana' : 'Mês'} {Math.max(1, caixa.mesAtual)}/{caixa.duracaoMeses}
+                          {caixa.tipo === 'semanal' ? 'Semana' : 'Mês'} {periodoAtual}/{caixa.duracaoMeses}
                         </Badge>
                       ) : (
                         <Badge variant={getStatusBadge(caixa.status)} size="sm">
@@ -455,7 +522,7 @@ export function Caixas() {
                   {/* Progress */}
                   {caixa.status === 'ativo' && (
                     <ProgressBar
-                      value={Math.max(1, caixa.mesAtual)}
+                      value={periodoAtual}
                       max={caixa.duracaoMeses}
                       color="primary"
                       size="sm"
@@ -492,14 +559,14 @@ export function Caixas() {
                       <div className="flex items-center gap-3 text-sm">
                         <span className="flex items-center gap-1 text-green-600">
                           <CheckCircle2 className="w-4 h-4" />
-                          {caixa.stats?.pagos || 0} pagos
+                          {pagos} pagos
                         </span>
                         <span className="flex items-center gap-1 text-amber-600">
                           <Clock className="w-4 h-4" />
-                          {caixa.stats?.pendentes ?? caixa.qtdParticipantes} pendentes
+                          {pendentes} pendentes
                         </span>
                       </div>
-                    ) : (semParticipantes || isIncompleto) ? (
+                    ) : (semParticipantes || isIncompleto) && usuario?.tipo !== 'usuario' ? (
                       <span
                         className={cn(
                           "inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-lg",
