@@ -35,8 +35,13 @@ import {
   Printer,
   Search,
   UserCheck,
+  Home,
+  MapPin,
+  Camera,
+  CheckCircle,
+  XCircle,
 } from 'lucide-react';
-import { caixasService, participantesService, usuariosService, cobrancasService, pagamentosService } from '../lib/api';
+import { caixasService, participantesService, usuariosService, cobrancasService, pagamentosService, splitConfigService, subcontasService } from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
 import { DetalhesPagamento } from './DetalhesPagamento';
 import { Card } from '../components/ui/Card';
@@ -48,6 +53,8 @@ import { Input } from '../components/ui/Input';
 import { CardSkeleton } from '../components/ui/Skeleton';
 import { EmptyState } from '../components/ui/EmptyState';
 import { formatCurrency, formatDate, cn } from '../lib/utils';
+import { ConfiguracoesObrigatoriasCaixa } from '../components/ConfiguracoesObrigatoriasCaixa';
+import { useCaixaConfiguracao } from '../hooks/useCaixaConfiguracao';
 
 interface Participante {
   _id: string;
@@ -132,7 +139,7 @@ const tabs = [
 
 // Taxa IPCA mensal estimada (0.4% ao mês)
 const TAXA_IPCA_MENSAL = 0.0041;
-const TAXA_SERVICO = 5;
+const TAXA_SERVICO = 10.00
 const FUNDO_RESERVA = 50;
 
 export function CaixaDetalhes() {
@@ -144,6 +151,7 @@ export function CaixaDetalhes() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('participantes');
   const [showAddParticipante, setShowAddParticipante] = useState(false);
+  const [imagePreview, setImagePreview] = useState('');
   const [showAddExistente, setShowAddExistente] = useState(false);
   const [showEditCaixa, setShowEditCaixa] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -163,6 +171,16 @@ export function CaixaDetalhes() {
     cpf: '',
     chavePix: '',
     picture: '',
+    senha: '',
+    address: {
+      street: '',
+      zone: '',
+      city: '',
+      state: '',
+      number: '',
+      complement: '',
+      zip: '',
+    },
   });
   const [usuariosSemCaixa, setUsuariosSemCaixa] = useState<Array<{ _id: string; nome: string; email: string; telefone: string; cpf?: string; chavePix?: string; score?: number; fotoUrl?: string }>>([]);
   const [searchUsuario, setSearchUsuario] = useState('');
@@ -182,8 +200,27 @@ export function CaixaDetalhes() {
   });
   const [showIniciarCaixa, setShowIniciarCaixa] = useState(false);
   const [aceiteContrato, setAceiteContrato] = useState(false);
+  const [showSplitConfigModal, setShowSplitConfigModal] = useState(false);
+
+  // Use custom hook for configuration verification
+  const {
+    splitConfigStatus,
+    participantesSubcontasStatus,
+    loading: configLoading,
+    error: configError,
+    verificarConfiguracaoSplitDetalhada,
+    validarIniciarCaixa,
+  } = useCaixaConfiguracao(
+    id || '',
+    participantes,
+    caixa?.adminId?._id || '',
+    caixa?.adminId?.email || '',
+    caixa?.adminId?.nome || ''
+  );
   const [customParticipantes, setCustomParticipantes] = useState(false);
   const [customDuracao, setCustomDuracao] = useState(false);
+  const [cepLoading, setCepLoading] = useState(false);
+
 
   const [pagamentosMes, setPagamentosMes] = useState<any[]>([]);
   const [todosPagamentos, setTodosPagamentos] = useState<any[]>([]);
@@ -235,12 +272,12 @@ export function CaixaDetalhes() {
 
     // Contar pagamentos realizados verificando status consolidado (Local + Remoto)
     let realizados = 0;
-    
+
     if (participantes.length > 0) {
       participantes.forEach(p => {
         const usuarioId = p.usuarioId?._id || p.usuarioId;
         const participanteId = p._id;
-        
+
         // Verificar cada mês possível
         for (let mes = 1; mes <= caixa.duracaoMeses; mes++) {
           if (verificarPagamento(String(usuarioId), String(participanteId), mes)) {
@@ -417,6 +454,17 @@ export function CaixaDetalhes() {
     await Promise.allSettled(promises);
   };
 
+  // Função para calcular valor com IPCA aplicado
+  const calcularValorComIPCA = (mes: number, valorBase: number): number => {
+    if (mes <= 1) return valorBase; // Primeira parcela sem IPCA
+
+    const taxaIPCA = 0.004; // 0.4% ao mês
+    const mesesIPCA = mes - 1; // IPCA acumulado desde o mês 2
+    const valorIPCA = valorBase * (Math.pow(1 + taxaIPCA, mesesIPCA) - 1);
+
+    return valorBase + valorIPCA;
+  };
+
   useEffect(() => {
     if (id) {
       loadCaixa();
@@ -460,6 +508,13 @@ export function CaixaDetalhes() {
       try { loadPagamentos(); } catch { }
     }
   }, [cronogramaParcela]);
+
+  useEffect(() => {
+    // Verificar configuração de split quando o modal for aberto
+    if (showSplitConfigModal) {
+      verificarConfiguracaoSplitDetalhada();
+    }
+  }, [showSplitConfigModal]);
 
   const loadCaixa = async () => {
     try {
@@ -577,6 +632,16 @@ export function CaixaDetalhes() {
       setShowErrorModal(true);
       return;
     }
+
+    // VALIDAÇÃO CRÍTICA: Verificar configuração de split antes de ativar
+    const splitConfigurado = await verificarConfiguracaoSplit();
+    if (!splitConfigurado) {
+      setErrorMessage('Configure o split de pagamentos antes de iniciar o caixa. Acesse a aba Configurações.');
+      setShowErrorModal(true);
+      setShowSplitConfigModal(true);
+      return;
+    }
+
     try {
       await caixasService.alterarStatus(id!, 'ativo');
       loadCaixa();
@@ -605,33 +670,89 @@ export function CaixaDetalhes() {
     }
   };
 
+  // Note: verificarConfiguracaoSplitDetalhada is now provided by the useCaixaConfiguracao hook
+
+  const verificarConfiguracaoSplit = async (): Promise<boolean> => {
+    try {
+      if (!id) return false;
+
+      const config = await splitConfigService.getByCaixa(id);
+
+      // Verificar se existe configuração
+      if (!config) return false;
+
+      // Verificar se tem IDs de subcontas configurados
+      if (!config.taxaServicoSubId || !config.adminSubId) return false;
+
+      // Verificar se tem participantes vinculados
+      if (!config.participantesMesOrdem || config.participantesMesOrdem.length === 0) return false;
+
+      return true;
+    } catch (error) {
+      console.error('Erro ao verificar configuração de split:', error);
+      return false;
+    }
+  };
+
   const handleIniciarCaixa = async () => {
-    if (!aceiteContrato) return;
+    console.log('🚀 handleIniciarCaixa called');
+    console.log('📋 aceiteContrato:', aceiteContrato);
+    console.log('📋 splitConfigStatus:', splitConfigStatus);
+
+    // Check if all configurations are complete (from the configuration modal)
+    const allConfigsComplete = splitConfigStatus.participantesVinculados &&
+      splitConfigStatus.adminTemSubconta &&
+      splitConfigStatus.regrasSplit;
+
+    // If called from normal flow, require aceiteContrato
+    // If called from config modal with all complete, skip aceiteContrato check
+    if (!aceiteContrato && !allConfigsComplete) {
+      console.log('❌ Aceite contrato not checked and configs not complete');
+      return;
+    }
 
     // Validação: só iniciar se posições estiverem sorteadas para todos
     const total = caixa?.qtdParticipantes || 0;
     const completo = participantes.length === total && total > 0;
     const todasPosicoes = completo && participantes.every((p) => (p.posicao || 0) > 0);
+
     if (!completo || !todasPosicoes) {
+      console.log('❌ Positions not sorted:', { completo, todasPosicoes, total, participantesCount: participantes.length });
       setErrorMessage('Sorteie as posições e garanta que todos os participantes tenham uma posição antes de iniciar.');
       setShowErrorModal(true);
       return;
     }
 
+    // MEGA IMPORTANTE: Validação de configuração de split
+    if (!allConfigsComplete) {
+      const splitConfigurado = await verificarConfiguracaoSplit();
+      if (!splitConfigurado) {
+        setShowSplitConfigModal(true);
+        setShowIniciarCaixa(false);
+        setAceiteContrato(false);
+        return;
+      }
+    }
+
     try {
+      console.log('🚀 Calling API to start caixa...');
       await caixasService.alterarStatus(id!, 'ativo');
+      console.log('✅ Caixa started successfully!');
+
       if (caixa) {
         setCaixa({ ...caixa, status: 'ativo', mesAtual: 1, dataInicio: new Date().toISOString() });
       }
       setShowIniciarCaixa(false);
+      setShowSplitConfigModal(false);
       setAceiteContrato(false);
+
+      // Show success message
+      setSuccessMessage('🎉 Caixa iniciado com sucesso!');
+      setShowSuccessModal(true);
     } catch (error) {
-      console.error('Erro ao iniciar caixa:', error);
-      if (caixa) {
-        setCaixa({ ...caixa, status: 'ativo', mesAtual: 1, dataInicio: new Date().toISOString() });
-      }
-      setShowIniciarCaixa(false);
-      setAceiteContrato(false);
+      console.error('❌ Erro ao iniciar caixa:', error);
+      setErrorMessage('Erro ao iniciar caixa. Tente novamente.');
+      setShowErrorModal(true);
     }
   };
 
@@ -742,6 +863,63 @@ export function CaixaDetalhes() {
     }
   };
 
+  // Função para comprimir imagem
+  const compressImage = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const maxWidth = 400;
+          const maxHeight = 400;
+          let width = img.width;
+          let height = img.height;
+
+          if (width > height) {
+            if (width > maxWidth) {
+              height *= maxWidth / width;
+              width = maxWidth;
+            }
+          } else {
+            if (height > maxHeight) {
+              width *= maxHeight / height;
+              height = maxHeight;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx?.drawImage(img, 0, 0, width, height);
+
+          const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7);
+          resolve(compressedBase64);
+        };
+        img.onerror = reject;
+        img.src = e.target?.result as string;
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      try {
+        const compressedImage = await compressImage(file);
+        setImagePreview(compressedImage);
+        setNewParticipante({ ...newParticipante, picture: compressedImage });
+      } catch (error) {
+        console.error('Erro ao processar imagem:', error);
+        setErrorMessage('Erro ao processar imagem. Tente outra foto.');
+        setShowErrorModal(true);
+      }
+    }
+  };
+
+
   const handleAddParticipante = async () => {
     if (caixa && participantes.length >= (caixa.qtdParticipantes || 0)) {
       setErrorMessage('O caixa já está completo. Edite o caixa para aumentar participantes antes de adicionar.');
@@ -749,23 +927,52 @@ export function CaixaDetalhes() {
       return;
     }
     if (!newParticipante.nome || !newParticipante.email || !newParticipante.telefone) {
-      alert('Preencha nome, email e telefone.');
+      setErrorMessage('Preencha nome, email e telefone.');
+      setShowErrorModal(true);
+      return;
+    }
+    // Validar senha
+    if (!newParticipante.senha || newParticipante.senha.length < 6) {
+      setErrorMessage('Defina uma senha com pelo menos 6 caracteres.');
+      setShowErrorModal(true);
       return;
     }
     try {
-      const usuario = await usuariosService.create({
-        ...newParticipante,
-        tipo: 'usuario',
-        senha: 'Senha@123',
-      });
+      const telefoneDigits = newParticipante.telefone.replace(/\D/g, '');
+      const cpfDigits = newParticipante.cpf.replace(/\D/g, '');
+      const zipDigits = newParticipante.address.zip.replace(/\D/g, '');
 
-      if (!usuario || !usuario._id) {
+      const usuarioData = {
+        nome: newParticipante.nome,
+        email: newParticipante.email,
+        telefone: telefoneDigits,
+        cpf: cpfDigits,
+        chavePix: newParticipante.chavePix,
+        picture: newParticipante.picture,
+        senha: newParticipante.senha,
+        tipo: 'usuario' as const,
+        criadoPorId: usuario?._id || '',
+        criadoPorNome: usuario?.nome || '',
+        address: {
+          street: newParticipante.address.street,
+          zone: newParticipante.address.zone,
+          city: newParticipante.address.city,
+          state: newParticipante.address.state,
+          number: newParticipante.address.number,
+          complement: newParticipante.address.complement,
+          zip: zipDigits,
+        },
+      };
+
+      const novoUsuario = await usuariosService.create(usuarioData);
+
+      if (!novoUsuario || !novoUsuario._id) {
         throw new Error('Erro ao criar usuário no servidor');
       }
 
       const participante = await participantesService.create({
         caixaId: id,
-        usuarioId: usuario._id,
+        usuarioId: novoUsuario._id,
         aceite: true,
         status: 'ativo',
       });
@@ -776,7 +983,24 @@ export function CaixaDetalhes() {
 
       await loadParticipantes();
       setShowAddParticipante(false);
-      setNewParticipante({ nome: '', email: '', telefone: '', cpf: '', chavePix: '', picture: '' });
+      setNewParticipante({
+        nome: '',
+        email: '',
+        telefone: '',
+        cpf: '',
+        chavePix: '',
+        picture: '',
+        senha: '',
+        address: {
+          street: '',
+          zone: '',
+          city: '',
+          state: '',
+          number: '',
+          complement: '',
+          zip: '',
+        },
+      });
       setSuccessMessage('Participante adicionado com sucesso!');
       setShowSuccessModal(true);
     } catch (error: any) {
@@ -786,6 +1010,51 @@ export function CaixaDetalhes() {
       setShowErrorModal(true);
     }
   };
+
+
+  const handleCepLookup = async (cep: string) => {
+    // Remove non-digit characters
+    const cepDigits = cep.replace(/\D/g, '');
+
+    // Only proceed if we have 8 digits
+    if (cepDigits.length !== 8) {
+      return;
+    }
+
+    setCepLoading(true);
+
+    try {
+      const response = await fetch(`https://viacep.com.br/ws/${cepDigits}/json/`);
+      const data = await response.json();
+
+      if (data.erro) {
+        setErrorMessage('CEP não encontrado. Verifique e tente novamente.');
+        setShowErrorModal(true);
+        return;
+      }
+
+      // Auto-fill address fields
+      setNewParticipante({
+        ...newParticipante,
+        address: {
+          ...newParticipante.address,
+          street: data.logradouro || newParticipante.address.street,
+          zone: data.bairro || newParticipante.address.zone,
+          city: data.localidade || newParticipante.address.city,
+          state: data.uf || newParticipante.address.state,
+          zip: cep,
+        },
+      });
+    } catch (error) {
+      console.error('Erro ao buscar CEP:', error);
+      setErrorMessage('Erro ao buscar CEP. Verifique sua conexão e tente novamente.');
+      setShowErrorModal(true);
+    } finally {
+      setCepLoading(false);
+    }
+  };
+
+
 
   const loadUsuariosSemCaixa = async () => {
     try {
@@ -801,8 +1070,14 @@ export function CaixaDetalhes() {
         listaParticipantes.map((p: any) => p.usuarioId?._id || p.usuarioId)
       );
 
+      // Filtrar participantes que JÁ ESTÃO NESTE CAIXA
+      const participantesNesteCaixa = new Set(
+        participantes.map(p => p.usuarioId._id)
+      );
+
       // Regra: não pode estar em 2 caixas simultaneamente → somente usuários sem vínculo
-      const livres = usuarios.filter((u: any) => !usuariosComVinculo.has(u._id));
+      // E também não pode adicionar quem já está neste caixa
+      const livres = usuarios.filter((u: any) => !usuariosComVinculo.has(u._id) && !participantesNesteCaixa.has(u._id));
       setUsuariosSemCaixa(livres);
     } catch (error) {
       console.error('Erro ao carregar usuários sem caixa:', error);
@@ -906,21 +1181,27 @@ export function CaixaDetalhes() {
     if (!caixa) return [];
 
     const boletos: Boleto[] = [];
-    const dataBase = caixa.dataInicio ? new Date(caixa.dataInicio) : new Date();
     const isSemanal = caixa.tipo === 'semanal';
+
+    // Parse the date without timezone conversion issues
+    const dataInicioStr = caixa.dataInicio || new Date().toISOString();
+    const parts = dataInicioStr.split('T')[0].split('-');
+    const baseYear = parseInt(parts[0]);
+    const baseMonth = parseInt(parts[1]) - 1; // JS months are 0-indexed
+    const baseDay = caixa.diaVencimento || parseInt(parts[2]);
 
     const valorParcelaReal = caixa.valorTotal / caixa.qtdParticipantes;
     const numParcelas = caixa.qtdParticipantes;
 
     for (let parcela = 1; parcela <= numParcelas; parcela++) {
-      const dataVencimento = new Date(dataBase);
+      let dataVencimento: Date;
+
       if (isSemanal) {
+        dataVencimento = new Date(baseYear, baseMonth, baseDay);
         dataVencimento.setDate(dataVencimento.getDate() + ((parcela - 1) * 7));
       } else {
-        dataVencimento.setMonth(dataVencimento.getMonth() + parcela - 1);
-      }
-      if (!isSemanal && caixa.diaVencimento > 0) {
-        dataVencimento.setDate(caixa.diaVencimento);
+        const targetMonth = baseMonth + (parcela - 1);
+        dataVencimento = new Date(baseYear, targetMonth, baseDay);
       }
 
       const correcaoIPCA = parcela > 1 ? valorParcelaReal * TAXA_IPCA_MENSAL : 0;
@@ -974,49 +1255,73 @@ export function CaixaDetalhes() {
 
   const getVencimentoAtual = (): string => {
     if (!caixa?.dataInicio) return '-';
-    const dataBase = new Date(caixa.dataInicio);
-    const data = new Date(dataBase);
-    const atual = Math.max(1, caixa.mesAtual);
+
+    // Parse the date without timezone conversion issues
+    const dataInicioStr = caixa.dataInicio;
+    const parts = dataInicioStr.split('T')[0].split('-');
+    const year = parseInt(parts[0]);
+    const month = parseInt(parts[1]) - 1; // JS months are 0-indexed
+    const day = caixa.diaVencimento || parseInt(parts[2]);
+
+    const atual = Math.max(1, caixa.mesAtual || 1);
+
     if (caixa.tipo === 'semanal') {
-      data.setDate(data.getDate() + ((atual - 1) * 7));
+      // For weekly: add weeks
+      const baseDate = new Date(year, month, day);
+      baseDate.setDate(baseDate.getDate() + ((atual - 1) * 7));
+      return formatDate(baseDate.toISOString());
     } else {
-      data.setMonth(data.getMonth() + atual - 1);
-      data.setDate(caixa.diaVencimento);
+      // For monthly: add months and set day
+      const targetMonth = month + (atual - 1);
+      const data = new Date(year, targetMonth, day);
+      return formatDate(data.toISOString());
     }
-    return formatDate(data.toISOString());
   };
 
   const getPrimeiraParcelaData = (): string => {
     if (!caixa?.dataInicio) return '-';
-    const d = new Date(caixa.dataInicio);
-    if (caixa.tipo !== 'semanal') {
-      d.setDate(caixa.diaVencimento);
-    }
-    return formatDate(d.toISOString());
+    const parts = caixa.dataInicio.split('T')[0].split('-');
+    const year = parseInt(parts[0]);
+    const month = parseInt(parts[1]) - 1;
+    const day = caixa.tipo !== 'semanal' ? caixa.diaVencimento : parseInt(parts[2]);
+    return formatDate(new Date(year, month, day).toISOString());
   };
 
   const getUltimaParcelaData = (): string => {
     if (!caixa?.dataInicio) return '-';
-    const d = new Date(caixa.dataInicio);
+    const parts = caixa.dataInicio.split('T')[0].split('-');
+    const year = parseInt(parts[0]);
+    const month = parseInt(parts[1]) - 1;
+    const day = caixa.diaVencimento || parseInt(parts[2]);
+
     if (caixa.tipo === 'semanal') {
+      const d = new Date(year, month, day);
       d.setDate(d.getDate() + ((caixa.qtdParticipantes - 1) * 7));
+      return formatDate(d.toISOString());
     } else {
-      d.setMonth(d.getMonth() + caixa.qtdParticipantes - 1);
-      d.setDate(caixa.diaVencimento);
+      const targetMonth = month + (caixa.qtdParticipantes - 1);
+      return formatDate(new Date(year, targetMonth, day).toISOString());
     }
-    return formatDate(d.toISOString());
   };
 
   const getDataVencimentoParcela = (parcela: number): string => {
     if (!caixa?.dataInicio) return '-';
-    const d = new Date(caixa.dataInicio);
+
+    // Parse the date without timezone conversion issues
+    const parts = caixa.dataInicio.split('T')[0].split('-');
+    const year = parseInt(parts[0]);
+    const month = parseInt(parts[1]) - 1; // JS months are 0-indexed
+    const day = caixa.diaVencimento || parseInt(parts[2]);
+
     if (caixa.tipo === 'semanal') {
-      d.setDate(d.getDate() + ((parcela - 1) * 7));
+      const baseDate = new Date(year, month, day);
+      baseDate.setDate(baseDate.getDate() + ((parcela - 1) * 7));
+      return formatDate(baseDate.toISOString());
     } else {
-      d.setMonth(d.getMonth() + parcela - 1);
-      d.setDate(caixa.diaVencimento);
+      const targetMonth = month + (parcela - 1);
+      const data = new Date(year, targetMonth, day);
+      return formatDate(data.toISOString());
     }
-    return formatDate(d.toISOString());
   };
 
   const getStatusVencimento = (vencISO: string, isPago: boolean) => {
@@ -1082,24 +1387,29 @@ export function CaixaDetalhes() {
 
         {/* Ações do Caixa */}
         <div className="flex gap-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            leftIcon={<Edit className="w-4 h-4" />}
-            onClick={() => setShowEditCaixa(true)}
-          >
-            Editar
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            leftIcon={<Trash2 className="w-4 h-4" />}
-            onClick={() => setShowDeleteConfirm(true)}
-            className="text-red-600 hover:text-red-700 hover:bg-red-50"
-          >
-            Excluir
-          </Button>
-          {usuario?.tipo === 'master' && (
+          {/* Botões de Editar e Excluir - APENAS ADMIN/MASTER */}
+          {(usuario?.tipo === 'master' || usuario?.tipo === 'administrador') && (
+            <>
+              <Button
+                variant="ghost"
+                size="sm"
+                leftIcon={<Edit className="w-4 h-4" />}
+                onClick={() => setShowEditCaixa(true)}
+              >
+                Editar
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                leftIcon={<Trash2 className="w-4 h-4" />}
+                onClick={() => setShowDeleteConfirm(true)}
+                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+              >
+                Excluir
+              </Button>
+            </>
+          )}
+          {(usuario?.tipo === 'master' || caixa?.adminId?._id === usuario?._id) && (
             caixa?.status === 'ativo' ? (
               <Button
                 variant="secondary"
@@ -1261,8 +1571,8 @@ export function CaixaDetalhes() {
             </div>
           )}
 
-          {/* Botão Iniciar Caixa - quando completo */}
-          {caixaCompleto && !caixaIniciado && (
+          {/* Botão Iniciar Caixa - quando completo - APENAS ADMIN/MASTER */}
+          {caixaCompleto && !caixaIniciado && (usuario?.tipo === 'master' || caixa?.adminId?._id === usuario?._id) && (
             <div className="mt-4 p-4 bg-green-50 border-2 border-green-300 rounded-xl">
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center">
@@ -1480,58 +1790,65 @@ export function CaixaDetalhes() {
             exit={{ opacity: 0, y: -10 }}
           >
             <div className="flex flex-wrap gap-2 mb-4">
-              {participantes.length > 0 && (
+              {/* BOTÕES APENAS PARA ADMIN/MASTER */}
+              {(usuario?.tipo === 'master' || caixa?.adminId?._id === usuario?._id) && (
                 <>
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    leftIcon={<UserPlus className="w-4 h-4" />}
-                    onClick={() => setShowAddParticipante(true)}
-                  >
-                    Cadastrar Participante
-                  </Button>
+                  {participantes.length > 0 && (
+                    <>
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        leftIcon={<UserPlus className="w-4 h-4" />}
+                        onClick={() => setShowAddParticipante(true)}
+                        disabled={caixaCompleto}
+                      >
+                        Cadastrar Participante
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        leftIcon={<UserCheck className="w-4 h-4" />}
+                        onClick={async () => {
+                          await loadUsuariosSemCaixa();
+                          setShowAddExistente(true);
+                        }}
+                        disabled={caixaCompleto}
+                      >
+                        Adicionar Existente
+                      </Button>
+                    </>
+                  )}
                   <Button
                     variant="secondary"
                     size="sm"
-                    leftIcon={<UserCheck className="w-4 h-4" />}
-                    onClick={async () => {
-                      await loadUsuariosSemCaixa();
-                      setShowAddExistente(true);
-                    }}
+                    leftIcon={<Shuffle className="w-4 h-4" />}
+                    onClick={handleSortear}
+                    disabled={!caixaCompleto || caixaIniciado}
                   >
-                    Adicionar Existente
+                    Sortear Posições
                   </Button>
+                  <Button
+                    variant={isReordering ? 'primary' : 'secondary'}
+                    size="sm"
+                    leftIcon={<GripVertical className="w-4 h-4" />}
+                    onClick={() => isReordering ? saveOrder() : setIsReordering(true)}
+                    disabled={!caixaCompleto || caixaIniciado}
+                  >
+                    {isReordering ? 'Salvar Ordem' : 'Reordenar'}
+                  </Button>
+                  {isReordering && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setIsReordering(false);
+                        loadParticipantes();
+                      }}
+                    >
+                      Cancelar
+                    </Button>
+                  )}
                 </>
-              )}
-              <Button
-                variant="secondary"
-                size="sm"
-                leftIcon={<Shuffle className="w-4 h-4" />}
-                onClick={handleSortear}
-                disabled={!caixaCompleto || caixaIniciado}
-              >
-                Sortear Posições
-              </Button>
-              <Button
-                variant={isReordering ? 'primary' : 'secondary'}
-                size="sm"
-                leftIcon={<GripVertical className="w-4 h-4" />}
-                onClick={() => isReordering ? saveOrder() : setIsReordering(true)}
-                disabled={!caixaCompleto || caixaIniciado}
-              >
-                {isReordering ? 'Salvar Ordem' : 'Reordenar'}
-              </Button>
-              {isReordering && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setIsReordering(false);
-                    loadParticipantes();
-                  }}
-                >
-                  Cancelar
-                </Button>
               )}
               {caixa.status === 'aguardando' && participantesFaltando === 0 && (
                 <Button
@@ -1610,7 +1927,18 @@ export function CaixaDetalhes() {
                   </div>
                   {participantes.map((participante, index) => {
                     const { isPago, isAtrasado, isVenceHoje } = obterStatusParticipante(participante, cronogramaParcela);
-                    const canRemove = !caixaIniciado && !participante.posicao;
+                    const isMaster = usuario?.tipo === 'master';
+                    const isAdmin = isMaster || caixa?.adminId?._id === usuario?._id;
+                    // Master: sempre vê lixeira
+                    // Admin: vê lixeira apenas se participante SEM posição
+                    // Participante comum: nunca vê lixeira
+                    const canRemove = isMaster || (isAdmin && !participante.posicao);
+
+                    // Check if this card belongs to the logged user (for participants only)
+                    const isOwnCard = usuario?.tipo === 'usuario'
+                      ? (participante.usuarioId?._id || participante.usuarioId) === usuario._id
+                      : true; // Admin/Master can interact with all cards
+                    const canInteract = usuario?.tipo !== 'usuario' || isOwnCard;
 
                     return (
                       <motion.div
@@ -1620,18 +1948,20 @@ export function CaixaDetalhes() {
                         transition={{ delay: index * 0.05 }}
                       >
                         <Card
-                          hover
+                          hover={canInteract}
                           onClick={() => {
+                            if (!canInteract) return; // Block click for other participants' cards
                             setSelectedParticipante(participante);
                             setShowParticipanteDetail(true);
                           }}
                           className={cn(
                             "transition-all",
+                            !canInteract && "cursor-default opacity-75", // Visual indication of read-only
                             isPago
                               ? 'ring-2 ring-blue-500 bg-blue-50'  // ← AZUL quando PAGO
                               : participante.posicao === caixa.mesAtual
-                              ? 'ring-2 ring-green-400 bg-green-50/50'
-                              : ''
+                                ? 'ring-2 ring-green-400 bg-green-50/50'
+                                : ''
                           )}
                         >
                           <div className="flex items-center gap-3">
@@ -1673,11 +2003,22 @@ export function CaixaDetalhes() {
                                   {participante?.usuarioId?.nome || 'Sem nome'}
                                 </p>
 
+                                {/* Badge for own card (participante only) */}
+                                {usuario?.tipo === 'usuario' && isOwnCard && (
+                                  <Badge variant="info" size="sm" className="bg-green-100 text-green-700 border border-green-300">
+                                    Você
+                                  </Badge>
+                                )}
+
                                 {/* ← BADGES EM DIA + PAGO */}
                                 {isPago ? (
                                   <>
                                     <Badge variant="success" size="sm" className="bg-white text-green-700 border border-green-200 shadow-sm">
                                       EM DIA
+                                    </Badge>
+                                    <Badge variant="success" size="sm" className="bg-purple-500 text-white shadow-sm">
+                                      <Wallet className="w-3 h-3 mr-1" />
+                                      Parcela {formatCurrency(caixa.valorParcela || (caixa.valorTotal / caixa.qtdParticipantes))}
                                     </Badge>
                                     <Badge variant="success" size="sm" className="bg-blue-500 text-white shadow-sm">
                                       <CheckCircle2 className="w-3 h-3 mr-1" />
@@ -1685,19 +2026,52 @@ export function CaixaDetalhes() {
                                     </Badge>
                                   </>
                                 ) : isAtrasado ? (
-                                  <Badge variant="danger" size="sm">
-                                    <AlertTriangle className="w-3 h-3 mr-1" />
-                                    ATRASADO
-                                  </Badge>
+                                  <>
+                                    <Badge variant="danger" size="sm">
+                                      <AlertTriangle className="w-3 h-3 mr-1" />
+                                      ATRASADO
+                                    </Badge>
+                                    <Badge variant="gray" size="sm" className="bg-gray-100 text-gray-600 shadow-sm">
+                                      <Wallet className="w-3 h-3 mr-1" />
+                                      Parcela {formatCurrency(
+                                        calcularValorComIPCA(
+                                          cronogramaParcela,
+                                          caixa.valorParcela || (caixa.valorTotal / caixa.qtdParticipantes)
+                                        )
+                                      )}
+                                    </Badge>
+                                  </>
                                 ) : isVenceHoje ? (
-                                  <Badge variant="warning" size="sm">
-                                    <Clock className="w-3 h-3 mr-1" />
-                                    VENCE HOJE
-                                  </Badge>
+                                  <>
+                                    <Badge variant="warning" size="sm">
+                                      <Clock className="w-3 h-3 mr-1" />
+                                      VENCE HOJE
+                                    </Badge>
+                                    <Badge variant="gray" size="sm" className="bg-gray-100 text-gray-600 shadow-sm">
+                                      <Wallet className="w-3 h-3 mr-1" />
+                                      Parcela {formatCurrency(
+                                        calcularValorComIPCA(
+                                          cronogramaParcela,
+                                          caixa.valorParcela || (caixa.valorTotal / caixa.qtdParticipantes)
+                                        )
+                                      )}
+                                    </Badge>
+                                  </>
                                 ) : (
-                                  <Badge variant="success" size="sm" className="bg-white text-green-700 border border-green-200 shadow-sm">
-                                    EM DIA
-                                  </Badge>
+                                  <>
+                                    <Badge variant="success" size="sm" className="bg-white text-green-700 border border-green-200 shadow-sm">
+                                      EM DIA
+                                    </Badge>
+                                    <Badge variant="gray" size="sm" className="bg-gray-100 text-gray-600 shadow-sm">
+                                      <Wallet className="w-3 h-3 mr-1" />
+                                      Parcela {formatCurrency(
+                                        calcularValorComIPCA(
+                                          cronogramaParcela,
+                                          caixa.valorParcela || (caixa.valorTotal / caixa.qtdParticipantes)
+                                        )
+                                      )}
+                                    </Badge>
+                                  </>
                                 )}
                               </div>
 
@@ -1821,14 +2195,17 @@ export function CaixaDetalhes() {
             <Card>
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-semibold text-gray-900">Informações do Caixa</h3>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  leftIcon={<Edit className="w-4 h-4" />}
-                  onClick={() => setShowEditCaixa(true)}
-                >
-                  Editar
-                </Button>
+                {/* Botão de Editar - APENAS ADMIN/MASTER */}
+                {(usuario?.tipo === 'master' || usuario?.tipo === 'administrador') && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    leftIcon={<Edit className="w-4 h-4" />}
+                    onClick={() => setShowEditCaixa(true)}
+                  >
+                    Editar
+                  </Button>
+                )}
               </div>
               <div className="space-y-4">
                 <div className="flex justify-between py-2 border-b border-gray-100">
@@ -1865,17 +2242,19 @@ export function CaixaDetalhes() {
                 </div>
               </div>
 
-              {/* Botão de Excluir */}
-              <div className="mt-6 pt-4 border-t border-gray-200">
-                <Button
-                  variant="danger"
-                  className="w-full"
-                  leftIcon={<Trash2 className="w-4 h-4" />}
-                  onClick={() => setShowDeleteConfirm(true)}
-                >
-                  Excluir Caixa
-                </Button>
-              </div>
+              {/* Botão de Excluir - APENAS ADMIN/MASTER */}
+              {(usuario?.tipo === 'master' || usuario?.tipo === 'administrador') && (
+                <div className="mt-6 pt-4 border-t border-gray-200">
+                  <Button
+                    variant="danger"
+                    className="w-full"
+                    leftIcon={<Trash2 className="w-4 h-4" />}
+                    onClick={() => setShowDeleteConfirm(true)}
+                  >
+                    Excluir Caixa
+                  </Button>
+                </div>
+              )}
             </Card>
           </motion.div>
         )}
@@ -1888,115 +2267,276 @@ export function CaixaDetalhes() {
         isOpen={showAddParticipante}
         onClose={() => setShowAddParticipante(false)}
         title="Cadastrar Participante"
-        size="lg"
+        size="xl"
       >
-        <div className="space-y-4">
-          <Input
-            label="Nome Completo"
-            placeholder="Nome do participante"
-            leftIcon={<User className="w-4 h-4" />}
-            value={newParticipante.nome}
-            onChange={(e) => setNewParticipante({ ...newParticipante, nome: e.target.value })}
-          />
-          <Input
-            label="Email"
-            type="email"
-            placeholder="email@exemplo.com"
-            leftIcon={<Mail className="w-4 h-4" />}
-            value={newParticipante.email}
-            onChange={(e) => setNewParticipante({ ...newParticipante, email: e.target.value })}
-          />
-          <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-6 px-1">
+          {/* Header com Foto e Campos Principais */}
+          <div className="flex flex-col md:flex-row gap-6">
+            {/* Esquerda: Foto */}
+            <div className="flex flex-col items-center gap-3 pt-2 w-full md:w-auto flex-shrink-0">
+              <div className="relative">
+                <Avatar
+                  src={imagePreview}
+                  name={newParticipante.nome || 'Participante'}
+                  size="xl"
+                />
+                <label
+                  htmlFor="picture-upload-caixa"
+                  className="absolute bottom-0 right-0 bg-green-500 text-white p-2 rounded-full cursor-pointer hover:bg-green-600 transition-colors shadow-lg"
+                >
+                  <Camera className="w-4 h-4" />
+                </label>
+                <input
+                  id="picture-upload-caixa"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageUpload}
+                  className="hidden"
+                />
+              </div>
+              <p className="text-xs text-gray-500">Foto</p>
+            </div>
+
+            {/* Direita: Campos Principais */}
+            <div className="flex-1 space-y-4">
+              <Input
+                label="Nome Completo *"
+                placeholder="Nome do participante"
+                leftIcon={<User className="w-4 h-4" />}
+                value={newParticipante.nome}
+                onChange={(e) => setNewParticipante({ ...newParticipante, nome: e.target.value })}
+              />
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Input
+                  label="Email *"
+                  type="email"
+                  placeholder="email@exemplo.com"
+                  leftIcon={<Mail className="w-4 h-4" />}
+                  value={newParticipante.email}
+                  onChange={(e) => setNewParticipante({ ...newParticipante, email: e.target.value })}
+                />
+                <Input
+                  label="Telefone *"
+                  placeholder="(11) 99999-9999"
+                  leftIcon={<Phone className="w-4 h-4" />}
+                  value={newParticipante.telefone}
+                  onChange={(e) => {
+                    const digits = e.target.value.replace(/\D/g, '').slice(0, 11);
+                    let masked = digits;
+                    if (digits.length <= 10) {
+                      masked = digits.replace(/(\d{2})(\d)/, '($1) $2').replace(/(\d{4})(\d)/, '$1-$2');
+                    } else {
+                      masked = digits.replace(/(\d{2})(\d)/, '($1) $2').replace(/(\d{5})(\d)/, '$1-$2');
+                    }
+                    setNewParticipante({ ...newParticipante, telefone: masked });
+                  }}
+                  maxLength={15}
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Input
+                  label="CPF"
+                  placeholder="000.000.000-00"
+                  value={newParticipante.cpf}
+                  onChange={(e) => {
+                    const digits = e.target.value.replace(/\D/g, '').slice(0, 11);
+                    const masked = digits
+                      .replace(/(\d{3})(\d)/, '$1.$2')
+                      .replace(/(\d{3})(\d)/, '$1.$2')
+                      .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+                    setNewParticipante({ ...newParticipante, cpf: masked });
+                  }}
+                  maxLength={14}
+                />
+                <Input
+                  label="Chave PIX"
+                  placeholder="CPF, email, telefone ou chave aleatória"
+                  leftIcon={<CreditCard className="w-4 h-4" />}
+                  value={newParticipante.chavePix}
+                  onChange={(e) => setNewParticipante({ ...newParticipante, chavePix: e.target.value })}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
             <Input
-              label="Telefone"
-              placeholder="(11) 99999-9999"
-              leftIcon={<Phone className="w-4 h-4" />}
-              value={newParticipante.telefone}
-              onChange={(e) => setNewParticipante({ ...newParticipante, telefone: e.target.value })}
-            />
-            <Input
-              label="CPF"
-              placeholder="000.000.000-00"
-              value={newParticipante.cpf}
-              onChange={(e) => setNewParticipante({ ...newParticipante, cpf: e.target.value })}
+              label="Senha *"
+              type="password"
+              placeholder="Defina a senha do participante"
+              value={newParticipante.senha}
+              onChange={(e) => setNewParticipante({ ...newParticipante, senha: e.target.value })}
             />
           </div>
-          <Input
-            label="Chave PIX"
-            placeholder="CPF, email, telefone ou chave aleatória"
-            leftIcon={<CreditCard className="w-4 h-4" />}
-            value={newParticipante.chavePix}
-            onChange={(e) => setNewParticipante({ ...newParticipante, chavePix: e.target.value })}
-          />
-          <div>
-            <label className="label">Foto do Participante</label>
-            <input
-              type="file"
-              accept="image/*"
-              className="block w-full text-sm text-gray-700 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
-              onChange={async (e) => {
-                const file = e.target.files?.[0];
-                if (!file) return;
 
-                try {
-                  // Compressão de imagem
-                  const img = new Image();
-                  const reader = new FileReader();
+          {/* Seção de Endereço */}
+          <div className="border-t border-gray-100 pt-5">
+            <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
+              <Home className="w-4 h-4" />
+              Endereço Completo
+            </h3>
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="md:col-span-1">
+                  <Input
+                    label="CEP"
+                    placeholder="00000-000"
+                    leftIcon={<MapPin className="w-4 h-4" />}
+                    value={newParticipante.address.zip}
+                    onChange={(e) => {
+                      const digits = e.target.value.replace(/\D/g, '').slice(0, 8);
+                      const masked = digits.replace(/(\d{5})(\d)/, '$1-$2');
+                      setNewParticipante({
+                        ...newParticipante,
+                        address: { ...newParticipante.address, zip: masked },
+                      });
+                    }}
+                    onBlur={(e) => handleCepLookup(e.target.value)}
+                    maxLength={9}
+                    disabled={cepLoading}
+                  />
+                  {cepLoading && (
+                    <p className="text-xs text-blue-600 mt-1">Buscando endereço...</p>
+                  )}
+                </div>
+                <div className="md:col-span-3">
+                  <Input
+                    label="Rua / Logradouro"
+                    placeholder="Nome da rua"
+                    value={newParticipante.address.street}
+                    onChange={(e) =>
+                      setNewParticipante({
+                        ...newParticipante,
+                        address: { ...newParticipante.address, street: e.target.value },
+                      })
+                    }
+                  />
+                </div>
+              </div>
 
-                  reader.onload = (ev) => {
-                    img.onload = () => {
-                      const canvas = document.createElement('canvas');
-                      const maxWidth = 400;
-                      const maxHeight = 400;
-                      let width = img.width;
-                      let height = img.height;
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="md:col-span-1">
+                  <Input
+                    label="Número"
+                    placeholder="123"
+                    value={newParticipante.address.number}
+                    onChange={(e) =>
+                      setNewParticipante({
+                        ...newParticipante,
+                        address: { ...newParticipante.address, number: e.target.value },
+                      })
+                    }
+                  />
+                </div>
+                <div className="md:col-span-1">
+                  <Input
+                    label="Complemento"
+                    placeholder="Apto 101"
+                    value={newParticipante.address.complement}
+                    onChange={(e) =>
+                      setNewParticipante({
+                        ...newParticipante,
+                        address: { ...newParticipante.address, complement: e.target.value },
+                      })
+                    }
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <Input
+                    label="Bairro"
+                    placeholder="Bairro"
+                    value={newParticipante.address.zone}
+                    onChange={(e) =>
+                      setNewParticipante({
+                        ...newParticipante,
+                        address: { ...newParticipante.address, zone: e.target.value },
+                      })
+                    }
+                  />
+                </div>
+              </div>
 
-                      if (width > height) {
-                        if (width > maxWidth) {
-                          height *= maxWidth / width;
-                          width = maxWidth;
-                        }
-                      } else {
-                        if (height > maxHeight) {
-                          width *= maxHeight / height;
-                          height = maxHeight;
-                        }
-                      }
-
-                      canvas.width = width;
-                      canvas.height = height;
-                      const ctx = canvas.getContext('2d');
-                      ctx?.drawImage(img, 0, 0, width, height);
-
-                      const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7);
-                      setNewParticipante({ ...newParticipante, picture: compressedBase64 });
-                    };
-                    img.src = ev.target?.result as string;
-                  };
-
-                  reader.readAsDataURL(file);
-                } catch (error) {
-                  console.error('Erro ao processar imagem:', error);
-                  alert('Erro ao processar imagem. Tente outra foto.');
-                }
-              }}
-            />
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="md:col-span-3">
+                  <Input
+                    label="Cidade"
+                    placeholder="Cidade"
+                    value={newParticipante.address.city}
+                    onChange={(e) =>
+                      setNewParticipante({
+                        ...newParticipante,
+                        address: { ...newParticipante.address, city: e.target.value },
+                      })
+                    }
+                  />
+                </div>
+                <div className="md:col-span-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Estado
+                  </label>
+                  <select
+                    className="w-full h-[42px] px-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 bg-white"
+                    value={newParticipante.address.state}
+                    onChange={(e) =>
+                      setNewParticipante({
+                        ...newParticipante,
+                        address: { ...newParticipante.address, state: e.target.value },
+                      })
+                    }
+                  >
+                    <option value="">UF</option>
+                    <option value="AC">AC</option>
+                    <option value="AL">AL</option>
+                    <option value="AP">AP</option>
+                    <option value="AM">AM</option>
+                    <option value="BA">BA</option>
+                    <option value="CE">CE</option>
+                    <option value="DF">DF</option>
+                    <option value="ES">ES</option>
+                    <option value="GO">GO</option>
+                    <option value="MA">MA</option>
+                    <option value="MT">MT</option>
+                    <option value="MS">MS</option>
+                    <option value="MG">MG</option>
+                    <option value="PA">PA</option>
+                    <option value="PB">PB</option>
+                    <option value="PR">PR</option>
+                    <option value="PE">PE</option>
+                    <option value="PI">PI</option>
+                    <option value="RJ">RJ</option>
+                    <option value="RN">RN</option>
+                    <option value="RS">RS</option>
+                    <option value="RO">RO</option>
+                    <option value="RR">RR</option>
+                    <option value="SC">SC</option>
+                    <option value="SP">SP</option>
+                    <option value="SE">SE</option>
+                    <option value="TO">TO</option>
+                  </select>
+                </div>
+              </div>
+            </div>
           </div>
-          <div className="flex gap-3 pt-4">
-            <Button variant="secondary" className="flex-1" onClick={() => setShowAddParticipante(false)}>
+
+          <div className="flex gap-3 pt-6 border-t border-gray-100">
+            <Button variant="secondary" className="flex-1" size="lg" onClick={() => setShowAddParticipante(false)}>
               Cancelar
             </Button>
             <Button
               variant="primary"
               className="flex-1"
+              size="lg"
               onClick={handleAddParticipante}
-              disabled={!newParticipante.nome || !newParticipante.telefone}
+              disabled={!newParticipante.nome || !newParticipante.email || !newParticipante.telefone || !newParticipante.senha}
             >
               Cadastrar
             </Button>
           </div>
         </div>
       </Modal>
+
 
       {/* Modal Adicionar Participante Existente */}
       <Modal
@@ -2269,123 +2809,23 @@ export function CaixaDetalhes() {
         </div>
       </Modal>
 
-      {/* Modal Iniciar Caixa com Contrato - Tamanho XL para evitar scroll */}
-      <Modal
-        isOpen={showIniciarCaixa}
-        onClose={() => {
-          setShowIniciarCaixa(false);
-          setAceiteContrato(false);
-        }}
-        title="Iniciar Caixa"
-        size="xl"
-      >
-        <div className="space-y-4">
-          {/* Resumo do Caixa em Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div className="p-3 bg-green-50 rounded-xl text-center">
-              <p className="text-xs text-gray-500">Nome</p>
-              <p className="font-bold text-green-700 truncate">{caixa.nome}</p>
-            </div>
-            <div className="p-3 bg-blue-50 rounded-xl text-center">
-              <p className="text-xs text-gray-500">Tipo</p>
-              <p className="font-bold text-blue-700 capitalize">{caixa.tipo || 'Mensal'}</p>
-            </div>
-            <div className="p-3 bg-purple-50 rounded-xl text-center">
-              <p className="text-xs text-gray-500">Valor Total</p>
-              <p className="font-bold text-purple-700">{formatCurrency(caixa.valorTotal)}</p>
-            </div>
-            <div className="p-3 bg-amber-50 rounded-xl text-center">
-              <p className="text-xs text-gray-500">Parcela</p>
-              <p className="font-bold text-amber-700">{formatCurrency(caixa.valorTotal / caixa.qtdParticipantes)}</p>
-            </div>
-          </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="p-3 bg-gray-50 rounded-xl">
-              <p className="text-xs text-gray-500">Participantes</p>
-              <p className="font-bold text-gray-700">{caixa.qtdParticipantes}</p>
-            </div>
-            <div className="p-3 bg-gray-50 rounded-xl">
-              <p className="text-xs text-gray-500">Duração</p>
-              <p className="font-bold text-gray-700">{caixa.qtdParticipantes} {caixa.tipo === 'semanal' ? 'semanas' : 'meses'}</p>
-            </div>
-          </div>
-
-          {/* Termos resumidos */}
-          <div className="bg-gray-50 rounded-xl p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <FileText className="w-5 h-5 text-green-600" />
-              <h4 className="font-bold text-gray-900">Termos e Condições</h4>
-            </div>
-
-            <div className="text-sm text-gray-700 space-y-2">
-              <p><strong>Datas:</strong> Início em {formatDate(new Date().toISOString())} • Término previsto em {formatDate(new Date(Date.now() + (caixa.qtdParticipantes * (caixa.tipo === 'semanal' ? 7 : 30) * 24 * 60 * 60 * 1000)).toISOString())}</p>
-
-              <p><strong>Participantes:</strong></p>
-              <div className="flex flex-wrap gap-2">
-                {participantes.map((p, idx) => (
-                  <span key={p._id} className="px-2 py-1 bg-white rounded text-xs">
-                    {idx + 1}. {p.usuarioId.nome}
-                  </span>
-                ))}
-              </div>
-
-              <p><strong>Obrigações:</strong></p>
-              <ul className="text-xs space-y-1 ml-4 list-disc">
-                <li>Pagar parcela até a data de vencimento</li>
-                <li>Não pagamento resulta em penalidade no score</li>
-                <li>Administrador gerencia e distribui os valores</li>
-              </ul>
-
-              <p><strong>Composição da Parcela:</strong></p>
-              <ul className="text-xs space-y-1 ml-4 list-disc">
-                <li>1ª Parcela: {formatCurrency(caixa.valorTotal / caixa.qtdParticipantes)} + R$ 5,00 (serviço) + R$ 50,00 (fundo reserva) + R$ 50,00 (taxa administrativa)</li>
-                <li>Parcelas 2-{caixa.qtdParticipantes - 1}: {formatCurrency(caixa.valorTotal / caixa.qtdParticipantes)} + R$ 5,00 (serviço) + IPCA</li>
-                <li>Última Parcela: {formatCurrency(caixa.valorTotal / caixa.qtdParticipantes)} + R$ 5,00 (serviço) + IPCA + {formatCurrency(caixa.valorTotal * 0.10)} (comissão admin)</li>
-              </ul>
-            </div>
-          </div>
-
-          {/* Checkbox de aceite */}
-          <label className="flex items-start gap-3 p-3 bg-amber-50 border border-amber-200 rounded-xl cursor-pointer">
-            <input
-              type="checkbox"
-              checked={aceiteContrato}
-              onChange={(e) => setAceiteContrato(e.target.checked)}
-              className="w-5 h-5 mt-0.5 text-green-600 rounded border-gray-300 focus:ring-green-500"
-            />
-            <div className="flex-1">
-              <p className="font-medium text-amber-800">Li e aceito os termos do contrato</p>
-              <p className="text-xs text-amber-600">
-                Ao marcar, você confirma que entendeu todas as condições.
-              </p>
-            </div>
-          </label>
-
-          <div className="flex gap-3">
-            <Button
-              variant="secondary"
-              className="flex-1"
-              onClick={() => {
-                setShowIniciarCaixa(false);
-                setAceiteContrato(false);
-              }}
-            >
-              Cancelar
-            </Button>
-            <Button
-              variant="primary"
-              className="flex-1"
-              onClick={handleIniciarCaixa}
-              disabled={!aceiteContrato}
-              leftIcon={<Play className="w-4 h-4" />}
-            >
-              Iniciar Caixa
-            </Button>
-          </div>
-        </div>
-      </Modal>
-
+      {/* Modais de Configuração e Iniciar Caixa */}
+      <ConfiguracoesObrigatoriasCaixa
+        showSplitConfigModal={showSplitConfigModal}
+        setShowSplitConfigModal={setShowSplitConfigModal}
+        splitConfigStatus={splitConfigStatus}
+        participantesSubcontasStatus={participantesSubcontasStatus}
+        verificarConfiguracaoSplitDetalhada={verificarConfiguracaoSplitDetalhada}
+        usuarioTipo={usuario?.tipo}
+        showIniciarCaixa={showIniciarCaixa}
+        setShowIniciarCaixa={setShowIniciarCaixa}
+        caixa={caixa}
+        participantes={participantes}
+        aceiteContrato={aceiteContrato}
+        setAceiteContrato={setAceiteContrato}
+        handleIniciarCaixa={handleIniciarCaixa}
+      />
       {/* Modal Confirmar Exclusão */}
       <Modal
         isOpen={showDeleteConfirm}

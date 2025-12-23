@@ -18,27 +18,27 @@ interface CaixaCarteiraApi {
   duracaoMeses?: number;
   taxaServico?: number;
   adminId?:
-    | {
-        _id?: string;
-        nome?: string;
-        email?: string;
-      }
-    | string;
+  | {
+    _id?: string;
+    nome?: string;
+    email?: string;
+  }
+  | string;
 }
 
 interface PagamentoCarteiraApi {
   _id: string;
   caixaId?:
-    | string
-    | {
-        _id?: string;
-      };
+  | string
+  | {
+    _id?: string;
+  };
   pagadorId?:
-    | {
-        _id?: string;
-        nome?: string;
-      }
-    | string;
+  | {
+    _id?: string;
+    nome?: string;
+  }
+  | string;
   participanteNome?: string;
   valorParcela?: number;
   taxaServico?: number;
@@ -238,7 +238,7 @@ const WalletDashboard = () => {
         usuario.tipo === 'master'
           ? await caixasService.getAll()
           : await caixasService.getByAdmin(usuario._id);
-      
+
       console.log('[Carteira] Resposta caixasService:', caixasResponse);
 
       const caixasRaw = Array.isArray(caixasResponse)
@@ -275,7 +275,7 @@ const WalletDashboard = () => {
           qtdParticipantes:
             typeof c.qtdParticipantes === 'number' ? c.qtdParticipantes : 0,
           duracaoMeses: typeof c.duracaoMeses === 'number' ? c.duracaoMeses : 0,
-          taxaServico: typeof c.taxaServico === 'number' ? c.taxaServico : 5,
+          taxaServico: typeof c.taxaServico === 'number' ? c.taxaServico : 7.20,
         });
       });
 
@@ -288,7 +288,7 @@ const WalletDashboard = () => {
         limit: 1000,
         page: 1,
       });
-      
+
       console.log('[Carteira] Resposta pagamentosService:', pagamentosResp);
 
       const pagamentos = Array.isArray(pagamentosResp)
@@ -313,8 +313,8 @@ const WalletDashboard = () => {
             typeof p.diasAtraso === 'number'
               ? p.diasAtraso
               : p.diasAtraso
-              ? Number(p.diasAtraso)
-              : 0;
+                ? Number(p.diasAtraso)
+                : 0;
 
           const statusNormalizado = normalizarStatusPagamento(
             p.status,
@@ -341,7 +341,7 @@ const WalletDashboard = () => {
           const valorParcelaPagamento =
             typeof p.valorParcela === 'number' ? p.valorParcela : 0;
           const valorParcelaCaixa = caixaInfo.valorParcela || 0;
-          
+
           // Base: usa o valor do pagamento se existir (pode incluir IPCA), senão usa do caixa
           const valorBase =
             valorParcelaPagamento > 0
@@ -355,7 +355,7 @@ const WalletDashboard = () => {
 
           const mesRef =
             typeof p.mesReferencia === 'number' ? p.mesReferencia : 0;
-          
+
           // Regra 1ª Parcela: Valor + Fundo Reserva (Valor/Qtd) + Taxa
           let fundoReserva = 0;
           if (mesRef === 1 && caixaInfo.qtdParticipantes > 0) {
@@ -460,10 +460,10 @@ const WalletDashboard = () => {
       const list = Array.isArray(response)
         ? response
         : Array.isArray(response?.contas)
-        ? response.contas
-        : response?.data && Array.isArray(response.data)
-        ? response.data
-        : [];
+          ? response.contas
+          : response?.data && Array.isArray(response.data)
+            ? response.data
+            : [];
       setBankAccounts(
         list.map((c: any) => ({
           _id: String(c._id || ''),
@@ -506,30 +506,37 @@ const WalletDashboard = () => {
         expectedMonthlyBilling: subForm.expectedMonthlyBilling,
         address: subForm.addressStreet
           ? {
-              street: subForm.addressStreet,
-              zone: subForm.addressZone,
-              city: subForm.addressCity,
-              state: subForm.addressState,
-              number: subForm.addressNumber || '0',
-              complement: subForm.addressComplement || undefined,
-              zip: subForm.addressZip,
-            }
+            street: subForm.addressStreet,
+            zone: subForm.addressZone,
+            city: subForm.addressCity,
+            state: subForm.addressState,
+            number: subForm.addressNumber || '0',
+            complement: subForm.addressComplement || undefined,
+            zip: subForm.addressZip,
+          }
           : undefined,
         adminEnterprise: subForm.adminCpf
           ? {
-              cpf: subForm.adminCpf,
-              fullName: subForm.adminFullName || subForm.name,
-              cellphone: subForm.adminCellphone || subForm.cellphone,
-              birthDate: subForm.adminBirthDate
-                ? new Date(subForm.adminBirthDate).toISOString()
-                : new Date().toISOString(),
-              motherName: subForm.adminMotherName || 'Não informado',
-            }
+            cpf: subForm.adminCpf,
+            fullName: subForm.adminFullName || subForm.name,
+            cellphone: subForm.adminCellphone || subForm.cellphone,
+            birthDate: subForm.adminBirthDate
+              ? new Date(subForm.adminBirthDate).toISOString()
+              : new Date().toISOString(),
+            motherName: subForm.adminMotherName || 'Não informado',
+          }
           : undefined,
       };
 
+
       // Montar banksAccounts se preenchido
       if (selectedBankForSub && bankAgency && bankAccount) {
+        // Padronizar nome do banco para corresponder ao Postman
+        let bankName = selectedBankForSub.name;
+        if (selectedBankForSub.code === '260') {
+          bankName = 'Nu Pagamentos S.A'; // Padronizado para Nubank
+        }
+
         payload.banksAccounts = [
           {
             owner: {
@@ -539,7 +546,8 @@ const WalletDashboard = () => {
             },
             bank: {
               code: selectedBankForSub.code,
-              name: selectedBankForSub.name,
+              name: bankName,
+              ispb: selectedBankForSub.code === '260' ? '18236120' : undefined, // ISPB do Nubank
             },
             agency: { number: bankAgency },
             creditCard: false,
@@ -548,9 +556,44 @@ const WalletDashboard = () => {
         ];
       }
 
+      // CRÍTICO: Adicionar webhookUrl para gerar seção "Aplicação" no Lytex
+      payload.webhookUrl = 'https://webhook.site/rafaela-notifications';
+
+
+      // 🔍 DEBUG COMPLETO - Início
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+      const endpoint = `${API_URL}/subcontas/me`;
+      const token = localStorage.getItem('token');
+
+      console.group('🚀 DEBUG - CRIAR SUBCONTA');
+      console.log('⏰ Timestamp:', new Date().toISOString());
+      console.log('📍 Endpoint:', endpoint);
+      console.log('🔑 Token:', token ? `${token.substring(0, 20)}...` : 'Não encontrado');
+      console.log('📦 Payload completo:', JSON.stringify(payload, null, 2));
+
+      // Gera comando curl equivalente
+      const curlCommand = `curl -X POST '${endpoint}' \\
+  -H 'Content-Type: application/json' \\
+  -H 'Authorization: Bearer ${token || 'SEU_TOKEN_AQUI'}' \\
+  -d '${JSON.stringify(payload, null, 2).replace(/'/g, "'\\''")}'`;
+
+      console.log('💻 Comando CURL equivalente:');
+      console.log(curlCommand);
+      console.groupEnd();
+      // 🔍 DEBUG COMPLETO - Fim
+
       console.log('[Carteira] Enviando payload de criação de subconta', payload);
 
       const resp = await subcontasService.createMine(payload);
+
+      // 🔍 DEBUG - Resposta
+      console.group('✅ DEBUG - RESPOSTA DA API');
+      console.log('⏰ Timestamp:', new Date().toISOString());
+      console.log('📥 Resposta completa:', JSON.stringify(resp, null, 2));
+      console.log('🎯 Success:', resp?.success);
+      console.log('🆔 Subconta ID:', resp?.subconta?.lytexId || resp?.subconta?._id);
+      console.groupEnd();
+
       console.log('[Carteira] Resposta da API ao criar subconta', resp);
       const subAccountId =
         (resp && resp.subconta && (resp.subconta.lytexId || resp.subconta._id)) || (resp && resp.subAccountId) || (resp && resp.id) || undefined;
@@ -574,6 +617,19 @@ const WalletDashboard = () => {
       const data = e?.response?.data;
       const message = data?.message || e?.message || 'Falha ao criar subconta';
 
+      // 🔍 DEBUG - Erro detalhado
+      console.group('❌ DEBUG - ERRO AO CRIAR SUBCONTA');
+      console.log('⏰ Timestamp:', new Date().toISOString());
+      console.log('🔴 Status HTTP:', status || 'N/A');
+      console.log('📛 Mensagem:', message);
+      console.log('📦 Response Data completo:', JSON.stringify(data, null, 2));
+      console.log('🔍 Headers da resposta:', e?.response?.headers);
+      console.log('🌐 URL da requisição:', e?.config?.url);
+      console.log('📤 Payload enviado:', e?.config?.data);
+      console.log('⚠️ Erro completo:', e);
+      console.log('📚 Stack trace:', e?.stack);
+      console.groupEnd();
+
       console.error(
         '[Carteira] Erro ao criar subconta',
         'status:',
@@ -584,10 +640,31 @@ const WalletDashboard = () => {
         e,
       );
 
+      // Tratamento específico para erros de duplicação
+      const errorCode = data?.error;
+
+      if (errorCode === 'DUPLICATE_CPF_LYTEX' || errorCode === 'DUPLICATE_CPF') {
+        setSubAccountError(
+          'Já existe uma subconta cadastrada com este CPF. Redirecionando para sua carteira...',
+        );
+        setHasSubAccount(true);
+
+        // Atualizar contexto se tiver subcontaId
+        if (data?.subcontaId) {
+          updateUsuario({ lytexSubAccountId: data.subcontaId });
+        }
+
+        // Recarregar após 2 segundos
+        setTimeout(() => {
+          window.location.reload();
+        }, 2000);
+        return;
+      }
+
       if (
         status === 409 ||
         typeof message === 'string' &&
-          message.toLowerCase().includes('subconta já criada')
+        message.toLowerCase().includes('subconta já criada')
       ) {
         setSubAccountError(
           'Você já possui uma subconta criada. Abrindo sua carteira.',
@@ -605,7 +682,20 @@ const WalletDashboard = () => {
 
   useEffect(() => {
     const verificarSubconta = async () => {
+      console.log('\n🔍 ========================================');
+      console.log('🔍 VERIFICAÇÃO DE SUBCONTA - CARTEIRA');
+      console.log('🔍 ========================================');
+      console.log('👤 Usuário logado:', {
+        _id: usuario?._id,
+        nome: usuario?.nome,
+        email: usuario?.email,
+        cpf: usuario?.cpf,
+        lytexSubAccountId: usuario?.lytexSubAccountId,
+      });
+
+      // Se já tem lytexSubAccountId no contexto, não precisa verificar
       if (usuario?.lytexSubAccountId) {
+        console.log('✅ lytexSubAccountId já existe no contexto:', usuario.lytexSubAccountId);
         setHasSubAccount(true);
         setCheckingSubAccount(false);
         return;
@@ -614,37 +704,91 @@ const WalletDashboard = () => {
       try {
         setCheckingSubAccount(true);
         setSubAccountError(null);
-        let idSub: string | undefined;
-        // Primeiro tenta local
+
+        // 1️⃣ Primeiro: Verificar se já existe subconta no MongoDB local
         try {
+          console.log('\n📡 ETAPA 1: Buscando subconta no MongoDB local...');
+          console.log('   Chamando: subcontasService.getMine()');
+
           const localResp = await subcontasService.getMine();
+
+          console.log('📦 Resposta completa getMine():', localResp);
+
           const local = (localResp && localResp.subconta) || null;
-          idSub = local ? (local.lytexId || local._id) : undefined;
-        } catch {}
-        if (!idSub) {
-          const data = await carteiraService.getSubAccount();
-          idSub = (data as any)?.subAccountId || (data as any)?._id || (data as any)?.id;
-        }
-        if (idSub) {
-          setHasSubAccount(true);
-          if (idSub && !(usuario as any)?.lytexSubAccountId) {
+          console.log('📦 Subconta extraída:', local);
+
+          const idSub = local ? (local.lytexId || local._id) : undefined;
+          console.log('🆔 ID da subconta:', idSub);
+
+          if (idSub) {
+            console.log('[Carteira] ✅ Subconta encontrada no MongoDB local:', idSub);
+            setHasSubAccount(true);
             updateUsuario({ lytexSubAccountId: idSub });
+            setCheckingSubAccount(false);
+            console.log('========================================\n');
+            return;
+          }
+
+          console.log('❌ Nenhuma subconta encontrada no MongoDB local');
+        } catch (e: any) {
+          console.log('❌ Erro ao buscar subconta no MongoDB local:', e.message);
+          console.log('   Status:', e?.response?.status);
+          console.log('   Data:', e?.response?.data);
+        }
+
+        // 2️⃣ Segundo: Verificar se já existe subconta no Lytex por CPF
+        if (usuario?.cpf) {
+          try {
+            console.log(`\n📡 ETAPA 2: Verificando CPF ${usuario.cpf} no Lytex...`);
+            const checkResp = await subcontasService.checkByCpf(usuario.cpf);
+
+            console.log('📦 Resposta checkByCpf:', checkResp);
+
+            if (checkResp?.exists) {
+              console.log(`✅ Subconta já existe! Location: ${checkResp.location}`);
+
+              // Se existe no Lytex mas não no MongoDB, foi sincronizada automaticamente pelo backend
+              if (checkResp.location === 'lytex') {
+                console.log('[Carteira] Subconta do Lytex será sincronizada automaticamente');
+              }
+
+              const subId = checkResp.subconta?.lytexId || checkResp.subconta?._id;
+              console.log('🆔 ID da subconta encontrada:', subId);
+
+              if (subId) {
+                setHasSubAccount(true);
+                updateUsuario({ lytexSubAccountId: subId });
+                setCheckingSubAccount(false);
+                console.log('========================================\n');
+                return;
+              }
+            }
+          } catch (e: any) {
+            console.log('❌ Erro ao verificar CPF:', e?.message);
           }
         }
+
+        // 3️⃣ Terceiro: Se não encontrou em lugar nenhum, permitir criação
+        console.log('\n❌ ========================================');
+        console.log('❌ CONCLUSÃO: Subconta não encontrada');
+        console.log('❌ Exibindo formulário de criação');
+        console.log('❌ ========================================\n');
+        setHasSubAccount(false);
+
       } catch (e: any) {
-        // Se não encontrar, apenas segue o fluxo para permitir criação
         const message =
           e?.response?.data?.message || e?.message || 'Erro ao verificar subconta';
         if (e?.response?.status !== 404) {
           console.warn('[Carteira] Erro ao verificar subconta:', message);
         }
+        setHasSubAccount(false);
       } finally {
         setCheckingSubAccount(false);
       }
     };
 
     verificarSubconta();
-  }, [usuario?.lytexSubAccountId, updateUsuario]);
+  }, [usuario?.lytexSubAccountId, usuario?.cpf, updateUsuario]);
 
   useEffect(() => {
     if (hasSubAccount) {
@@ -801,7 +945,7 @@ const WalletDashboard = () => {
                         )}
                       </div>
                     </div>
-                    
+
                     {/* Agrupamento por Participante dentro do Caixa */}
                     {Array.from(
                       grupo.transacoes.reduce((mapPart, t) => {
@@ -843,22 +987,20 @@ const WalletDashboard = () => {
                                         ? 'Pago em dia'
                                         : 'Pago em atraso'}
                                       {typeof t.mesReferencia === 'number' &&
-                                      t.mesReferencia > 0
-                                        ? ` • ${t.mesReferencia}ª ${
-                                            t.tipoCaixa === 'semanal'
-                                              ? 'semana'
-                                              : 'mês'
-                                          }`
+                                        t.mesReferencia > 0
+                                        ? ` • ${t.mesReferencia}ª ${t.tipoCaixa === 'semanal'
+                                          ? 'semana'
+                                          : 'mês'
+                                        }`
                                         : ''}
                                     </p>
                                   </div>
                                   <div className="text-right">
                                     <p
-                                      className={`font-bold ${
-                                        t.tipo === 'entrada'
-                                          ? 'text-green-600'
-                                          : 'text-red-600'
-                                      }`}
+                                      className={`font-bold ${t.tipo === 'entrada'
+                                        ? 'text-green-600'
+                                        : 'text-red-600'
+                                        }`}
                                     >
                                       {t.tipo === 'entrada' ? '+' : '-'}{' '}
                                       {formatCurrency(t.valorPago)}
@@ -1138,11 +1280,10 @@ const WalletDashboard = () => {
                   <button
                     key={id}
                     onClick={() => setSelectedBank(id)}
-                    className={`w-full p-4 rounded-lg border-2 text-left transition-all ${
-                      selectedBank === id
-                        ? 'border-blue-600 bg-blue-50'
-                        : 'border-gray-200 hover:border-gray-300'
-                    }`}
+                    className={`w-full p-4 rounded-lg border-2 text-left transition-all ${selectedBank === id
+                      ? 'border-blue-600 bg-blue-50'
+                      : 'border-gray-200 hover:border-gray-300'
+                      }`}
                   >
                     <div className="flex justify-between items-center">
                       <div>
@@ -1236,411 +1377,411 @@ const WalletDashboard = () => {
             {checkingSubAccount ? null : (
               <>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Nome completo
-                </label>
-                <input
-                  type="text"
-                  value={subForm.name}
-                  onChange={(e) =>
-                    setSubForm({ ...subForm, name: e.target.value })
-                  }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {subForm.type === 'pj' ? 'CNPJ' : 'CPF'}
-                </label>
-                <input
-                  type="text"
-                  value={subForm.cpfCnpj}
-                  onChange={(e) =>
-                    setSubForm({ ...subForm, cpfCnpj: e.target.value })
-                  }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Tipo
-                </label>
-                <select
-                  value={subForm.type}
-                  onChange={(e) =>
-                    setSubForm({ ...subForm, type: e.target.value as 'pf' | 'pj' })
-                  }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="pf">Pessoa Física</option>
-                  <option value="pj">Pessoa Jurídica</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Telefone
-                </label>
-                <input
-                  type="text"
-                  value={subForm.cellphone}
-                  onChange={(e) =>
-                    setSubForm({ ...subForm, cellphone: e.target.value })
-                  }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  E-mail
-                </label>
-                <input
-                  type="email"
-                  value={subForm.email}
-                  onChange={(e) =>
-                    setSubForm({ ...subForm, email: e.target.value })
-                  }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Sobre o negócio
-                </label>
-                <input
-                  type="text"
-                  value={subForm.aboutBusiness}
-                  onChange={(e) =>
-                    setSubForm({ ...subForm, aboutBusiness: e.target.value })
-                  }
-                  placeholder="Ex: Administrador de caixas"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Ramo de atividade
-                </label>
-                <input
-                  type="text"
-                  value={subForm.branchOfActivity}
-                  onChange={(e) =>
-                    setSubForm({ ...subForm, branchOfActivity: e.target.value })
-                  }
-                  placeholder="Serviços"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              {subForm.type === 'pj' && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Nome Fantasia</label>
-                  <input
-                    type="text"
-                    value={subForm.fantasyName}
-                    onChange={(e) => setSubForm({ ...subForm, fantasyName: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-              )}
-            </div>
-
-            <div className="mt-6">
-              <h3 className="text-sm font-semibold text-gray-800 mb-3">Administrador da conta</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">CPF</label>
-                  <input
-                    type="text"
-                    value={subForm.adminCpf}
-                    onChange={(e) => setSubForm({ ...subForm, adminCpf: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Nome completo</label>
-                  <input
-                    type="text"
-                    value={subForm.adminFullName}
-                    onChange={(e) => setSubForm({ ...subForm, adminFullName: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Telefone</label>
-                  <input
-                    type="text"
-                    value={subForm.adminCellphone}
-                    onChange={(e) => setSubForm({ ...subForm, adminCellphone: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Data de nascimento</label>
-                  <input
-                    type="date"
-                    value={subForm.adminBirthDate}
-                    onChange={(e) => setSubForm({ ...subForm, adminBirthDate: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Nome da mãe</label>
-                  <input
-                    type="text"
-                    value={subForm.adminMotherName}
-                    onChange={(e) => setSubForm({ ...subForm, adminMotherName: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Dados Bancários */}
-            <div className="mt-6">
-              <h3 className="text-sm font-semibold text-gray-800 mb-3">Dados bancários</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                <div className="relative">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Banco</label>
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      setBankDropdownOpen(!bankDropdownOpen);
-                      try {
-                        setLoadingBanks(true);
-                        setBanksError(null);
-                        const resp = await bancosService.getAll(bankSearch || undefined);
-                        const list = Array.isArray(resp?.banks) ? resp.banks : (Array.isArray(resp) ? resp : []);
-                        setBanks(list.map((b: any) => ({ code: String(b.code || b.codigo || ''), name: String(b.name || b.nome || '') })));
-                      } catch (e: any) {
-                        setBanksError(e?.response?.data?.message || e?.message || 'Erro ao carregar bancos');
-                      } finally {
-                        setLoadingBanks(false);
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Nome completo
+                    </label>
+                    <input
+                      type="text"
+                      value={subForm.name}
+                      onChange={(e) =>
+                        setSubForm({ ...subForm, name: e.target.value })
                       }
-                    }}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg flex items-center justify-between"
-                  >
-                    <span className={selectedBankForSub ? 'text-gray-900' : 'text-gray-400'}>
-                      {selectedBankForSub ? `${selectedBankForSub.code} - ${selectedBankForSub.name}` : 'Selecione o banco'}
-                    </span>
-                    <svg className={`w-4 h-4 text-gray-400 ${bankDropdownOpen ? 'rotate-180' : ''}`} viewBox="0 0 20 20"><path d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 10.168l3.71-2.94a.75.75 0 0 1 .94 1.17l-4.25 3.37a.75.75 0 0 1-.94 0l-4.25-3.37a.75.75 0 0 1-.02-1.06Z"/></svg>
-                  </button>
-                  {bankDropdownOpen && (
-                    <div className="absolute z-50 mt-2 w-full bg-white border border-gray-200 rounded-xl shadow-xl">
-                      <div className="p-2 border-b border-gray-100">
-                        <input
-                          type="text"
-                          value={bankSearch}
-                          onChange={async (e) => {
-                            const term = e.target.value;
-                            setBankSearch(term);
-                            try {
-                              setLoadingBanks(true);
-                              const resp = await bancosService.getAll(term || undefined);
-                              const list = Array.isArray(resp?.banks) ? resp.banks : (Array.isArray(resp) ? resp : []);
-                              setBanks(list.map((b: any) => ({ code: String(b.code || b.codigo || ''), name: String(b.name || b.nome || '') })));
-                            } catch (err: any) {
-                              setBanksError(err?.response?.data?.message || err?.message || 'Erro ao buscar bancos');
-                            } finally {
-                              setLoadingBanks(false);
-                            }
-                          }}
-                          placeholder="Buscar por nome ou código..."
-                          className="w-full px-3 py-2 border border-gray-200 rounded-lg"
-                          autoFocus
-                        />
-                      </div>
-                      <div className="max-h-64 overflow-y-auto">
-                        {loadingBanks ? (
-                          <div className="p-4 text-center text-gray-500">Carregando bancos...</div>
-                        ) : banksError ? (
-                          <div className="p-4 text-center text-red-600">{banksError}</div>
-                        ) : banks.filter(b => {
-                            const term = bankSearch.trim().toLowerCase();
-                            return !term || b.name.toLowerCase().includes(term) || b.code.toLowerCase().includes(term);
-                          }).map((b, idx) => (
-                          <button
-                            key={`${b.code}-${idx}`}
-                            type="button"
-                            onClick={() => { setSelectedBankForSub(b); setBankDropdownOpen(false); }}
-                            className="w-full text-left px-3 py-2 hover:bg-gray-50"
-                          >
-                            {b.code} - {b.name}
-                          </button>
-                        ))}
-                      </div>
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      {subForm.type === 'pj' ? 'CNPJ' : 'CPF'}
+                    </label>
+                    <input
+                      type="text"
+                      value={subForm.cpfCnpj}
+                      onChange={(e) =>
+                        setSubForm({ ...subForm, cpfCnpj: e.target.value })
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Tipo
+                    </label>
+                    <select
+                      value={subForm.type}
+                      onChange={(e) =>
+                        setSubForm({ ...subForm, type: e.target.value as 'pf' | 'pj' })
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="pf">Pessoa Física</option>
+                      <option value="pj">Pessoa Jurídica</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Telefone
+                    </label>
+                    <input
+                      type="text"
+                      value={subForm.cellphone}
+                      onChange={(e) =>
+                        setSubForm({ ...subForm, cellphone: e.target.value })
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      E-mail
+                    </label>
+                    <input
+                      type="email"
+                      value={subForm.email}
+                      onChange={(e) =>
+                        setSubForm({ ...subForm, email: e.target.value })
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Sobre o negócio
+                    </label>
+                    <input
+                      type="text"
+                      value={subForm.aboutBusiness}
+                      onChange={(e) =>
+                        setSubForm({ ...subForm, aboutBusiness: e.target.value })
+                      }
+                      placeholder="Ex: Administrador de caixas"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Ramo de atividade
+                    </label>
+                    <input
+                      type="text"
+                      value={subForm.branchOfActivity}
+                      onChange={(e) =>
+                        setSubForm({ ...subForm, branchOfActivity: e.target.value })
+                      }
+                      placeholder="Serviços"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  {subForm.type === 'pj' && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Nome Fantasia</label>
+                      <input
+                        type="text"
+                        value={subForm.fantasyName}
+                        onChange={(e) => setSubForm({ ...subForm, fantasyName: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
                     </div>
                   )}
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de conta</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button type="button" onClick={() => setBankAccountType('corrente')} className={`px-3 py-2 rounded-lg border ${bankAccountType==='corrente'?'border-blue-500 bg-blue-50 text-blue-700':'border-gray-300 text-gray-700'}`}>Conta Corrente</button>
-                    <button type="button" onClick={() => setBankAccountType('poupanca')} className={`px-3 py-2 rounded-lg border ${bankAccountType==='poupanca'?'border-blue-500 bg-blue-50 text-blue-700':'border-gray-300 text-gray-700'}`}>Conta Poupança</button>
+
+                <div className="mt-6">
+                  <h3 className="text-sm font-semibold text-gray-800 mb-3">Administrador da conta</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">CPF</label>
+                      <input
+                        type="text"
+                        value={subForm.adminCpf}
+                        onChange={(e) => setSubForm({ ...subForm, adminCpf: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Nome completo</label>
+                      <input
+                        type="text"
+                        value={subForm.adminFullName}
+                        onChange={(e) => setSubForm({ ...subForm, adminFullName: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Telefone</label>
+                      <input
+                        type="text"
+                        value={subForm.adminCellphone}
+                        onChange={(e) => setSubForm({ ...subForm, adminCellphone: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Data de nascimento</label>
+                      <input
+                        type="date"
+                        value={subForm.adminBirthDate}
+                        onChange={(e) => setSubForm({ ...subForm, adminBirthDate: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Nome da mãe</label>
+                      <input
+                        type="text"
+                        value={subForm.adminMotherName}
+                        onChange={(e) => setSubForm({ ...subForm, adminMotherName: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
                   </div>
                 </div>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Agência</label>
-                  <input type="text" value={bankAgency} onChange={(e)=>setBankAgency(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Dígito</label>
-                  <input type="text" value={bankAgencyDv} onChange={(e)=>setBankAgencyDv(e.target.value)} maxLength={1} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-center" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Conta</label>
-                  <input type="text" value={bankAccount} onChange={(e)=>setBankAccount(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Dígito da conta</label>
-                  <input type="text" value={bankAccountDv} onChange={(e)=>setBankAccountDv(e.target.value)} maxLength={2} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-center" />
-                </div>
-              </div>
-            </div>
 
-            <div className="mt-6">
-              <h3 className="text-sm font-semibold text-gray-800 mb-3">
-                Endereço
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Rua
-                  </label>
-                  <input
-                    type="text"
-                    value={subForm.addressStreet}
-                    onChange={(e) =>
-                      setSubForm({ ...subForm, addressStreet: e.target.value })
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
+                {/* Dados Bancários */}
+                <div className="mt-6">
+                  <h3 className="text-sm font-semibold text-gray-800 mb-3">Dados bancários</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div className="relative">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Banco</label>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          setBankDropdownOpen(!bankDropdownOpen);
+                          try {
+                            setLoadingBanks(true);
+                            setBanksError(null);
+                            const resp = await bancosService.getAll(bankSearch || undefined);
+                            const list = Array.isArray(resp?.banks) ? resp.banks : (Array.isArray(resp) ? resp : []);
+                            setBanks(list.map((b: any) => ({ code: String(b.code || b.codigo || ''), name: String(b.name || b.nome || '') })));
+                          } catch (e: any) {
+                            setBanksError(e?.response?.data?.message || e?.message || 'Erro ao carregar bancos');
+                          } finally {
+                            setLoadingBanks(false);
+                          }
+                        }}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg flex items-center justify-between"
+                      >
+                        <span className={selectedBankForSub ? 'text-gray-900' : 'text-gray-400'}>
+                          {selectedBankForSub ? `${selectedBankForSub.code} - ${selectedBankForSub.name}` : 'Selecione o banco'}
+                        </span>
+                        <svg className={`w-4 h-4 text-gray-400 ${bankDropdownOpen ? 'rotate-180' : ''}`} viewBox="0 0 20 20"><path d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 10.168l3.71-2.94a.75.75 0 0 1 .94 1.17l-4.25 3.37a.75.75 0 0 1-.94 0l-4.25-3.37a.75.75 0 0 1-.02-1.06Z" /></svg>
+                      </button>
+                      {bankDropdownOpen && (
+                        <div className="absolute z-50 mt-2 w-full bg-white border border-gray-200 rounded-xl shadow-xl">
+                          <div className="p-2 border-b border-gray-100">
+                            <input
+                              type="text"
+                              value={bankSearch}
+                              onChange={async (e) => {
+                                const term = e.target.value;
+                                setBankSearch(term);
+                                try {
+                                  setLoadingBanks(true);
+                                  const resp = await bancosService.getAll(term || undefined);
+                                  const list = Array.isArray(resp?.banks) ? resp.banks : (Array.isArray(resp) ? resp : []);
+                                  setBanks(list.map((b: any) => ({ code: String(b.code || b.codigo || ''), name: String(b.name || b.nome || '') })));
+                                } catch (err: any) {
+                                  setBanksError(err?.response?.data?.message || err?.message || 'Erro ao buscar bancos');
+                                } finally {
+                                  setLoadingBanks(false);
+                                }
+                              }}
+                              placeholder="Buscar por nome ou código..."
+                              className="w-full px-3 py-2 border border-gray-200 rounded-lg"
+                              autoFocus
+                            />
+                          </div>
+                          <div className="max-h-64 overflow-y-auto">
+                            {loadingBanks ? (
+                              <div className="p-4 text-center text-gray-500">Carregando bancos...</div>
+                            ) : banksError ? (
+                              <div className="p-4 text-center text-red-600">{banksError}</div>
+                            ) : banks.filter(b => {
+                              const term = bankSearch.trim().toLowerCase();
+                              return !term || b.name.toLowerCase().includes(term) || b.code.toLowerCase().includes(term);
+                            }).map((b, idx) => (
+                              <button
+                                key={`${b.code}-${idx}`}
+                                type="button"
+                                onClick={() => { setSelectedBankForSub(b); setBankDropdownOpen(false); }}
+                                className="w-full text-left px-3 py-2 hover:bg-gray-50"
+                              >
+                                {b.code} - {b.name}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de conta</label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button type="button" onClick={() => setBankAccountType('corrente')} className={`px-3 py-2 rounded-lg border ${bankAccountType === 'corrente' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-300 text-gray-700'}`}>Conta Corrente</button>
+                        <button type="button" onClick={() => setBankAccountType('poupanca')} className={`px-3 py-2 rounded-lg border ${bankAccountType === 'poupanca' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-300 text-gray-700'}`}>Conta Poupança</button>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Agência</label>
+                      <input type="text" value={bankAgency} onChange={(e) => setBankAgency(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Dígito</label>
+                      <input type="text" value={bankAgencyDv} onChange={(e) => setBankAgencyDv(e.target.value)} maxLength={1} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-center" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Conta</label>
+                      <input type="text" value={bankAccount} onChange={(e) => setBankAccount(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Dígito da conta</label>
+                      <input type="text" value={bankAccountDv} onChange={(e) => setBankAccountDv(e.target.value)} maxLength={2} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-center" />
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Bairro
-                  </label>
-                  <input
-                    type="text"
-                    value={subForm.addressZone}
-                    onChange={(e) =>
-                      setSubForm({ ...subForm, addressZone: e.target.value })
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Cidade
-                  </label>
-                  <input
-                    type="text"
-                    value={subForm.addressCity}
-                    onChange={(e) =>
-                      setSubForm({ ...subForm, addressCity: e.target.value })
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Estado
-                  </label>
-                  <input
-                    type="text"
-                    value={subForm.addressState}
-                    onChange={(e) =>
-                      setSubForm({ ...subForm, addressState: e.target.value })
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    CEP
-                  </label>
-                  <input
-                    type="text"
-                    value={subForm.addressZip}
-                    onChange={(e) => {
-                      const digits = e.target.value.replace(/\D/g, '').slice(0, 8);
-                      setSubForm({ ...subForm, addressZip: digits });
-                    }}
-                    onBlur={async () => {
-                      const cep = String(subForm.addressZip || '').replace(/\D/g, '');
-                      if (cep.length !== 8) return;
-                      try {
-                        const resp = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
-                        const data = await resp.json();
-                        if (!data?.erro) {
+
+                <div className="mt-6">
+                  <h3 className="text-sm font-semibold text-gray-800 mb-3">
+                    Endereço
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Rua
+                      </label>
+                      <input
+                        type="text"
+                        value={subForm.addressStreet}
+                        onChange={(e) =>
+                          setSubForm({ ...subForm, addressStreet: e.target.value })
+                        }
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Bairro
+                      </label>
+                      <input
+                        type="text"
+                        value={subForm.addressZone}
+                        onChange={(e) =>
+                          setSubForm({ ...subForm, addressZone: e.target.value })
+                        }
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Cidade
+                      </label>
+                      <input
+                        type="text"
+                        value={subForm.addressCity}
+                        onChange={(e) =>
+                          setSubForm({ ...subForm, addressCity: e.target.value })
+                        }
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Estado
+                      </label>
+                      <input
+                        type="text"
+                        value={subForm.addressState}
+                        onChange={(e) =>
+                          setSubForm({ ...subForm, addressState: e.target.value })
+                        }
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        CEP
+                      </label>
+                      <input
+                        type="text"
+                        value={subForm.addressZip}
+                        onChange={(e) => {
+                          const digits = e.target.value.replace(/\D/g, '').slice(0, 8);
+                          setSubForm({ ...subForm, addressZip: digits });
+                        }}
+                        onBlur={async () => {
+                          const cep = String(subForm.addressZip || '').replace(/\D/g, '');
+                          if (cep.length !== 8) return;
+                          try {
+                            const resp = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+                            const data = await resp.json();
+                            if (!data?.erro) {
+                              setSubForm({
+                                ...subForm,
+                                addressStreet: data.logradouro || subForm.addressStreet,
+                                addressZone: data.bairro || subForm.addressZone,
+                                addressCity: data.localidade || subForm.addressCity,
+                                addressState: data.uf || subForm.addressState,
+                              });
+                            }
+                          } catch { }
+                        }}
+                        placeholder="00000000"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Número
+                      </label>
+                      <input
+                        type="text"
+                        value={subForm.addressNumber}
+                        onChange={(e) =>
+                          setSubForm({ ...subForm, addressNumber: e.target.value })
+                        }
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Complemento
+                      </label>
+                      <input
+                        type="text"
+                        value={subForm.addressComplement}
+                        onChange={(e) =>
                           setSubForm({
                             ...subForm,
-                            addressStreet: data.logradouro || subForm.addressStreet,
-                            addressZone: data.bairro || subForm.addressZone,
-                            addressCity: data.localidade || subForm.addressCity,
-                            addressState: data.uf || subForm.addressState,
-                          });
+                            addressComplement: e.target.value,
+                          })
                         }
-                      } catch {}
-                    }}
-                    placeholder="00000000"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  </div>
                 </div>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Número
-                  </label>
-                  <input
-                    type="text"
-                    value={subForm.addressNumber}
-                    onChange={(e) =>
-                      setSubForm({ ...subForm, addressNumber: e.target.value })
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Complemento
-                  </label>
-                  <input
-                    type="text"
-                    value={subForm.addressComplement}
-                    onChange={(e) =>
-                      setSubForm({
-                        ...subForm,
-                        addressComplement: e.target.value,
-                      })
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-              </div>
-            </div>
 
-            {subAccountError && (
-              <p className="mb-4 text-sm text-red-600">{subAccountError}</p>
-            )}
+                {subAccountError && (
+                  <p className="mb-4 text-sm text-red-600">{subAccountError}</p>
+                )}
 
-            <button
-              onClick={handleCreateSubAccount}
-              disabled={creatingSubAccount}
-              className="w-full md:w-auto px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-60"
-            >
-              {creatingSubAccount ? 'Criando subconta...' : 'Criar Subconta'}
-            </button>
+                <button
+                  onClick={handleCreateSubAccount}
+                  disabled={creatingSubAccount}
+                  className="w-full md:w-auto px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-60"
+                >
+                  {creatingSubAccount ? 'Criando subconta...' : 'Criar Subconta'}
+                </button>
               </>
             )}
           </div>
@@ -1667,31 +1808,28 @@ const WalletDashboard = () => {
           <div className="flex gap-6">
             <button
               onClick={() => setActiveTab('overview')}
-              className={`py-4 px-2 border-b-2 font-medium transition-colors ${
-                activeTab === 'overview'
-                  ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-gray-600 hover:text-gray-800'
-              }`}
+              className={`py-4 px-2 border-b-2 font-medium transition-colors ${activeTab === 'overview'
+                ? 'border-blue-600 text-blue-600'
+                : 'border-transparent text-gray-600 hover:text-gray-800'
+                }`}
             >
               Visão Geral
             </button>
             <button
               onClick={() => setActiveTab('account')}
-              className={`py-4 px-2 border-b-2 font-medium transition-colors ${
-                activeTab === 'account'
-                  ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-gray-600 hover:text-gray-800'
-              }`}
+              className={`py-4 px-2 border-b-2 font-medium transition-colors ${activeTab === 'account'
+                ? 'border-blue-600 text-blue-600'
+                : 'border-transparent text-gray-600 hover:text-gray-800'
+                }`}
             >
               Dados da Conta
             </button>
             <button
               onClick={() => setActiveTab('banks')}
-              className={`py-4 px-2 border-b-2 font-medium transition-colors ${
-                activeTab === 'banks'
-                  ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-gray-600 hover:text-gray-800'
-              }`}
+              className={`py-4 px-2 border-b-2 font-medium transition-colors ${activeTab === 'banks'
+                ? 'border-blue-600 text-blue-600'
+                : 'border-transparent text-gray-600 hover:text-gray-800'
+                }`}
             >
               Contas Bancárias
             </button>

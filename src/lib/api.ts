@@ -245,10 +245,10 @@ export const cobrancasService = {
     if (context?.caixaId) params.append('caixaId', context.caixaId);
     if (context?.participanteId) params.append('participanteId', context.participanteId);
     if (context?.mes) params.append('mes', String(context.mes));
-    
+
     const queryString = params.toString();
     const url = `/cobrancas/${id}${queryString ? `?${queryString}` : ''}`;
-    
+
     const response = await api.get(url);
     return response.data;
   },
@@ -333,6 +333,10 @@ export const carteiraService = {
 };
 
 export const subcontasService = {
+  getAll: async () => {
+    const response = await api.get('/subcontas');
+    return response.data;
+  },
   getMine: async () => {
     const response = await api.get('/subcontas/me');
     return response.data;
@@ -343,6 +347,10 @@ export const subcontasService = {
   },
   getByLytexId: async (lytexId: string) => {
     const response = await api.get(`/subcontas/${lytexId}`);
+    return response.data;
+  },
+  checkByCpf: async (cpf: string) => {
+    const response = await api.get(`/subcontas/check/${cpf}`);
     return response.data;
   },
 };
@@ -372,6 +380,10 @@ export const splitService = {
 };
 
 export const splitConfigService = {
+  getAll: async () => {
+    const response = await api.get('/split-config');
+    return response.data;
+  },
   getByCaixa: async (caixaId: string) => {
     const response = await api.get(`/split-config/${caixaId}`);
     return response.data;
@@ -388,4 +400,21 @@ export const splitConfigService = {
     const response = await api.post(`/split-config/${caixaId}`, data);
     return response.data;
   },
+  update: async (
+    id: string,
+    data: {
+      taxaServicoSubId?: string;
+      fundoReservaSubId?: string;
+      adminSubId?: string;
+      participantesMesOrdem?: string[];
+    },
+  ) => {
+    const response = await api.put(`/split-config/${id}`, data);
+    return response.data;
+  },
+  delete: async (id: string) => {
+    const response = await api.delete(`/split-config/${id}`);
+    return response.data;
+  },
 };
+

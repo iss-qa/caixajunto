@@ -298,6 +298,20 @@ export function PainelMaster() {
             <Button onClick={() => (window.location.href = '/painel-master/split')}>Abrir</Button>
           </div>
         </Card>
+
+        {/* Gerenciar Split */}
+        <Card className="bg-gradient-to-br from-teal-50 to-teal-100/50 border-teal-200/50">
+          <div className="flex items-center justify-between mb-2">
+            <div className="w-10 h-10 bg-teal-500 rounded-xl flex items-center justify-center">
+              <BarChart3 className="w-5 h-5 text-white" />
+            </div>
+          </div>
+          <p className="text-base font-semibold text-gray-900 mb-1">Gerenciar Split</p>
+          <p className="text-xs text-gray-500">Visualize distribuição e acompanhe contemplados</p>
+          <div className="mt-3">
+            <Button onClick={() => (window.location.href = '/painel-master/split/gerenciar')}>Abrir</Button>
+          </div>
+        </Card>
       </motion.div>
 
       {/* Second Row - Charts and Stats */}
@@ -359,23 +373,23 @@ export function PainelMaster() {
                 </div>
               </div>
             </div>
-            
+
             {/* Visual Progress */}
             <div className="mt-4 h-3 bg-gray-100 rounded-full overflow-hidden flex">
-              <div 
-                className="h-full bg-green-500" 
+              <div
+                className="h-full bg-green-500"
                 style={{ width: `${(data?.caixas.ativos || 0) / (data?.caixas.total || 1) * 100}%` }}
               />
-              <div 
-                className="h-full bg-amber-500" 
+              <div
+                className="h-full bg-amber-500"
                 style={{ width: `${(data?.caixas.aguardando || 0) / (data?.caixas.total || 1) * 100}%` }}
               />
-              <div 
-                className="h-full bg-blue-500" 
+              <div
+                className="h-full bg-blue-500"
                 style={{ width: `${(data?.caixas.finalizados || 0) / (data?.caixas.total || 1) * 100}%` }}
               />
-              <div 
-                className="h-full bg-red-500" 
+              <div
+                className="h-full bg-red-500"
                 style={{ width: `${(data?.caixas.cancelados || 0) / (data?.caixas.total || 1) * 100}%` }}
               />
             </div>
@@ -395,11 +409,11 @@ export function PainelMaster() {
                   <span className="text-gray-600">Participantes</span>
                   <span className="font-semibold">{data?.usuarios.usuarios}</span>
                 </div>
-                <ProgressBar 
-                  value={data?.usuarios.usuarios || 0} 
-                  max={data?.usuarios.total || 1} 
-                  color="primary" 
-                  size="sm" 
+                <ProgressBar
+                  value={data?.usuarios.usuarios || 0}
+                  max={data?.usuarios.total || 1}
+                  color="primary"
+                  size="sm"
                 />
               </div>
               <div>
@@ -407,11 +421,11 @@ export function PainelMaster() {
                   <span className="text-gray-600">Administradores</span>
                   <span className="font-semibold">{data?.usuarios.administradores}</span>
                 </div>
-                <ProgressBar 
-                  value={data?.usuarios.administradores || 0} 
-                  max={data?.usuarios.total || 1} 
-                  color="success" 
-                  size="sm" 
+                <ProgressBar
+                  value={data?.usuarios.administradores || 0}
+                  max={data?.usuarios.total || 1}
+                  color="success"
+                  size="sm"
                 />
               </div>
               <div>
@@ -419,11 +433,11 @@ export function PainelMaster() {
                   <span className="text-gray-600">Masters</span>
                   <span className="font-semibold">{data?.usuarios.masters}</span>
                 </div>
-                <ProgressBar 
-                  value={data?.usuarios.masters || 0} 
-                  max={data?.usuarios.total || 1} 
-                  color="warning" 
-                  size="sm" 
+                <ProgressBar
+                  value={data?.usuarios.masters || 0}
+                  max={data?.usuarios.total || 1}
+                  color="warning"
+                  size="sm"
                 />
               </div>
             </div>
@@ -476,7 +490,7 @@ export function PainelMaster() {
             <h3 className="font-semibold text-gray-900">Recebimentos</h3>
             <Activity className="w-5 h-5 text-gray-400" />
           </div>
-          
+
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="p-4 bg-gray-50 rounded-xl text-center">
               <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-2">
@@ -519,7 +533,7 @@ export function PainelMaster() {
             <h3 className="font-semibold text-gray-900">Indicadores de Performance</h3>
             <BarChart3 className="w-5 h-5 text-gray-400" />
           </div>
-          
+
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {/* Taxa de Conclusão */}
             <div className="text-center">

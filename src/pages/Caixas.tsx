@@ -85,23 +85,49 @@ export function Caixas() {
       if (usuario.tipo === 'usuario') {
         const participacoes = await participantesService.getByUsuario(usuario._id);
         const lista = Array.isArray(participacoes) ? participacoes : participacoes?.participacoes || [];
-        const caixasList = lista.map((p: any) => ({
-          _id: p.caixaId?._id || p.caixaId || `caixa-${p._id}`,
-          nome: p.caixaId?.nome || p.nomeCaixa || 'Caixa',
-          descricao: p.caixaId?.descricao,
-          valorTotal: p.caixaId?.valorTotal || 0,
-          valorParcela: p.caixaId?.valorParcela || 0,
-          qtdParticipantes: p.caixaId?.qtdParticipantes || p.qtdParticipantes || 0,
-          duracaoMeses: p.caixaId?.duracaoMeses || p.duracaoMeses || 0,
-          status: p.caixaId?.status || 'aguardando',
-          mesAtual: p.caixaId?.mesAtual || 1,
-          tipo: p.caixaId?.tipo || p.tipo || 'mensal',
-          dataInicio: p.caixaId?.dataInicio,
-          codigoConvite: p.caixaId?.codigoConvite || '',
-          participantesAtivos: p.caixaId?.qtdParticipantes || p.qtdParticipantes || 0,
-          adminNome: p.caixaId?.adminId?.nome || '',
-        }));
-        setCaixas(caixasList);
+        const caixasList = lista.map((p: any) => {
+          const caixaData = p.caixaId || {};
+
+          return {
+            _id: caixaData._id || p.caixaId || `caixa-${p._id}`,
+            nome: caixaData.nome || p.nomeCaixa || 'Caixa',
+            descricao: caixaData.descricao,
+            valorTotal: caixaData.valorTotal || 0,
+            valorParcela: caixaData.valorParcela || 0,
+            qtdParticipantes: caixaData.qtdParticipantes,
+            duracaoMeses: caixaData.duracaoMeses,
+            status: caixaData.status || 'aguardando',
+            mesAtual: caixaData.mesAtual || 1,
+            tipo: caixaData.tipo || 'mensal',
+            dataInicio: caixaData.dataInicio,
+            codigoConvite: caixaData.codigoConvite || '',
+            participantesAtivos: caixaData.participantesAtivos || 0,
+            adminNome: caixaData.adminId?.nome || '',
+          };
+        });
+
+        // Fetch full caixa details for missing fields
+        const caixasComDetalhes = await Promise.all(
+          caixasList.map(async (c: Caixa) => {
+            try {
+              if (!c.qtdParticipantes || !c.duracaoMeses) {
+                const fullCaixa = await caixasService.getById(c._id);
+                return {
+                  ...c,
+                  qtdParticipantes: fullCaixa.qtdParticipantes || 0,
+                  duracaoMeses: fullCaixa.duracaoMeses || 0,
+                  participantesAtivos: fullCaixa.participantesAtivos || c.participantesAtivos || 0,
+                };
+              }
+              return c;
+            } catch (error) {
+              console.error(`Error fetching caixa ${c._id}:`, error);
+              return c;
+            }
+          })
+        );
+
+        setCaixas(caixasComDetalhes);
       } else {
         let response;
         if (usuario.tipo === 'master') {
@@ -243,7 +269,7 @@ export function Caixas() {
             return u ? { ...cx, stats: { pagos: u.pagos, pendentes: u.pendentes } } : cx;
           })
         );
-      } catch {}
+      } catch { }
     };
     timer = setInterval(refreshStats, 5000);
     return () => {
@@ -387,7 +413,7 @@ export function Caixas() {
             const totalPagamentos = (caixa.qtdParticipantes || 0) * (caixa.duracaoMeses || 0);
             const pagos = caixa.stats?.pagos || 0;
             const pendentes = Math.max(0, totalPagamentos - pagos);
-            
+
             return (
               <motion.div
                 key={caixa._id}
@@ -406,7 +432,7 @@ export function Caixas() {
                   )}
                 >
                   {/* Badge de status no topo */}
-                  {semParticipantes && (
+                  {semParticipantes && usuario?.tipo !== 'usuario' && (
                     <div className="flex items-center gap-2 p-2 bg-red-100 rounded-lg mb-3 -mt-1">
                       <AlertTriangle className="w-4 h-4 text-red-600" />
                       <span className="text-xs font-semibold text-red-700">Sem participantes! Adicione agora</span>
@@ -436,11 +462,16 @@ export function Caixas() {
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex-1">
                       <h3 className="font-semibold text-gray-900 mb-1">{caixa.nome}</h3>
-                      <p className="text-sm text-gray-500">
-                        {formatCurrency(caixa.valorTotal)}
-                      </p>
+                      <div className="space-y-1">
+                        <p className="text-lg font-bold text-green-600">
+                          {formatCurrency(caixa.valorTotal)}
+                        </p>
+                        <p className="text-xs text-gray-600">
+                          {caixa.duracaoMeses}x de {formatCurrency(caixa.valorParcela)}
+                        </p>
+                      </div>
                       {caixa.adminNome && (
-                        <p className="text-xs text-gray-500 mt-0.5">
+                        <p className="text-xs text-gray-500 mt-1">
                           Organizado por: {caixa.adminNome}
                         </p>
                       )}
@@ -535,7 +566,7 @@ export function Caixas() {
                           {pendentes} pendentes
                         </span>
                       </div>
-                    ) : (semParticipantes || isIncompleto) ? (
+                    ) : (semParticipantes || isIncompleto) && usuario?.tipo !== 'usuario' ? (
                       <span
                         className={cn(
                           "inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-lg",

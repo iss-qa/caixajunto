@@ -62,36 +62,36 @@ const gerarComparativoCredito = (valor: number) => {
   const jurosCartao = valor * 0.44;
   const jurosBanco = valor * 0.3;
   const taxaCaixa = valor * 0.02;
-  
+
   const valorCaixa = valor + taxaCaixa;
-  
+
   return [
-    { 
-      nome: 'Agiota', 
-      valor: valor + jurosAgiota, 
-      juros: '50%+', 
+    {
+      nome: 'Agiota',
+      valor: valor + jurosAgiota,
+      juros: '50%+',
       color: 'text-red-500',
       economia: ((jurosAgiota - taxaCaixa) / (valor + jurosAgiota) * 100).toFixed(0),
     },
-    { 
-      nome: 'Cartão de crédito', 
-      valor: valor + jurosCartao, 
-      juros: '44%', 
+    {
+      nome: 'Cartão de crédito',
+      valor: valor + jurosCartao,
+      juros: '44%',
       color: 'text-red-500',
       economia: ((jurosCartao - taxaCaixa) / (valor + jurosCartao) * 100).toFixed(0),
     },
-    { 
-      nome: 'Empréstimo banco', 
-      valor: valor + jurosBanco, 
-      juros: '30%', 
+    {
+      nome: 'Empréstimo banco',
+      valor: valor + jurosBanco,
+      juros: '30%',
       color: 'text-amber-500',
       economia: ((jurosBanco - taxaCaixa) / (valor + jurosBanco) * 100).toFixed(0),
     },
-    { 
-      nome: 'CaixaJunto', 
-      valor: valorCaixa, 
-      juros: '2%', 
-      color: 'text-green-500', 
+    {
+      nome: 'CaixaJunto',
+      valor: valorCaixa,
+      juros: '2%',
+      color: 'text-green-500',
       highlight: true,
       economia: '0',
     },
@@ -140,7 +140,7 @@ export function Dashboard() {
       setLoadingPart(false);
     }
   };
-  
+
   useEffect(() => {
     if (usuario?.tipo === 'usuario') return;
     let timer: any;
@@ -167,7 +167,7 @@ export function Dashboard() {
           });
           return { ...prev, caixas: updated };
         });
-      } catch {}
+      } catch { }
     };
     timer = setInterval(refreshStats, 5000);
     return () => {
@@ -252,69 +252,25 @@ export function Dashboard() {
           </div>
         </Card>
 
-        {/* Caixas que participo */}
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-gray-900">Meus Caixas</h2>
-        </div>
 
-        {loadingPart ? (
-          <div className="grid gap-3 md:grid-cols-2">
-            {[1, 2].map((i) => <CardSkeleton key={i} />)}
-          </div>
-        ) : caixasParticipante.length === 0 ? (
-          <EmptyState
-            icon={Wallet}
-            title="Nenhum caixa encontrado"
-            description="Você ainda não participa de nenhum caixa."
-          />
-        ) : (
-          <div className="grid gap-3 md:grid-cols-2">
-            {caixasParticipante.map((item) => {
-              const dias = calcDiasRestantes(item);
-              return (
-                <Card key={item.caixaId} hover onClick={() => navigate(`/caixas/${item.caixaId}`)}>
-                  <div className="flex items-center justify-between mb-2">
-                    <div>
-                      <p className="text-sm text-gray-500">Tipo: {item.tipo === 'semanal' ? 'Semanal' : 'Mensal'}</p>
-                      <h3 className="font-semibold text-gray-900">{item.caixaNome || 'Caixa'}</h3>
-                    </div>
-                    <Badge variant="info" size="sm">Posição {item.posicao}</Badge>
-                  </div>
-                  <p className="text-sm text-gray-700">
-                    {dias == null ? (
-                      <span>Aguardando definição da posição</span>
-                    ) : (
-                      <span>
-                        Faltam <strong>{dias} dia{dias === 1 ? '' : 's'}</strong> para sua contemplação.
-                      </span>
-                    )}
-                  </p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Participantes: {item.qtdParticipantes} • Duração: {item.duracaoMeses} {item.tipo === 'semanal' ? 'semanas' : 'meses'}
-                  </p>
-                </Card>
-              );
-            })}
-          </div>
-        )}
       </div>
     );
   }
 
   const loadDashboard = async () => {
     if (!usuario?._id) return;
-    
+
     try {
       setLoading(true);
       // Tentar carregar caixas do backend
       const caixasResponse = await caixasService.getByAdmin(usuario._id);
       const caixas = Array.isArray(caixasResponse) ? caixasResponse : caixasResponse.caixas || [];
-      
+
       // Calcular ganhos previstos dinamicamente
       const ganhosPrevistos = caixas.reduce((total: number, caixa: any) => {
         return total + calcularGanhoAdmin(caixa.valorTotal || 0);
       }, 0);
-      
+
       const caixasResumoBase: CaixaResumo[] = caixas.map((c: any) => ({
         id: c._id,
         nome: c.nome,
@@ -516,7 +472,7 @@ export function Dashboard() {
               ))}
             </div>
           </div>
-          
+
           {/* Tabela comparativa */}
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -563,7 +519,7 @@ export function Dashboard() {
               </tbody>
             </table>
           </div>
-          
+
           <p className="text-xs text-gray-500 mt-3 text-center bg-green-50 p-2 rounded-lg">
             💡 Com CaixaJunto você economiza até <strong className="text-green-600">
               {formatCurrency(economiaMaxima)}

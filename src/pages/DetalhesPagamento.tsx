@@ -79,7 +79,7 @@ interface Boleto {
 }
 
 const TAXA_IPCA_MENSAL = 0.0041
-const TAXA_SERVICO = 5
+const TAXA_SERVICO = 10.00
 const PIX_EXPIRATION_MINUTES = 30
 const POLLING_INTERVAL_MS = 30000 // Aumentado para 30s
 const CACHE_VALIDITY_MS = 60000 // Cache de 1 minuto
@@ -93,13 +93,13 @@ interface DetalhesPagamentoProps {
   onPaidUpdate?: (mes: number, participanteId: string) => void
 }
 
-export function DetalhesPagamento({ 
-  isOpen, 
-  onClose, 
-  caixa, 
-  participante, 
-  onRefreshPagamentos, 
-  onPaidUpdate 
+export function DetalhesPagamento({
+  isOpen,
+  onClose,
+  caixa,
+  participante,
+  onRefreshPagamentos,
+  onPaidUpdate
 }: DetalhesPagamentoProps) {
   const [expandedMes, setExpandedMes] = useState<number | null>(null)
   const [paymentTab, setPaymentTab] = useState<'pix' | 'boleto'>('pix')
@@ -109,14 +109,14 @@ export function DetalhesPagamento({
   const [boletoSelecionado, setBoletoSelecionado] = useState<number | null>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [cobrancas, setCobrancas] = useState<Map<number, CobrancaCompleta>>(new Map())
-  
+
   // Refs para controle de carregamento
   const isLoadingRef = useRef(false)
   const lastLoadTimeRef = useRef<number>(0)
   const abortControllerRef = useRef<AbortController | null>(null)
   const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const mountedRef = useRef(true)
-  
+
   // IDs estáveis para dependências
   const caixaId = caixa?._id
   const participanteId = participante?._id
@@ -145,8 +145,8 @@ export function DetalhesPagamento({
 
   // Normalização de dados
   const normalizarCobranca = useCallback((
-    invoice: any, 
-    mes: number, 
+    invoice: any,
+    mes: number,
     descricao: string
   ): CobrancaCompleta | null => {
     try {
@@ -155,7 +155,7 @@ export function DetalhesPagamento({
 
       const dueDateRaw = invoice?.dueDate || invoice?.vencimento
       const pixGeradoEm = tx?.createdAt || tx?.created_at || invoice?.createdAt || invoice?.created_at
-      
+
       // Normalizar status
       const statusSources = [
         invoice?.status,
@@ -165,19 +165,19 @@ export function DetalhesPagamento({
       ]
         .map((s) => String(s || '').toLowerCase())
         .filter(Boolean)
-      
+
       const paidStatuses = ['paid', 'liquidated', 'settled', 'pago', 'inqueue', 'aprovado']
       const paidAt = invoice?.payedAt || invoice?.paidAt || invoice?.paid_at || invoice?.local?.data_pagamento
       const statusPago = Boolean(paidAt) || statusSources.some((s) => paidStatuses.includes(s))
-      
+
       // PIX
       const pixQrcode = tx?.pix?.qrcode || invoice?.paymentMethods?.pix?.qrcode || invoice?.pix?.qrcode || ''
       const pixEmv = tx?.pix?.emv || tx?.pix?.qrcode || invoice?.paymentMethods?.pix?.emv || invoice?.pix?.copyPaste || ''
-      
+
       // Boleto
       const boletoBarcode = tx?.boleto?.barcode || invoice?.paymentMethods?.boleto?.barcode || invoice?.boleto?.barcode || ''
       const boletoDigitable = tx?.boleto?.digitableLine || invoice?.paymentMethods?.boleto?.digitableLine || invoice?.boleto?.digitableLine || ''
-      
+
       const cobranca: CobrancaCompleta = {
         id: invoice?._id || invoice?.id || '',
         mes,
@@ -222,7 +222,7 @@ export function DetalhesPagamento({
     if (!caixaId || !participanteId || !mountedRef.current) {
       return
     }
-    
+
     // Prevenir múltiplas chamadas simultâneas
     if (isLoadingRef.current) {
       logger.warn('Carregamento já em andamento')
@@ -239,7 +239,7 @@ export function DetalhesPagamento({
     // Iniciar carregamento
     setIsRefreshing(true)
     isLoadingRef.current = true
-    
+
     // Cancelar requisições anteriores
     if (abortControllerRef.current) {
       abortControllerRef.current.abort()
@@ -323,14 +323,14 @@ export function DetalhesPagamento({
 
             // Selecionar melhor candidato
             const candidatosValidos = resultados
-              .filter((r): r is PromiseFulfilledResult<CobrancaCompleta | null> => 
+              .filter((r): r is PromiseFulfilledResult<CobrancaCompleta | null> =>
                 r.status === 'fulfilled' && r.value !== null
               )
               .map(r => r.value!)
 
             // Prioridade: pago > não expirado > primeiro disponível
             const candidatoPago = candidatosValidos.find(c => c.status === 'pago')
-            const candidatoNaoExpirado = candidatosValidos.find(c => 
+            const candidatoNaoExpirado = candidatosValidos.find(c =>
               c.pix && !isPixExpired(c.pix)
             )
             const melhorCandidato = candidatoPago || candidatoNaoExpirado || candidatosValidos[0]
@@ -377,7 +377,7 @@ export function DetalhesPagamento({
     if (!isOpen || !participanteId) return
 
     mountedRef.current = true
-    
+
     // Carregamento inicial
     loadPaymentDetails(true)
 
@@ -405,7 +405,7 @@ export function DetalhesPagamento({
     }
 
     const cobranca = cobrancas.get(expandedMes)
-    
+
     // Não fazer polling se já está pago
     if (cobranca?.status === 'pago') {
       if (pollingIntervalRef.current) {
@@ -450,7 +450,7 @@ export function DetalhesPagamento({
 
     for (let parcela = 1; parcela <= numParcelas; parcela++) {
       const dataVencimento = new Date(dataBase)
-      
+
       if (isSemanal) {
         dataVencimento.setDate(dataVencimento.getDate() + ((parcela - 1) * 7))
       } else {
@@ -544,7 +544,7 @@ export function DetalhesPagamento({
 
   const handlePrintBoleto = useCallback((mes: number) => {
     const cobranca = cobrancas.get(mes)
-    
+
     if (cobranca?.boleto?.url) {
       window.open(cobranca.boleto.url, '_blank')
       return
@@ -632,7 +632,7 @@ export function DetalhesPagamento({
           participanteId: participante._id,
           mes: boleto.mes,
         })
-        
+
         const cobrancaNormalizada = normalizarCobranca(
           invoiceResp?.cobranca || invoiceResp,
           boleto.mes,
@@ -651,11 +651,11 @@ export function DetalhesPagamento({
 
     } catch (error: any) {
       logger.error('Erro ao gerar cobrança', error)
-      
+
       const mensagem = error?.response?.status === 401
         ? 'Credenciais inválidas para a API de pagamentos'
         : error.message || 'Erro ao gerar cobrança. Tente novamente.'
-      
+
       alert(mensagem)
     } finally {
       setGerandoCobranca(false)
@@ -666,16 +666,16 @@ export function DetalhesPagamento({
   // Utilitários
   const calcularDataRecebimento = useCallback((posicao: number): string => {
     if (!caixa?.dataInicio) return '-'
-    
+
     const data = new Date(caixa.dataInicio)
-    
+
     if (caixa.tipo === 'semanal') {
       data.setDate(data.getDate() + ((posicao - 1) * 7))
     } else {
       data.setMonth(data.getMonth() + posicao - 1)
       data.setDate(caixa.diaVencimento)
     }
-    
+
     return formatDate(data.toISOString())
   }, [caixa])
 
@@ -698,10 +698,25 @@ export function DetalhesPagamento({
     const novoMes = expandedMes === boleto.mes ? null : boleto.mes
     setExpandedMes(novoMes)
 
-    if (novoMes && !cobrancas.has(novoMes)) {
-      await handleGerarCobranca(boleto)
+    if (novoMes) {
+      const cobrancaExistente = cobrancas.get(novoMes)
+
+      // Gerar automaticamente se:
+      // 1. Não existe cobrança para este mês, OU
+      // 2. O PIX existente está expirado
+      const pixExpirado = cobrancaExistente?.pix && isPixExpired(cobrancaExistente.pix)
+      const deveGerar = !cobrancaExistente || pixExpirado
+
+      if (deveGerar) {
+        logger.log(
+          pixExpirado
+            ? `PIX expirado detectado para mês ${novoMes}. Regenerando automaticamente...`
+            : `Nenhuma cobrança encontrada para mês ${novoMes}. Gerando automaticamente...`
+        )
+        await handleGerarCobranca(boleto)
+      }
     }
-  }, [expandedMes, caixa, cobrancas, handleGerarCobranca])
+  }, [expandedMes, caixa, cobrancas, isPixExpired, handleGerarCobranca, logger])
 
   if (!participante) return null
 
@@ -715,10 +730,10 @@ export function DetalhesPagamento({
       <div>
         {/* Header do Participante */}
         <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-xl mb-4">
-          <Avatar 
-            name={participante.usuarioId.nome} 
-            src={participante.usuarioId.fotoUrl} 
-            size="lg" 
+          <Avatar
+            name={participante.usuarioId.nome}
+            src={participante.usuarioId.fotoUrl}
+            size="lg"
           />
           <div className="flex-1">
             <p className="font-bold text-gray-900">{participante.usuarioId.nome}</p>
@@ -734,11 +749,11 @@ export function DetalhesPagamento({
             <p className="text-xs text-gray-500">Score</p>
             <p className={cn(
               'text-2xl font-bold',
-              participante.usuarioId.score >= 80 
-                ? 'text-green-600' 
-                : participante.usuarioId.score >= 60 
-                ? 'text-amber-600' 
-                : 'text-red-600'
+              participante.usuarioId.score >= 80
+                ? 'text-green-600'
+                : participante.usuarioId.score >= 60
+                  ? 'text-amber-600'
+                  : 'text-red-600'
             )}>
               {participante.usuarioId.score}
             </p>
@@ -765,10 +780,10 @@ export function DetalhesPagamento({
         <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
           <FileText className="w-4 h-4" />
           Histórico de Pagamentos
-          <Button 
-            variant="secondary" 
-            size="sm" 
-            leftIcon={<RefreshCw className={cn("w-4 h-4", isRefreshing && "animate-spin")} />} 
+          <Button
+            variant="secondary"
+            size="sm"
+            leftIcon={<RefreshCw className={cn("w-4 h-4", isRefreshing && "animate-spin")} />}
             onClick={() => loadPaymentDetails(true)}
             disabled={isRefreshing}
             className="ml-auto"
@@ -802,13 +817,13 @@ export function DetalhesPagamento({
             const daysLate =
               isAtrasado && !Number.isNaN(vencimentoOriginal.getTime())
                 ? Math.max(
-                    1,
-                    Math.floor(
-                      (startOfDay(now).getTime() -
-                        startOfDay(vencimentoOriginal).getTime()) /
-                        (24 * 60 * 60 * 1000),
-                    ),
-                  )
+                  1,
+                  Math.floor(
+                    (startOfDay(now).getTime() -
+                      startOfDay(vencimentoOriginal).getTime()) /
+                    (24 * 60 * 60 * 1000),
+                  ),
+                )
                 : 0
 
             const multaCents = 300
@@ -837,19 +852,19 @@ export function DetalhesPagamento({
               cobranca?.dueDate || (isAtrasado ? previewDueDateIso : boleto.dataVencimento)
 
             return (
-              <div 
-                key={boleto.mes} 
+              <div
+                key={boleto.mes}
                 className={cn(
                   'p-3 rounded-xl border transition-all',
-                  isPago 
-                    ? 'bg-green-50 border-green-200' 
-                    : isAtrasado 
-                    ? 'bg-red-50 border-red-200' 
-                    : 'bg-gray-50 border-gray-200'
+                  isPago
+                    ? 'bg-green-50 border-green-200'
+                    : isAtrasado
+                      ? 'bg-red-50 border-red-200'
+                      : 'bg-gray-50 border-gray-200'
                 )}
               >
                 {/* Header do Boleto */}
-                <div 
+                <div
                   className="flex items-center justify-between mb-2 cursor-pointer"
                   onClick={() => handleToggleExpand(boleto)}
                 >
@@ -857,9 +872,9 @@ export function DetalhesPagamento({
                     <span className="font-semibold">
                       {caixa?.tipo === 'semanal' ? 'Semana' : 'Mês'} {boleto.mes}
                     </span>
-                    <Badge 
-                      variant={isPago ? 'success' : isAtrasado ? 'danger' : 'warning'} 
-                      className={isPago ? 'bg-green-100 text-green-800' : ''} 
+                    <Badge
+                      variant={isPago ? 'success' : isAtrasado ? 'danger' : 'warning'}
+                      className={isPago ? 'bg-green-100 text-green-800' : ''}
                       size="sm"
                     >
                       {isPago ? 'PAGO' : isAtrasado ? 'Atrasado' : 'Pendente'}
@@ -870,18 +885,18 @@ export function DetalhesPagamento({
                       {formatCurrency(displayTotalCents / 100)}
                     </span>
                     {!isPago && caixa?.status === 'ativo' && (
-                      <button 
+                      <button
                         onClick={(e) => {
                           e.stopPropagation()
                           setExpandedMes(isExpanded ? null : boleto.mes)
                         }}
                         className="p-1 rounded-lg hover:bg-gray-100"
                       >
-                        <ChevronRight 
+                        <ChevronRight
                           className={cn(
                             'w-4 h-4 text-gray-500 transition-transform',
                             isExpanded && 'rotate-90'
-                          )} 
+                          )}
                         />
                       </button>
                     )}
@@ -918,15 +933,15 @@ export function DetalhesPagamento({
                           Crédito previsto: <span className="font-medium">
                             {formatDate(cobranca.detalhePagamento.creditoEm)}
                           </span>
-                          {cobranca.detalhePagamento.valorPago && 
-                           cobranca.detalhePagamento.taxas && (
-                            <span className="font-bold ml-2 text-amber-700">
-                              {formatCurrency(
-                                (cobranca.detalhePagamento.valorPago - 
-                                 cobranca.detalhePagamento.taxas) / 100
-                              )}
-                            </span>
-                          )}
+                          {cobranca.detalhePagamento.valorPago &&
+                            cobranca.detalhePagamento.taxas && (
+                              <span className="font-bold ml-2 text-amber-700">
+                                {formatCurrency(
+                                  (cobranca.detalhePagamento.valorPago -
+                                    cobranca.detalhePagamento.taxas) / 100
+                                )}
+                              </span>
+                            )}
                         </div>
                       )}
                     </div>
@@ -1063,23 +1078,23 @@ export function DetalhesPagamento({
 
                     {/* Tabs PIX/Boleto */}
                     <div className="flex gap-1 p-1 bg-gray-100 rounded-xl mb-3">
-                      <button 
+                      <button
                         onClick={() => setPaymentTab('pix')}
                         className={cn(
                           'flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
-                          paymentTab === 'pix' 
-                            ? 'bg-white text-green-600 shadow-sm' 
+                          paymentTab === 'pix'
+                            ? 'bg-white text-green-600 shadow-sm'
                             : 'text-gray-600 hover:text-gray-800'
                         )}
                       >
                         PIX
                       </button>
-                      <button 
+                      <button
                         onClick={() => setPaymentTab('boleto')}
                         className={cn(
                           'flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
-                          paymentTab === 'boleto' 
-                            ? 'bg-white text-blue-600 shadow-sm' 
+                          paymentTab === 'boleto'
+                            ? 'bg-white text-blue-600 shadow-sm'
                             : 'text-gray-600 hover:text-gray-800'
                         )}
                       >
@@ -1089,20 +1104,20 @@ export function DetalhesPagamento({
 
                     {/* Botão Gerar ou Conteúdo */}
                     {!cobranca ? (
-                      <Button 
-                        variant="primary" 
-                        size="sm" 
-                        className="w-full" 
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        className="w-full"
                         onClick={() => handleGerarCobranca(boleto)}
                         disabled={gerandoCobranca}
                         leftIcon={
-                          gerandoCobranca && boletoSelecionado === boleto.mes 
+                          gerandoCobranca && boletoSelecionado === boleto.mes
                             ? <Loader2 className="w-4 h-4 animate-spin" />
                             : <QrCode className="w-4 h-4" />
                         }
                       >
-                        {gerandoCobranca && boletoSelecionado === boleto.mes 
-                          ? 'Gerando...' 
+                        {gerandoCobranca && boletoSelecionado === boleto.mes
+                          ? 'Gerando...'
                           : 'Gerar cobrança'}
                       </Button>
                     ) : paymentTab === 'pix' ? (
@@ -1119,13 +1134,38 @@ export function DetalhesPagamento({
                           </div>
                         )}
 
+                        {/* Botão Regenerar se PIX expirado */}
+                        {isPixExpired(cobranca.pix) && (
+                          <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+                            <p className="text-xs text-red-700 mb-2 font-medium">
+                              ⚠️ Este PIX expirou. Gere uma nova cobrança para continuar.
+                            </p>
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              className="w-full bg-red-500 hover:bg-red-600"
+                              onClick={() => handleGerarCobranca(boleto)}
+                              disabled={gerandoCobranca}
+                              leftIcon={
+                                gerandoCobranca && boletoSelecionado === boleto.mes
+                                  ? <Loader2 className="w-4 h-4 animate-spin" />
+                                  : <RefreshCw className="w-4 h-4" />
+                              }
+                            >
+                              {gerandoCobranca && boletoSelecionado === boleto.mes
+                                ? 'Gerando nova cobrança...'
+                                : 'Gerar Nova Cobrança'}
+                            </Button>
+                          </div>
+                        )}
+
                         {/* QR Code */}
                         <div className="flex justify-center">
                           {cobranca.pix?.qrCode ? (
                             <div className="bg-white p-3 rounded-lg border border-gray-200">
-                              <QRCode 
-                                value={cobranca.pix.copiaCola} 
-                                size={176} 
+                              <QRCode
+                                value={cobranca.pix.copiaCola}
+                                size={176}
                               />
                             </div>
                           ) : (
@@ -1141,37 +1181,37 @@ export function DetalhesPagamento({
                             Código PIX
                           </label>
                           <div className="flex gap-2">
-                            <input 
-                              type="text" 
-                              readOnly 
-                              value={cobranca.pix?.copiaCola || ''} 
+                            <input
+                              type="text"
+                              readOnly
+                              value={cobranca.pix?.copiaCola || ''}
                               className="flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-mono text-gray-600 truncate"
                             />
-                            <Button 
-                              variant={copiedPix ? 'primary' : 'secondary'} 
-                              size="sm" 
+                            <Button
+                              variant={copiedPix ? 'primary' : 'secondary'}
+                              size="sm"
                               onClick={() => handleCopyPix(boleto.mes)}
                               leftIcon={
-                                copiedPix 
-                                  ? <CheckCircle2 className="w-4 h-4" /> 
+                                copiedPix
+                                  ? <CheckCircle2 className="w-4 h-4" />
                                   : <Copy className="w-4 h-4" />
                               }
                               className={copiedPix ? 'bg-green-500 hover:bg-green-600' : ''}
                             >
                               {copiedPix ? 'Copiado!' : 'Copiar'}
                             </Button>
-                            <Button 
-                              variant="secondary" 
-                              size="sm" 
+                            <Button
+                              variant="secondary"
+                              size="sm"
                               onClick={() => handlePrintPix(boleto.mes)}
                               leftIcon={<Printer className="w-4 h-4" />}
                             >
                               Imprimir
                             </Button>
                             {cobranca.paymentUrl && (
-                              <Button 
-                                variant="secondary" 
-                                size="sm" 
+                              <Button
+                                variant="secondary"
+                                size="sm"
                                 onClick={() => window.open(cobranca.paymentUrl!, '_blank')}
                                 leftIcon={<ExternalLink className="w-4 h-4" />}
                               >
@@ -1207,11 +1247,11 @@ export function DetalhesPagamento({
                               </p>
                             </div>
                             <div className="flex justify-center mt-2">
-                              <Barcode 
-                                value={cobranca.boleto.codigoBarras} 
-                                format="CODE128" 
-                                width={2} 
-                                height={50} 
+                              <Barcode
+                                value={cobranca.boleto.codigoBarras}
+                                format="CODE128"
+                                width={2}
+                                height={50}
                               />
                             </div>
                           </div>
@@ -1219,31 +1259,31 @@ export function DetalhesPagamento({
 
                         {/* Ações do Boleto */}
                         <div className="flex gap-2">
-                          <Button 
-                            variant={copiedBoleto ? 'primary' : 'secondary'} 
-                            size="sm" 
+                          <Button
+                            variant={copiedBoleto ? 'primary' : 'secondary'}
+                            size="sm"
                             onClick={() => handleCopyBoleto(boleto.mes)}
                             leftIcon={
-                              copiedBoleto 
-                                ? <CheckCircle2 className="w-4 h-4" /> 
+                              copiedBoleto
+                                ? <CheckCircle2 className="w-4 h-4" />
                                 : <Copy className="w-4 h-4" />
                             }
                             className={copiedBoleto ? 'bg-green-500 hover:bg-green-600' : ''}
                           >
                             {copiedBoleto ? 'Copiado!' : 'Copiar'}
                           </Button>
-                          <Button 
-                            variant="secondary" 
-                            size="sm" 
+                          <Button
+                            variant="secondary"
+                            size="sm"
                             onClick={() => handlePrintBoleto(boleto.mes)}
                             leftIcon={<Printer className="w-4 h-4" />}
                           >
                             Imprimir
                           </Button>
                           {cobranca.boleto?.url && (
-                            <Button 
-                              variant="primary" 
-                              size="sm" 
+                            <Button
+                              variant="primary"
+                              size="sm"
                               onClick={() => window.open(cobranca.boleto!.url, '_blank')}
                               leftIcon={<ExternalLink className="w-4 h-4" />}
                             >

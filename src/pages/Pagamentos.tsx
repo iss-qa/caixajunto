@@ -21,20 +21,20 @@ import { Avatar } from '../components/ui/Avatar';
 import { formatCurrency, formatDate, cn } from '../lib/utils';
 
 // Taxas
-const TAXA_SERVICO = 5;
+const TAXA_SERVICO = 10.00;
 const TAXA_IPCA_MENSAL = 0.0041;
 type StatusBoletoNormalizado = 'pago' | 'pendente' | 'atrasado' | 'enviado';
 
 interface ParticipanteCaixa {
   _id?: string;
   usuarioId?:
-    | {
-        _id?: string;
-        nome?: string;
-        telefone?: string;
-        fotoUrl?: string;
-      }
-    | string;
+  | {
+    _id?: string;
+    nome?: string;
+    telefone?: string;
+    fotoUrl?: string;
+  }
+  | string;
   posicao?: number;
 }
 
@@ -51,24 +51,24 @@ interface CaixaApi {
   dataInicio?: string;
   diaVencimento?: number;
   adminId?:
-    | {
-        _id?: string;
-        nome?: string;
-        email?: string;
-      }
-    | string;
+  | {
+    _id?: string;
+    nome?: string;
+    email?: string;
+  }
+  | string;
 }
 
 interface PagamentoApi {
   _id: string;
   caixaId?: string;
   pagadorId?:
-    | {
-        _id?: string;
-        nome?: string;
-        fotoUrl?: string;
-      }
-    | string;
+  | {
+    _id?: string;
+    nome?: string;
+    fotoUrl?: string;
+  }
+  | string;
   participanteNome?: string;
   mesReferencia: number;
   valorParcela?: number;
@@ -256,8 +256,8 @@ export function Pagamentos() {
               typeof p.diasAtraso === 'number'
                 ? p.diasAtraso
                 : p.diasAtraso
-                ? Number(p.diasAtraso)
-                : 0;
+                  ? Number(p.diasAtraso)
+                  : 0;
 
             const statusNormalizado = normalizarStatus(
               p.status,
@@ -347,7 +347,7 @@ export function Pagamentos() {
   };
 
   const toggleCaixa = (caixaId: string) => {
-    setCaixasComBoletos(prev => prev.map(c => 
+    setCaixasComBoletos(prev => prev.map(c =>
       c._id === caixaId ? { ...c, expanded: !c.expanded } : c
     ));
   };
@@ -394,7 +394,7 @@ export function Pagamentos() {
 
   const totalCaixas = caixasComBoletos.length;
 
-  
+
 
   const totalPagamentosRecebidos = allBoletos
     .filter((b) => b.status === 'pago')
@@ -407,12 +407,12 @@ export function Pagamentos() {
   const boletosParticipanteSelecionado =
     selectedBoleto && caixaSelecionada
       ? caixaSelecionada.boletos
-          .filter(
-            (b) =>
-              String(b.pagadorId || b.participanteId) ===
-              String(selectedBoleto.pagadorId || selectedBoleto.participanteId),
-          )
-          .sort((a, b) => a.mes - b.mes)
+        .filter(
+          (b) =>
+            String(b.pagadorId || b.participanteId) ===
+            String(selectedBoleto.pagadorId || selectedBoleto.participanteId),
+        )
+        .sort((a, b) => a.mes - b.mes)
       : [];
 
   const calcularDataPrevistaRecebimento = (
@@ -678,303 +678,302 @@ export function Pagamentos() {
                 return pagosB - pagosA;
               })
               .map((caixa) => {
-              const participantesLista = (caixa.participantes || []).filter((p) => {
-                const nome =
-                  typeof p.usuarioId === 'object' && p.usuarioId?.nome
-                    ? String(p.usuarioId.nome)
-                    : '';
-                if (search && !nome.toLowerCase().includes(search.toLowerCase())) {
-                  return false;
-                }
-                return true;
-              });
+                const participantesLista = (caixa.participantes || []).filter((p) => {
+                  const nome =
+                    typeof p.usuarioId === 'object' && p.usuarioId?.nome
+                      ? String(p.usuarioId.nome)
+                      : '';
+                  if (search && !nome.toLowerCase().includes(search.toLowerCase())) {
+                    return false;
+                  }
+                  return true;
+                });
 
-              const ordenados = [...participantesLista].sort((a, b) => (a.posicao || 0) - (b.posicao || 0));
+                const ordenados = [...participantesLista].sort((a, b) => (a.posicao || 0) - (b.posicao || 0));
 
-              if (ordenados.length === 0) return null;
+                if (ordenados.length === 0) return null;
 
-              const filtroPeriodo = filtroPeriodoPorCaixa[caixa._id] ?? 'geral';
-              const totalParcelasCaixa = caixa.duracaoMeses || caixa.qtdParticipantes || 1;
-              const periodos = Array.from({ length: totalParcelasCaixa }, (_, i) => i + 1);
+                const filtroPeriodo = filtroPeriodoPorCaixa[caixa._id] ?? 'geral';
+                const totalParcelasCaixa = caixa.duracaoMeses || caixa.qtdParticipantes || 1;
+                const periodos = Array.from({ length: totalParcelasCaixa }, (_, i) => i + 1);
 
-              return (
-                <Card key={caixa._id} className="border border-gray-200 rounded-xl">
-                  <div
-                    className="flex items-center justify-between px-4 py-3 cursor-pointer"
-                    onClick={() => {
-                      if (!caixa.expanded) {
-                        setFiltroPeriodoPorCaixa((prev) => ({
-                          ...prev,
-                          [caixa._id]: 'geral',
-                        }));
-                      }
-                      toggleCaixa(caixa._id);
-                    }}
-                  >
-                    <div className="flex flex-col">
-                      <span className="text-sm font-semibold text-gray-900">{caixa.nome}</span>
-                      <span className="text-xs text-gray-500">
-                        {caixa.tipo === 'semanal' ? 'Caixa semanal' : 'Caixa mensal'} •{' '}
-                        {caixa.duracaoMeses} {caixa.tipo === 'semanal' ? 'semanas' : 'meses'}
-                      </span>
-                      {caixa.adminNome && (
-                        <span className="text-xs text-gray-400">
-                          Gerenciado por: {caixa.adminNome}
+                return (
+                  <Card key={caixa._id} className="border border-gray-200 rounded-xl">
+                    <div
+                      className="flex items-center justify-between px-4 py-3 cursor-pointer"
+                      onClick={() => {
+                        if (!caixa.expanded) {
+                          setFiltroPeriodoPorCaixa((prev) => ({
+                            ...prev,
+                            [caixa._id]: 'geral',
+                          }));
+                        }
+                        toggleCaixa(caixa._id);
+                      }}
+                    >
+                      <div className="flex flex-col">
+                        <span className="text-sm font-semibold text-gray-900">{caixa.nome}</span>
+                        <span className="text-xs text-gray-500">
+                          {caixa.tipo === 'semanal' ? 'Caixa semanal' : 'Caixa mensal'} •{' '}
+                          {caixa.duracaoMeses} {caixa.tipo === 'semanal' ? 'semanas' : 'meses'}
                         </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Badge variant="info" size="sm">
-                        {caixa.tipo === 'semanal' ? 'Semana' : 'Mês'} {caixa.mesAtual}/{caixa.duracaoMeses}
-                      </Badge>
-                      {caixa.expanded ? (
-                        <ChevronUp className="w-4 h-4 text-gray-500" />
-                      ) : (
-                        <ChevronDown className="w-4 h-4 text-gray-500" />
-                      )}
-                    </div>
-                  </div>
-
-                  {caixa.expanded && (
-                    <div className="px-4 pb-4 pt-2 border-t border-gray-100 bg-gray-50/60 rounded-b-xl">
-                      <div className="flex gap-2 overflow-x-auto pb-3 mb-3">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setFiltroPeriodoPorCaixa((prev) => ({
-                              ...prev,
-                              [caixa._id]: 'geral',
-                            }))
-                          }
-                          className={cn(
-                            'px-3 py-1 rounded-full text-xs font-medium border whitespace-nowrap',
-                            filtroPeriodo === 'geral'
-                              ? 'bg-blue-50 border-blue-500 text-blue-700'
-                              : 'bg-white border-gray-200 text-gray-700',
-                          )}
-                        >
-                          Geral
-                        </button>
-                        {periodos.map((mes) => {
-                          const ativo = filtroPeriodo === mes;
-                          const label = caixa.tipo === 'semanal' ? `Semana ${mes}` : `Mês ${mes}`;
-                          return (
-                            <button
-                              key={mes}
-                              type="button"
-                              onClick={() =>
-                                setFiltroPeriodoPorCaixa((prev) => ({
-                                  ...prev,
-                                  [caixa._id]: mes,
-                                }))
-                              }
-                              className={cn(
-                                'px-3 py-1 rounded-full text-xs font-medium border whitespace-nowrap',
-                                ativo
-                                  ? 'bg-blue-50 border-blue-500 text-blue-700'
-                                  : 'bg-white border-gray-200 text-gray-700',
-                              )}
-                            >
-                              {label}
-                            </button>
-                          );
-                        })}
+                        {caixa.adminNome && (
+                          <span className="text-xs text-gray-400">
+                            Gerenciado por: {caixa.adminNome}
+                          </span>
+                        )}
                       </div>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="info" size="sm">
+                          {caixa.tipo === 'semanal' ? 'Semana' : 'Mês'} {caixa.mesAtual}/{caixa.duracaoMeses}
+                        </Badge>
+                        {caixa.expanded ? (
+                          <ChevronUp className="w-4 h-4 text-gray-500" />
+                        ) : (
+                          <ChevronDown className="w-4 h-4 text-gray-500" />
+                        )}
+                      </div>
+                    </div>
 
-                      <div className="space-y-3">
-                        {ordenados.map((p) => {
-                          const usuarioId =
-                            typeof p.usuarioId === 'string' ? p.usuarioId : p.usuarioId?._id;
-                          const nome =
-                            typeof p.usuarioId === 'object' && p.usuarioId?.nome
-                              ? String(p.usuarioId.nome)
-                              : 'Participante';
-                          const usuarioObj =
-                            typeof p.usuarioId === 'object' ? p.usuarioId : undefined;
-                          const telefone = usuarioObj?.telefone ? String(usuarioObj.telefone) : '';
+                    {caixa.expanded && (
+                      <div className="px-4 pb-4 pt-2 border-t border-gray-100 bg-gray-50/60 rounded-b-xl">
+                        <div className="flex gap-2 overflow-x-auto pb-3 mb-3">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setFiltroPeriodoPorCaixa((prev) => ({
+                                ...prev,
+                                [caixa._id]: 'geral',
+                              }))
+                            }
+                            className={cn(
+                              'px-3 py-1 rounded-full text-xs font-medium border whitespace-nowrap',
+                              filtroPeriodo === 'geral'
+                                ? 'bg-blue-50 border-blue-500 text-blue-700'
+                                : 'bg-white border-gray-200 text-gray-700',
+                            )}
+                          >
+                            Geral
+                          </button>
+                          {periodos.map((mes) => {
+                            const ativo = filtroPeriodo === mes;
+                            const label = caixa.tipo === 'semanal' ? `Semana ${mes}` : `Mês ${mes}`;
+                            return (
+                              <button
+                                key={mes}
+                                type="button"
+                                onClick={() =>
+                                  setFiltroPeriodoPorCaixa((prev) => ({
+                                    ...prev,
+                                    [caixa._id]: mes,
+                                  }))
+                                }
+                                className={cn(
+                                  'px-3 py-1 rounded-full text-xs font-medium border whitespace-nowrap',
+                                  ativo
+                                    ? 'bg-blue-50 border-blue-500 text-blue-700'
+                                    : 'bg-white border-gray-200 text-gray-700',
+                                )}
+                              >
+                                {label}
+                              </button>
+                            );
+                          })}
+                        </div>
 
-                          const boletosDoParticipante = caixa.boletos.filter((b) =>
-                            String(b.pagadorId || b.participanteId) === String(usuarioId || ''),
-                          );
+                        <div className="space-y-3">
+                          {ordenados.map((p) => {
+                            const usuarioId =
+                              typeof p.usuarioId === 'string' ? p.usuarioId : p.usuarioId?._id;
+                            const nome =
+                              typeof p.usuarioId === 'object' && p.usuarioId?.nome
+                                ? String(p.usuarioId.nome)
+                                : 'Participante';
+                            const usuarioObj =
+                              typeof p.usuarioId === 'object' ? p.usuarioId : undefined;
+                            const telefone = usuarioObj?.telefone ? String(usuarioObj.telefone) : '';
 
-                          const boletosConsiderados =
-                            filtroPeriodo === 'geral'
-                              ? boletosDoParticipante
-                              : boletosDoParticipante.filter((b) => b.mes === filtroPeriodo);
+                            const boletosDoParticipante = caixa.boletos.filter((b) =>
+                              String(b.pagadorId || b.participanteId) === String(usuarioId || ''),
+                            );
 
-                          const parcelasPagas = boletosConsiderados.filter(
-                            (b) => b.status === 'pago',
-                          ).length;
+                            const boletosConsiderados =
+                              filtroPeriodo === 'geral'
+                                ? boletosDoParticipante
+                                : boletosDoParticipante.filter((b) => b.mes === filtroPeriodo);
 
-                          const valorPago = boletosConsiderados
-                            .filter((b) => b.status === 'pago')
-                            .reduce((sum, b) => sum + b.valorTotal, 0);
+                            const parcelasPagas = boletosConsiderados.filter(
+                              (b) => b.status === 'pago',
+                            ).length;
 
-                          const labelProgressoGeral = `Pago ${parcelasPagas}/${totalParcelasCaixa}`;
+                            const valorPago = boletosConsiderados
+                              .filter((b) => b.status === 'pago')
+                              .reduce((sum, b) => sum + b.valorTotal, 0);
 
-                          const boletoPeriodo =
-                            filtroPeriodo === 'geral'
-                              ? undefined
-                              : boletosDoParticipante.find(
+                            const labelProgressoGeral = `Pago ${parcelasPagas}/${totalParcelasCaixa}`;
+
+                            const boletoPeriodo =
+                              filtroPeriodo === 'geral'
+                                ? undefined
+                                : boletosDoParticipante.find(
                                   (b) => b.mes === filtroPeriodo,
                                 );
 
-                          const indicePeriodo =
-                            filtroPeriodo === 'geral'
-                              ? undefined
-                              : Number(filtroPeriodo);
+                            const indicePeriodo =
+                              filtroPeriodo === 'geral'
+                                ? undefined
+                                : Number(filtroPeriodo);
 
-                          const labelProgressoPeriodo =
-                            filtroPeriodo === 'geral' || !indicePeriodo
-                              ? null
-                              : `${
-                                  boletoPeriodo?.status === 'pago'
-                                    ? 'Pago'
-                                    : 'Parcela'
+                            const labelProgressoPeriodo =
+                              filtroPeriodo === 'geral' || !indicePeriodo
+                                ? null
+                                : `${boletoPeriodo?.status === 'pago'
+                                  ? 'Pago'
+                                  : 'Parcela'
                                 } ${indicePeriodo}/${totalParcelasCaixa}`;
 
-                          const statusBadge =
-                            parcelasPagas > 0
-                              ? { variant: 'success', label: 'Pago' }
-                              : { variant: 'warning', label: 'Pendente' };
+                            const statusBadge =
+                              parcelasPagas > 0
+                                ? { variant: 'success', label: 'Pago' }
+                                : { variant: 'warning', label: 'Pendente' };
 
-                          const boletoRepresentativo =
-                            filtroPeriodo === 'geral'
-                              ? boletosDoParticipante.find(
+                            const boletoRepresentativo =
+                              filtroPeriodo === 'geral'
+                                ? boletosDoParticipante.find(
                                   (b) => b.mes === caixa.mesAtual,
                                 ) || boletosDoParticipante[0]
-                              : boletosDoParticipante.find(
+                                : boletosDoParticipante.find(
                                   (b) => b.mes === filtroPeriodo,
                                 ) || boletosDoParticipante[0];
 
-                          const boletoComObservacao =
-                            filtroPeriodo === 'geral'
-                              ? boletosDoParticipante.find((b) => b.observacao)
-                              : boletosDoParticipante.find(
+                            const boletoComObservacao =
+                              filtroPeriodo === 'geral'
+                                ? boletosDoParticipante.find((b) => b.observacao)
+                                : boletosDoParticipante.find(
                                   (b) =>
                                     b.mes === filtroPeriodo && b.observacao,
                                 ) ||
                                 boletosDoParticipante.find((b) => b.observacao);
 
-                          if (!usuarioId) return null;
+                            if (!usuarioId) return null;
 
-                          return (
-                            <Card
-                              key={String(usuarioId)}
-                              className="p-3 border border-blue-200 bg-blue-50/70"
-                            >
-                              <div className="flex items-start justify-between gap-3">
-                                <div className="flex items-start gap-3">
-                                  <div className="flex flex-col items-center mr-1">
-                                    <div className="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center text-sm font-bold">
-                                      {p.posicao || boletoRepresentativo?.mes || 0}
+                            return (
+                              <Card
+                                key={String(usuarioId)}
+                                className="p-3 border border-blue-200 bg-blue-50/70"
+                              >
+                                <div className="flex items-start justify-between gap-3">
+                                  <div className="flex items-start gap-3">
+                                    <div className="flex flex-col items-center mr-1">
+                                      <div className="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center text-sm font-bold">
+                                        {p.posicao || boletoRepresentativo?.mes || 0}
+                                      </div>
                                     </div>
-                                  </div>
-                                  <div
-                                    className="cursor-pointer"
-                                    onClick={() => {
-                                      if (boletoRepresentativo) {
-                                        setSelectedBoleto(boletoRepresentativo);
-                                        setShowDetalheModal(true);
-                                      }
-                                    }}
-                                  >
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                      <span className="font-semibold text-gray-900">{nome}</span>
-                                      <Badge variant={statusBadge.variant as any} size="sm">
-                                        {statusBadge.label}
-                                      </Badge>
-                                      {filtroPeriodo !== 'geral' && labelProgressoPeriodo && (
-                                        <span className="text-xs text-gray-500">
-                                          {labelProgressoPeriodo}
-                                        </span>
-                                      )}
-                                    </div>
-                                    <p className="text-xs text-gray-500 mt-0.5">
-                                      Caixa: {caixa.nome}
-                                    </p>
-                                    {filtroPeriodo === 'geral' && (
-                                      <p className="text-xs text-gray-500">
-                                        {labelProgressoGeral}
-                                      </p>
-                                    )}
-                                    <p className="text-sm mt-1">
-                                      <span className="text-gray-600">Valor Pago:</span>{' '}
-                                      <span className="text-green-700 font-semibold">
-                                        {formatCurrency(valorPago)}
-                                      </span>
-                                    </p>
-                                    {filtroPeriodo !== 'geral' && boletoPeriodo?.dataPagamento && (
-                                      <p className="text-xs text-gray-500 mt-0.5">
-                                        Data de Pagamento:{' '}
-                                        {formatDate(boletoPeriodo.dataPagamento)}
-                                      </p>
-                                    )}
-                                    {boletoComObservacao?.observacao && (
-                                      <p className="text-xs text-amber-700 mt-1 bg-amber-50 px-2 py-1 rounded">
-                                        Observação: {boletoComObservacao.observacao}
-                                      </p>
-                                    )}
-                                  </div>
-                                </div>
-                                <div className="flex flex-col sm:flex-row items-end gap-2">
-                                  {boletoRepresentativo && parcelasPagas > 0 && (
-                                    <Button
-                                      size="sm"
-                                      variant="secondary"
+                                    <div
+                                      className="cursor-pointer"
                                       onClick={() => {
-                                        setSelectedBoleto(boletoRepresentativo);
-                                        setShowDetalheModal(true);
-                                      }}
-                                    >
-                                      Comprovante
-                                    </Button>
-                                  )}
-                                  {telefone && (
-                                    <Button
-                                      size="sm"
-                                      variant="secondary"
-                                      leftIcon={<Phone className="w-4 h-4" />}
-                                      onClick={() => {
-                                        const digits = telefone.replace(/\D/g, '');
-                                        if (digits) {
-                                          window.open(
-                                            `https://wa.me/${digits}`,
-                                            '_blank',
-                                          );
+                                        if (boletoRepresentativo) {
+                                          setSelectedBoleto(boletoRepresentativo);
+                                          setShowDetalheModal(true);
                                         }
                                       }}
                                     >
-                                      WhatsApp
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <span className="font-semibold text-gray-900">{nome}</span>
+                                        <Badge variant={statusBadge.variant as any} size="sm">
+                                          {statusBadge.label}
+                                        </Badge>
+                                        {filtroPeriodo !== 'geral' && labelProgressoPeriodo && (
+                                          <span className="text-xs text-gray-500">
+                                            {labelProgressoPeriodo}
+                                          </span>
+                                        )}
+                                      </div>
+                                      <p className="text-xs text-gray-500 mt-0.5">
+                                        Caixa: {caixa.nome}
+                                      </p>
+                                      {filtroPeriodo === 'geral' && (
+                                        <p className="text-xs text-gray-500">
+                                          {labelProgressoGeral}
+                                        </p>
+                                      )}
+                                      <p className="text-sm mt-1">
+                                        <span className="text-gray-600">Valor Pago:</span>{' '}
+                                        <span className="text-green-700 font-semibold">
+                                          {formatCurrency(valorPago)}
+                                        </span>
+                                      </p>
+                                      {filtroPeriodo !== 'geral' && boletoPeriodo?.dataPagamento && (
+                                        <p className="text-xs text-gray-500 mt-0.5">
+                                          Data de Pagamento:{' '}
+                                          {formatDate(boletoPeriodo.dataPagamento)}
+                                        </p>
+                                      )}
+                                      {boletoComObservacao?.observacao && (
+                                        <p className="text-xs text-amber-700 mt-1 bg-amber-50 px-2 py-1 rounded">
+                                          Observação: {boletoComObservacao.observacao}
+                                        </p>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <div className="flex flex-col sm:flex-row items-end gap-2">
+                                    {boletoRepresentativo && parcelasPagas > 0 && (
+                                      <Button
+                                        size="sm"
+                                        variant="secondary"
+                                        onClick={() => {
+                                          setSelectedBoleto(boletoRepresentativo);
+                                          setShowDetalheModal(true);
+                                        }}
+                                      >
+                                        Comprovante
+                                      </Button>
+                                    )}
+                                    {telefone && (
+                                      <Button
+                                        size="sm"
+                                        variant="secondary"
+                                        leftIcon={<Phone className="w-4 h-4" />}
+                                        onClick={() => {
+                                          const digits = telefone.replace(/\D/g, '');
+                                          if (digits) {
+                                            window.open(
+                                              `https://wa.me/${digits}`,
+                                              '_blank',
+                                            );
+                                          }
+                                        }}
+                                      >
+                                        WhatsApp
+                                      </Button>
+                                    )}
+                                    <Button
+                                      size="sm"
+                                      variant="secondary"
+                                      onClick={() => {
+                                        if (boletoRepresentativo) {
+                                          handleAbrirModalObservacao(boletoRepresentativo);
+                                        } else {
+                                          setObservacaoAtual(
+                                            'Observação: Contato realizado via WhatsApp',
+                                          );
+                                          setObservacaoModalAberto(true);
+                                        }
+                                      }}
+                                    >
+                                      Anotar
                                     </Button>
-                                  )}
-                                  <Button
-                                    size="sm"
-                                    variant="secondary"
-                                    onClick={() => {
-                                      if (boletoRepresentativo) {
-                                        handleAbrirModalObservacao(boletoRepresentativo);
-                                      } else {
-                                        setObservacaoAtual(
-                                          'Observação: Contato realizado via WhatsApp',
-                                        );
-                                        setObservacaoModalAberto(true);
-                                      }
-                                    }}
-                                  >
-                                    Anotar
-                                  </Button>
+                                  </div>
                                 </div>
-                              </div>
-                            </Card>
-                          );
-                        })}
+                              </Card>
+                            );
+                          })}
+                        </div>
                       </div>
-                    </div>
-                  )}
-                </Card>
-              );
-            })}
+                    )}
+                  </Card>
+                );
+              })}
           </div>
         </>
       )}
@@ -1020,7 +1019,7 @@ export function Pagamentos() {
               <option value="pendente">Pendentes</option>
               <option value="pago">Pagos</option>
             </select>
-            <select className="px-3 py-2 rounded-xl border border-gray-200 text-sm" value={"todos"} onChange={()=>{}}>
+            <select className="px-3 py-2 rounded-xl border border-gray-200 text-sm" value={"todos"} onChange={() => { }}>
               <option value="todos">Todos os Tipos</option>
             </select>
           </div>
@@ -1139,7 +1138,7 @@ export function Pagamentos() {
                               );
                             const usuarioObj =
                               participanteInfo &&
-                              typeof participanteInfo.usuarioId === 'object'
+                                typeof participanteInfo.usuarioId === 'object'
                                 ? participanteInfo.usuarioId
                                 : undefined;
                             const telefone = usuarioObj?.telefone
@@ -1270,7 +1269,7 @@ export function Pagamentos() {
         </>
       )}
 
-      
+
 
       {/* Modal Detalhe do Boleto */}
       <Modal
@@ -1503,9 +1502,9 @@ export function Pagamentos() {
                     const valor =
                       caixaSplit != null
                         ? calcularSplitValor(
-                            selectedSplitBoleto as Boleto,
-                            caixaSplit,
-                          )
+                          selectedSplitBoleto as Boleto,
+                          caixaSplit,
+                        )
                         : selectedSplitBoleto.valorParcela || 0;
                     return formatCurrency(valor);
                   })()}
