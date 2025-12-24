@@ -169,6 +169,71 @@ const WalletDashboard = () => {
   const fetchWallet = async () => {
     try {
       setWalletError(null);
+
+      // Primeiro tenta buscar a carteira usando credenciais individuais do participante
+      console.log('💰 Tentando buscar carteira individual do participante...');
+
+      try {
+        const individualResponse = await subcontasService.getMyWallet();
+        console.log('📦 Resposta da carteira individual:', individualResponse);
+
+        // Se obteve sucesso com carteira individual, usa esses valores
+        if (individualResponse?.success && individualResponse?.wallet) {
+          console.log('✅ Carteira individual obtida com sucesso:', individualResponse.wallet);
+          const wallet = individualResponse.wallet;
+          const availableRaw = typeof wallet?.balance === 'number' ? wallet.balance : 0;
+          const pendingRaw = typeof wallet?.futureBalance === 'number' ? wallet.futureBalance : 0;
+          const blockedRaw = typeof wallet?.blockedBalance === 'number' ? wallet.blockedBalance : 0;
+          const futureTaxesRaw = typeof wallet?.futureTaxes === 'number' ? wallet.futureTaxes : 0;
+          const available = availableRaw / 100;
+          const pending = pendingRaw / 100;
+          const blocked = blockedRaw / 100;
+          const futureTaxes = futureTaxesRaw / 100;
+
+          console.log('💵 Valores da carteira individual:', {
+            balance: available,
+            pendingBalance: pending,
+            blockedBalance: blocked,
+            futureTaxes,
+          });
+
+          setAccountData((prev) => ({
+            ...prev,
+            balance: available,
+            pendingBalance: pending,
+            blockedBalance: blocked,
+            futureTaxes,
+          }));
+          return; // Sucesso, não precisa do fallback
+        }
+
+        // Se sucesso=false mas não é erro de credenciais, trata especificamente
+        if (individualResponse?.success === false) {
+          const errorCode = individualResponse?.error;
+          console.log('⚠️ Erro na carteira individual:', errorCode, individualResponse?.message);
+
+          // Se for erro de credenciais não configuradas, mostra mensagem e usa fallback
+          if (errorCode === 'CREDENTIALS_NOT_CONFIGURED') {
+            console.log('ℹ️ Credenciais não configuradas, usando carteira geral...');
+            // Continua para o fallback (não retorna aqui)
+          } else if (errorCode === 'SUBCONTA_NOT_FOUND') {
+            console.log('ℹ️ Subconta não encontrada, usando carteira geral...');
+            // Continua para o fallback
+          } else if (errorCode === 'LYTEX_AUTH_FAILED') {
+            console.log('⚠️ Falha de autenticação Lytex, usando carteira geral...');
+            // Continua para o fallback
+          } else {
+            console.log('⚠️ Erro desconhecido, usando carteira geral...');
+            // Continua para o fallback
+          }
+        }
+      } catch (individualError: any) {
+        console.log('❌ Exceção ao buscar carteira individual:', individualError?.message);
+        // Continua para o fallback
+      }
+
+      // Fallback: busca carteira geral (para admin/master ou quando participante não tem credenciais)
+      console.log('📊 Usando fallback: buscando carteira geral...');
       const response = await cobrancasService.wallet();
       const wallet = (response && response.wallet) || response;
       const availableRaw =
@@ -185,6 +250,12 @@ const WalletDashboard = () => {
       const pending = pendingRaw / 100;
       const blocked = blockedRaw / 100;
       const futureTaxes = futureTaxesRaw / 100;
+
+      console.log('💵 Valores da carteira geral (fallback):', {
+        balance: available,
+        pendingBalance: pending,
+      });
+
       setAccountData((prev) => ({
         ...prev,
         balance: available,
@@ -193,6 +264,7 @@ const WalletDashboard = () => {
         futureTaxes,
       }));
     } catch (e: any) {
+      console.error('❌ Erro fatal ao consultar carteira:', e);
       setWalletError(e?.message || 'Erro ao consultar carteira');
     }
   };

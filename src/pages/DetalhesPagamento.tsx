@@ -216,7 +216,7 @@ export function DetalhesPagamento({
     }
   }, [logger])
 
-  // 🔥 FUNÇÃO PRINCIPAL DE CARREGAMENTO - OTIMIZADA
+  // 🔥 FUNÇÃO PRINCIPAL DE CARREGAMENTO - LEITURA LOCAL + DETALHES LYTEX (SEM CRIAR NOVAS COBRANÇAS)
   const loadPaymentDetails = useCallback(async (forceRefresh = false) => {
     // Verificações iniciais
     if (!caixaId || !participanteId || !mountedRef.current) {
@@ -247,9 +247,9 @@ export function DetalhesPagamento({
     abortControllerRef.current = new AbortController()
 
     try {
-      logger.log('Iniciando carregamento de cobranças...')
+      logger.log('🔄 Carregando cobranças...')
 
-      // 1. Buscar todas as cobranças da associação (UMA VEZ)
+      // 1. Buscar cobranças do banco local
       const response = await cobrancasService.getAllByAssociacao({
         caixaId,
         participanteId,
@@ -258,33 +258,57 @@ export function DetalhesPagamento({
       if (!mountedRef.current) return
 
       const cobrancasDB = response.cobrancas || []
-      logger.log(`Encontradas ${cobrancasDB.length} cobranças no banco`)
+      logger.log(`📊 Encontradas ${cobrancasDB.length} cobranças no banco local`)
 
       // 2. Agrupar por mês
       const cobrancasPorMes = new Map<number, any[]>()
       for (const c of cobrancasDB) {
         const mes = c.mesReferencia
+        if (!mes) continue
         if (!cobrancasPorMes.has(mes)) {
           cobrancasPorMes.set(mes, [])
         }
         cobrancasPorMes.get(mes)!.push(c)
       }
 
-      // 3. Processar cobranças em LOTE (não em loop)
+      // 3. Para cobranças existentes, buscar detalhes do Lytex (sem criar novas)
       const novasCobrancas = new Map<number, CobrancaCompleta>()
       const promises: Promise<void>[] = []
 
       for (const [mes, candidatos] of cobrancasPorMes.entries()) {
-        // Processar cada mês em paralelo
         const promessa = (async () => {
           try {
             // Buscar detalhes de todos os candidatos em paralelo
             const resultados = await Promise.allSettled(
               candidatos.map(async (c) => {
-                if (!c.lytexId) return null
+                if (!c.lytexId) {
+                  // Sem lytexId, usar dados locais
+                  const statusLocal = String(c.status || '').toLowerCase()
+                  const isPago = ['pago', 'paid', 'liquidated', 'settled', 'aprovado'].includes(statusLocal)
+                  return {
+                    id: c._id || '',
+                    mes,
+                    valor: c.valor || (c.valorCentavos || 0) / 100,
+                    descricao: c.descricao || `Pagamento Mês ${mes}`,
+                    status: isPago ? 'pago' : 'pendente',
+                    dueDate: c.dataVencimento ? new Date(c.dataVencimento).toISOString() : undefined,
+                    paymentUrl: c.paymentUrl,
+                    pix: c.pix ? {
+                      qrCode: c.pix.qrCode || '',
+                      copiaCola: c.pix.copiaCola || '',
+                      geradoEm: c.createdAt,
+                    } : undefined,
+                    boleto: c.boleto ? {
+                      codigoBarras: c.boleto.codigoBarras || '',
+                      linhaDigitavel: c.boleto.linhaDigitavel || '',
+                      url: c.boleto.url,
+                    } : undefined,
+                    ultimaAtualizacao: Date.now(),
+                  } as CobrancaCompleta
+                }
 
                 try {
-                  // Buscar invoice e detail em paralelo
+                  // Buscar invoice e detail em paralelo do Lytex
                   const [invoiceResp, detailResp] = await Promise.all([
                     cobrancasService.buscar(c.lytexId, {
                       caixaId,
@@ -316,7 +340,17 @@ export function DetalhesPagamento({
                   return normalizada
                 } catch (error) {
                   logger.error(`Erro ao buscar cobrança ${c.lytexId}`, error)
-                  return null
+                  // Fallback para dados locais
+                  const statusLocal = String(c.status || '').toLowerCase()
+                  const isPago = ['pago', 'paid', 'liquidated', 'settled', 'aprovado'].includes(statusLocal)
+                  return {
+                    id: c.lytexId || c._id || '',
+                    mes,
+                    valor: c.valor || (c.valorCentavos || 0) / 100,
+                    descricao: c.descricao || `Pagamento Mês ${mes}`,
+                    status: isPago ? 'pago' : 'pendente',
+                    ultimaAtualizacao: Date.now(),
+                  } as CobrancaCompleta
                 }
               })
             )
@@ -351,14 +385,12 @@ export function DetalhesPagamento({
 
       if (!mountedRef.current) return
 
-      // 4. Atualizar estado UMA VEZ
+      // Atualizar estado
       setCobrancas(novasCobrancas)
       lastLoadTimeRef.current = Date.now()
 
-      logger.log('Carregamento completo', {
-        total: novasCobrancas.size,
-        pagas: Array.from(novasCobrancas.values()).filter(c => c.status === 'pago').length
-      })
+      const pagasCount = Array.from(novasCobrancas.values()).filter(c => c.status === 'pago').length
+      logger.log(`✅ Carregamento completo: ${novasCobrancas.size} cobranças, ${pagasCount} pagas`)
 
     } catch (error) {
       if (error instanceof Error && error.name !== 'AbortError') {
@@ -462,7 +494,7 @@ export function DetalhesPagamento({
 
       const correcaoIPCA = parcela > 1 ? valorParcelaReal * TAXA_IPCA_MENSAL : 0
       const fundoReserva = parcela === 1 ? (valorParcelaReal / caixa.qtdParticipantes) : 0
-      const comissaoAdmin = parcela === numParcelas ? caixa.valorTotal * 0.10 : 0
+      const comissaoAdmin = parcela === numParcelas ? (caixa.valorTotal * 0.10) / caixa.qtdParticipantes : 0
       const valorTotal = valorParcelaReal + TAXA_SERVICO + correcaoIPCA + fundoReserva + comissaoAdmin
 
       const cobranca = cobrancas.get(parcela)
@@ -582,12 +614,57 @@ export function DetalhesPagamento({
     setBoletoSelecionado(boleto.mes)
 
     try {
-      // Verificar se já existe cobrança válida
-      const cobrancaExistente = cobrancas.get(boleto.mes)
+      // Verificar se já existe cobrança válida no estado local
+      let cobrancaExistente = cobrancas.get(boleto.mes)
+
+      // Se não existe localmente, verificar no backend
+      if (!cobrancaExistente && caixaId && participanteId) {
+        try {
+          const response = await cobrancasService.getByAssociacao({
+            caixaId,
+            participanteId,
+            mes: boleto.mes
+          })
+
+          const cobrancaDB = response?.cobranca
+          if (cobrancaDB && cobrancaDB.lytexId) {
+            const invoiceResp = await cobrancasService.buscar(cobrancaDB.lytexId, {
+              caixaId,
+              participanteId,
+              mes: boleto.mes
+            })
+
+            const invoice = invoiceResp?.cobranca || invoiceResp
+            if (invoice) {
+              const normalizada = normalizarCobranca(
+                invoice,
+                boleto.mes,
+                cobrancaDB.descricao || `Pagamento Mês ${boleto.mes}`
+              )
+
+              if (normalizada) {
+                setCobrancas(prev => new Map(prev).set(boleto.mes, normalizada))
+                cobrancaExistente = normalizada
+                logger.log(`Cobrança existente encontrada no backend para mês ${boleto.mes}`)
+              }
+            }
+          }
+        } catch (error) {
+          logger.warn(`Erro ao verificar cobrança no backend:`, error)
+        }
+      }
+
+      // Se existe cobrança válida (PIX não expirado), usar a existente
       if (cobrancaExistente && cobrancaExistente.pix && !isPixExpired(cobrancaExistente.pix)) {
+        logger.log(`Cobrança válida encontrada para mês ${boleto.mes}. PIX ainda válido (<30min). Não gerando nova.`)
         setExpandedMes(boleto.mes)
         setPaymentTab('pix')
         return
+      }
+
+      // Se PIX expirado ou não existe cobrança, gerar nova
+      if (cobrancaExistente?.pix && isPixExpired(cobrancaExistente.pix)) {
+        logger.log(`PIX expirado para mês ${boleto.mes} (>30min). Gerando nova cobrança...`)
       }
 
       const payload = {
@@ -616,7 +693,7 @@ export function DetalhesPagamento({
         habilitarBoleto: true,
       }
 
-      logger.log('Gerando cobrança', { mes: boleto.mes, valor: boleto.valorTotal })
+      logger.log('Gerando nova cobrança', { mes: boleto.mes, valor: boleto.valorTotal })
 
       const response = await cobrancasService.gerar(payload)
 
@@ -661,7 +738,7 @@ export function DetalhesPagamento({
       setGerandoCobranca(false)
       setBoletoSelecionado(null)
     }
-  }, [participante, caixa, cobrancas, isPixExpired, normalizarCobranca, onRefreshPagamentos, logger])
+  }, [participante, caixa, caixaId, participanteId, cobrancas, isPixExpired, normalizarCobranca, onRefreshPagamentos, logger])
 
   // Utilitários
   const calcularDataRecebimento = useCallback((posicao: number): string => {
@@ -698,25 +775,72 @@ export function DetalhesPagamento({
     const novoMes = expandedMes === boleto.mes ? null : boleto.mes
     setExpandedMes(novoMes)
 
-    if (novoMes) {
-      const cobrancaExistente = cobrancas.get(novoMes)
+    // Se está fechando (novoMes === null), não faz nada
+    if (!novoMes || !caixaId || !participanteId) return
 
-      // Gerar automaticamente se:
-      // 1. Não existe cobrança para este mês, OU
-      // 2. O PIX existente está expirado
-      const pixExpirado = cobrancaExistente?.pix && isPixExpired(cobrancaExistente.pix)
-      const deveGerar = !cobrancaExistente || pixExpirado
+    // ✅ VERIFICAR SE EXISTE COBRANÇA VÁLIDA (PIX não expirado)
+    let cobrancaExistente = cobrancas.get(novoMes)
 
-      if (deveGerar) {
-        logger.log(
-          pixExpirado
-            ? `PIX expirado detectado para mês ${novoMes}. Regenerando automaticamente...`
-            : `Nenhuma cobrança encontrada para mês ${novoMes}. Gerando automaticamente...`
-        )
-        await handleGerarCobranca(boleto)
+    // Se não existe localmente, tentar buscar no backend (sem gerar nova)
+    if (!cobrancaExistente) {
+      logger.log(`🔍 Verificando cobrança existente no backend para mês ${novoMes}...`)
+      try {
+        const response = await cobrancasService.getByAssociacao({
+          caixaId,
+          participanteId,
+          mes: novoMes
+        })
+
+        const cobrancaDB = response?.cobranca
+        if (cobrancaDB && cobrancaDB.lytexId) {
+          // Buscar detalhes completos da cobrança existente
+          const invoiceResp = await cobrancasService.buscar(cobrancaDB.lytexId, {
+            caixaId,
+            participanteId,
+            mes: novoMes
+          })
+
+          const invoice = invoiceResp?.cobranca || invoiceResp
+          if (invoice) {
+            const normalizada = normalizarCobranca(
+              invoice,
+              novoMes,
+              cobrancaDB.descricao || `Pagamento Mês ${novoMes}`
+            )
+
+            if (normalizada) {
+              setCobrancas(prev => new Map(prev).set(novoMes, normalizada))
+              cobrancaExistente = normalizada
+              logger.log(`✅ Cobrança existente encontrada no backend para mês ${novoMes}`)
+            }
+          }
+        }
+      } catch (error) {
+        logger.warn(`⚠️ Erro ao buscar cobrança no backend para mês ${novoMes}:`, error)
       }
     }
-  }, [expandedMes, caixa, cobrancas, isPixExpired, handleGerarCobranca, logger])
+
+    // ✅ VERIFICAR SE PIX AINDA É VÁLIDO (< 30 minutos)
+    const pixValido = cobrancaExistente?.pix && !isPixExpired(cobrancaExistente.pix)
+
+    if (cobrancaExistente && pixValido) {
+      // PIX ainda válido - não gerar nova cobrança
+      logger.log(`✅ PIX válido para mês ${novoMes} (< 30min). Reutilizando cobrança existente.`)
+      setPaymentTab('pix')
+      return
+    }
+
+    // ✅ GERAR NOVA COBRANÇA AUTOMATICAMENTE
+    // Só gera se não existe cobrança ou se PIX expirou
+    if (cobrancaExistente?.pix && isPixExpired(cobrancaExistente.pix)) {
+      logger.log(`⏰ PIX expirado para mês ${novoMes} (> 30min). Gerando nova cobrança...`)
+    } else {
+      logger.log(`🆕 Sem cobrança para mês ${novoMes}. Gerando automaticamente...`)
+    }
+
+    // Chamar handleGerarCobranca passando o boleto
+    handleGerarCobranca(boleto)
+  }, [expandedMes, caixa, caixaId, participanteId, cobrancas, isPixExpired, normalizarCobranca, logger, handleGerarCobranca])
 
   if (!participante) return null
 

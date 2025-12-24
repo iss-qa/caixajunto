@@ -289,6 +289,14 @@ export const cobrancasService = {
     const response = await api.get('/cobrancas/transactions', { params });
     return response.data;
   },
+  /**
+   * Sincroniza status de cobranças do banco local (sem chamar Lytex)
+   * Usado para verificar pagamentos sem gerar novas cobranças
+   */
+  syncStatus: async (caixaId: string) => {
+    const response = await api.get(`/cobrancas/sync-status/${caixaId}`);
+    return response.data;
+  },
 };
 
 // Bancos (Lytex - via backend)
@@ -351,6 +359,16 @@ export const subcontasService = {
   },
   checkByCpf: async (cpf: string) => {
     const response = await api.get(`/subcontas/check/${cpf}`);
+    return response.data;
+  },
+  // Atualiza credenciais Lytex de uma subconta por usuarioId
+  updateCredentials: async (usuarioId: string, data: { clientId?: string; clientSecret?: string; nomeCaixa?: string }) => {
+    const response = await api.patch(`/subcontas/usuario/${usuarioId}/credentials`, data);
+    return response.data;
+  },
+  // Obtém carteira do participante usando suas credenciais Lytex
+  getMyWallet: async () => {
+    const response = await api.get('/subcontas/me/wallet');
     return response.data;
   },
 };

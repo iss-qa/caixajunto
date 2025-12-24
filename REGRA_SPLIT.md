@@ -29,25 +29,27 @@ JSON
 2. Meses Intermediários (Cota + Taxa Fixa)
 Total da Transação: R$ 255,00 (250,00 + 5,00)
 
-Sistema: Recebe a Taxa Fixa = R$ 5,00 (1,96%)
+Sistema: Recebe a Taxa Fixa = R$ 10,00 
 
 Contemplado: Recebe a Cota = R$ 250,00 (98,04%)
 
 JSON
 
-[
+{
+  "type": "fixedValue",
+  "recipients": [
     {
-        "percentage": 1.96,
-        "description": "Taxa de Servico Fixa (5.00)",
-        "_recipientId": "693881d90b94786c6437a441"
+      "value": 1000,
+      "description": "Taxa de Serviço (R$ 10,00)",
+      "_recipientId": "693881d90b94786c6437a441"
     },
     {
-        "percentage": 98.04,
-        "description": "Participante Contemplado do Mes",
-        "_recipientId": "ID_DO_CONTEMPLADO_ATUAL"
+      "value": 100410,
+      "description": "Participante Contemplado: [NOME] - Cota R$ 1000.00 + IPCA R$ 4.10",
+      "_recipientId": "ID_DO_CONTEMPLADO_ATUAL"
     }
-]
-
+  ]
+}
 
 
 3. Último Mês (Cota + Bônus 10% + Taxa Fixa)

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Check, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
-import { caixasService, bancosService, participantesService, splitConfigService } from '../lib/api';
+import { ArrowLeft, Check, AlertCircle, CheckCircle, XCircle, Save, Loader2 } from 'lucide-react';
+import { caixasService, bancosService, participantesService, splitConfigService, subcontasService } from '../lib/api';
 import { formatCurrency } from '../lib/utils';
 import { useCaixaConfiguracao } from '../hooks/useCaixaConfiguracao';
 
@@ -71,6 +71,18 @@ interface ParticipanteOrdem {
   nome: string;
   subcontaId?: string;
   usuarioId?: any;
+  clientId?: string;
+  clientSecret?: string;
+}
+
+// Estado para credenciais de cada participante
+interface CredentialsMap {
+  [usuarioId: string]: {
+    clientId: string;
+    clientSecret: string;
+    saving?: boolean;
+    saved?: boolean;
+  };
 }
 
 const calcularValorComIPCA = (valorBase: number, meses: number): number => {
@@ -96,6 +108,8 @@ export default function SplitConfig() {
   const [participantesOrdem, setParticipantesOrdem] = useState<ParticipanteOrdem[]>([]);
   const [existingConfig, setExistingConfig] = useState<ExistingSplitConfig | null>(null);
   const [showTable, setShowTable] = useState(false);
+  const [credentials, setCredentials] = useState<CredentialsMap>({});
+  const [savingCredentials, setSavingCredentials] = useState<{ [key: string]: boolean }>({});
 
   const selectedCaixa = useMemo(() => caixas.find((c) => c._id === selectedCaixaId), [caixas, selectedCaixaId]);
 
@@ -328,6 +342,54 @@ export default function SplitConfig() {
 
   const comSubconta = participantesSubcontasStatus.filter(p => p.temSubconta).length;
 
+  // Handler para atualizar credenciais no estado local
+  const handleCredentialChange = (usuarioId: string, field: 'clientId' | 'clientSecret', value: string) => {
+    setCredentials(prev => ({
+      ...prev,
+      [usuarioId]: {
+        ...prev[usuarioId],
+        [field]: value,
+        saved: false,
+      }
+    }));
+  };
+
+  // Salvar credenciais no backend via onBlur
+  const handleSaveCredentials = async (usuarioId: string) => {
+    const creds = credentials[usuarioId];
+    if (!creds || (!creds.clientId && !creds.clientSecret)) return;
+
+    try {
+      setSavingCredentials(prev => ({ ...prev, [usuarioId]: true }));
+      console.log(`💾 Salvando credenciais para usuário ${usuarioId}:`, {
+        clientId: creds.clientId ? '***' : 'N/A',
+        clientSecret: creds.clientSecret ? '***' : 'N/A',
+        nomeCaixa: selectedCaixa?.nome,
+      });
+
+      await subcontasService.updateCredentials(usuarioId, {
+        clientId: creds.clientId,
+        clientSecret: creds.clientSecret,
+        nomeCaixa: selectedCaixa?.nome,
+      });
+
+      setCredentials(prev => ({
+        ...prev,
+        [usuarioId]: {
+          ...prev[usuarioId],
+          saved: true,
+        }
+      }));
+
+      console.log(`✅ Credenciais salvas para ${usuarioId}`);
+    } catch (error: any) {
+      console.error(`❌ Erro ao salvar credenciais para ${usuarioId}:`, error);
+      setConfigError(`Erro ao salvar credenciais: ${error.message}`);
+    } finally {
+      setSavingCredentials(prev => ({ ...prev, [usuarioId]: false }));
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -515,6 +577,12 @@ export default function SplitConfig() {
                       Status Subconta
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase">
+                      Client ID
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase">
+                      Client Secret
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase">
                       Data Prevista
                     </th>
                     <th className="px-4 py-3 text-right text-xs font-bold text-gray-600 uppercase">
@@ -568,6 +636,54 @@ export default function SplitConfig() {
                               Sem subconta
                             </span>
                           )}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="relative">
+                            <input
+                              type="text"
+                              placeholder="Client ID"
+                              value={credentials[usuarioIdReal]?.clientId || p.clientId || ''}
+                              onChange={(e) => handleCredentialChange(usuarioIdReal, 'clientId', e.target.value)}
+                              onBlur={() => handleSaveCredentials(usuarioIdReal)}
+                              disabled={!finalStatus?.temSubconta}
+                              className={`w-full px-2 py-1 text-xs border rounded ${!finalStatus?.temSubconta
+                                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                  : credentials[usuarioIdReal]?.saved
+                                    ? 'border-green-300 bg-green-50'
+                                    : 'border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500'
+                                }`}
+                            />
+                            {savingCredentials[usuarioIdReal] && (
+                              <Loader2 size={12} className="absolute right-2 top-1/2 -translate-y-1/2 animate-spin text-blue-500" />
+                            )}
+                            {credentials[usuarioIdReal]?.saved && !savingCredentials[usuarioIdReal] && (
+                              <CheckCircle size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-green-500" />
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="relative">
+                            <input
+                              type="password"
+                              placeholder="Client Secret"
+                              value={credentials[usuarioIdReal]?.clientSecret || p.clientSecret || ''}
+                              onChange={(e) => handleCredentialChange(usuarioIdReal, 'clientSecret', e.target.value)}
+                              onBlur={() => handleSaveCredentials(usuarioIdReal)}
+                              disabled={!finalStatus?.temSubconta}
+                              className={`w-full px-2 py-1 text-xs border rounded ${!finalStatus?.temSubconta
+                                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                  : credentials[usuarioIdReal]?.saved
+                                    ? 'border-green-300 bg-green-50'
+                                    : 'border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500'
+                                }`}
+                            />
+                            {savingCredentials[usuarioIdReal] && (
+                              <Loader2 size={12} className="absolute right-2 top-1/2 -translate-y-1/2 animate-spin text-blue-500" />
+                            )}
+                            {credentials[usuarioIdReal]?.saved && !savingCredentials[usuarioIdReal] && (
+                              <CheckCircle size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-green-500" />
+                            )}
+                          </div>
                         </td>
                         <td className="px-4 py-3 text-gray-700 text-sm">
                           {calcularDataPrevista(idx)}

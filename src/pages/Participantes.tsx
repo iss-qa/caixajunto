@@ -167,12 +167,40 @@ export function Participantes() {
     try {
       setLoading(true);
 
-      // Buscar todos os usuários do tipo 'usuario'
+      // 1️⃣ PRIMEIRO: Buscar caixas para mapear nomes e administradores
+      let caixasPorId: Record<string, CaixaResumo> = {};
+      try {
+        let respCaixas: any;
+        if (usuarioLogado?.tipo === 'master') {
+          respCaixas = await caixasService.getAll();
+        } else {
+          // Administrador: pega apenas seus caixas; fallback para getAll se necessário
+          try {
+            respCaixas = await caixasService.getByAdmin(usuarioLogado!._id);
+          } catch (e) {
+            respCaixas = await caixasService.getAll();
+          }
+        }
+        const listaCaixas = (Array.isArray(respCaixas) ? respCaixas : respCaixas.caixas || []) as CaixaResumo[];
+        // Expor caixas disponíveis para o combo (exclui em andamento)
+        setCaixas(listaCaixas.filter((c: any) => String(c.status || '') !== 'ativo'));
+        caixasPorId = listaCaixas.reduce((map: Record<string, CaixaResumo>, c: CaixaResumo) => {
+          if (c && c._id) {
+            map[c._id] = c;
+          }
+          return map;
+        }, {});
+        console.log('📦 Caixas carregados:', Object.keys(caixasPorId).length);
+      } catch (e) {
+        console.error('Erro ao carregar caixas para mapear administradores:', e);
+      }
+
+      // 2️⃣ Buscar todos os usuários do tipo 'usuario'
       const responseUsuarios = await usuariosService.getAll();
       const listaUsuarios = Array.isArray(responseUsuarios) ? responseUsuarios : responseUsuarios.usuarios || [];
       const usuarios = listaUsuarios.filter((u: any) => u.tipo === 'usuario');
 
-      // Buscar todos os participantes (vínculos)
+      // 3️⃣ Buscar todos os participantes (vínculos)
       const responseParticipantes = await participantesService.getAll();
       const listaParticipantes = Array.isArray(responseParticipantes) ? responseParticipantes : responseParticipantes.participantes || [];
 
@@ -182,7 +210,7 @@ export function Participantes() {
         console.log('📋 Primeiro participante:', JSON.stringify(listaParticipantes[0], null, 2));
       }
 
-      // Combinar usuários com seus caixas - SIMPLIFIED
+      // 4️⃣ Combinar usuários com seus caixas (agora caixasPorId está disponível!)
       const participantesComCaixa = usuarios.map((usuario: any) => {
         // Find vinculo for this usuario
         const vinculo = listaParticipantes.find((p: any) => {
@@ -209,18 +237,18 @@ export function Participantes() {
                 } else if (caixasPorId[caixaId]) {
                   const caixaInfo = caixasPorId[caixaId];
                   if (typeof caixaInfo.adminId === 'object') {
-                    adminNome = caixaInfo.adminId.nome || '';
+                    adminNome = (caixaInfo.adminId as any).nome || '';
                   }
                 }
               }
             } else {
-              // caixaId is just a string ID - look it up
+              // caixaId is just a string ID - look it up in caixasPorId
               caixaId = String(vinculo.caixaId);
               const caixaInfo = caixasPorId[caixaId];
               if (caixaInfo) {
                 caixaNome = caixaInfo.nome || '';
                 if (typeof caixaInfo.adminId === 'object') {
-                  adminNome = caixaInfo.adminId.nome || '';
+                  adminNome = (caixaInfo.adminId as any).nome || '';
                 }
               }
             }
@@ -240,33 +268,6 @@ export function Participantes() {
         console.log(`${p.nome}: ${p.caixaNome || '❌ SEM CAIXA'}`);
       });
       console.log('🔍 ===== FIM =====\n');
-
-      // Buscar caixas para mapear nomes e administradores
-      let caixasPorId: Record<string, CaixaResumo> = {};
-      try {
-        let respCaixas: any;
-        if (usuarioLogado?.tipo === 'master') {
-          respCaixas = await caixasService.getAll();
-        } else {
-          // Administrador: pega apenas seus caixas; fallback para getAll se necessário
-          try {
-            respCaixas = await caixasService.getByAdmin(usuarioLogado!._id);
-          } catch (e) {
-            respCaixas = await caixasService.getAll();
-          }
-        }
-        const listaCaixas = (Array.isArray(respCaixas) ? respCaixas : respCaixas.caixas || []) as CaixaResumo[];
-        // Expor caixas disponíveis para o combo (exclui em andamento)
-        setCaixas(listaCaixas.filter((c: any) => String(c.status || '') !== 'ativo'));
-        caixasPorId = listaCaixas.reduce((map: Record<string, CaixaResumo>, c: CaixaResumo) => {
-          if (c && c._id) {
-            map[c._id] = c;
-          }
-          return map;
-        }, {});
-      } catch (e) {
-        console.error('Erro ao carregar caixas para mapear administradores:', e);
-      }
 
 
       // Filter participants based on user type

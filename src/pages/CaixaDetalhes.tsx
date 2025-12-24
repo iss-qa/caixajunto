@@ -363,96 +363,46 @@ export function CaixaDetalhes() {
     }
   };
 
-  // Sincronização de pagamentos (Gateway Check) reaproveitando lógica do modal
-  const syncPaymentsForParticipantes = async (lista: Participante[]) => {
-    if (!id || !lista.length) return;
+  // ✅ NOVA FUNÇÃO: sincronizarStatusCobrancas
+  // Esta função busca APENAS do banco local (MongoDB) os status das cobranças existentes.
+  // NÃO chama a API do Lytex, então NÃO gera novas cobranças.
+  // Atualiza o localPaidByMes para refletir os pagamentos já realizados.
+  const sincronizarStatusCobrancas = async (listaParticipantes: Participante[]) => {
+    if (!id || !listaParticipantes.length) return;
 
-    const promises = lista.map(async (p) => {
-      try {
-        const response = await cobrancasService.getAllByAssociacao({
-          caixaId: id,
-          participanteId: p._id,
-        });
+    const statusPagos = ['pago', 'paid', 'liquidated', 'settled', 'aprovado', 'inqueue'];
 
-        const cobrancas = response?.cobrancas || [];
-        const cobrancasPorMes = new Map<number, any[]>();
+    try {
+      // Processar cada participante
+      await Promise.all(listaParticipantes.map(async (p) => {
+        try {
+          // Buscar cobranças existentes do banco LOCAL (não chama Lytex)
+          const response = await cobrancasService.getAllByAssociacao({
+            caixaId: id,
+            participanteId: p._id,
+          });
 
-        for (const c of cobrancas) {
-          const mes = c.mesReferencia;
-          if (!mes) continue;
-          if (!cobrancasPorMes.has(mes)) {
-            cobrancasPorMes.set(mes, []);
-          }
-          cobrancasPorMes.get(mes)!.push(c);
-        }
+          const cobrancas = response?.cobrancas || [];
 
-        const tarefasMes: Promise<void>[] = [];
+          // Atualizar localPaidByMes para cada cobrança paga
+          cobrancas.forEach((c: any) => {
+            const status = String(c.status || '').toLowerCase();
+            const mes = c.mesReferencia;
 
-        for (const [mes, candidatos] of cobrancasPorMes.entries()) {
-          const tarefa = (async () => {
-            try {
-              const resultados = await Promise.allSettled(
-                candidatos.map(async (c: any) => {
-                  if (!c.lytexId) {
-                    const statusLocal = String(c.status || '').toLowerCase();
-                    const pagos = ['pago', 'paid', 'liquidated', 'settled', 'aprovado', 'inqueue'];
-                    if (pagos.includes(statusLocal)) {
-                      markPaid(mes, p._id);
-                    }
-                    return null;
-                  }
-
-                  try {
-                    const [invoiceResp, detailResp] = await Promise.all([
-                      cobrancasService.buscar(c.lytexId, {
-                        caixaId: id,
-                        participanteId: p._id,
-                        mes,
-                      }),
-                      cobrancasService.paymentDetail(c.lytexId),
-                    ]);
-
-                    const invoice = invoiceResp?.cobranca || invoiceResp || {};
-                    const detail = detailResp?.paymentDetail || detailResp?.detail || detailResp || {};
-                    const localStatus = String(detailResp?.local?.status || '').toLowerCase();
-                    const statusList = [invoice?.status, detail?.status, localStatus]
-                      .map((s: unknown) => String(s || '').toLowerCase())
-                      .filter(Boolean);
-                    const pagos = ['paid', 'liquidated', 'settled', 'pago', 'inqueue', 'aprovado'];
-                    const paidAt =
-                      detail?.payedAt ||
-                      detail?.paidAt ||
-                      detail?.paid_at ||
-                      detailResp?.local?.data_pagamento;
-                    const isPago = Boolean(paidAt) || statusList.some((s) => pagos.includes(s));
-
-                    if (isPago) {
-                      markPaid(mes, p._id);
-                    }
-
-                    return null;
-                  } catch {
-                    return null;
-                  }
-                }),
-              );
-
-              void resultados;
-            } catch {
+            if (mes && statusPagos.includes(status)) {
+              markPaid(mes, p._id);
             }
-          })();
-
-          tarefasMes.push(tarefa);
+          });
+        } catch (err) {
+          // Silently ignore errors - não queremos bloquear a UI
+          console.debug(`Erro ao sincronizar status para participante ${p._id}:`, err);
         }
-
-        await Promise.allSettled(tarefasMes);
-      } catch (e) {
-        console.error(`Erro ao sincronizar pagamentos do participante ${p.usuarioId?.nome}:`, e);
-      }
-    });
-
-    await Promise.allSettled(promises);
+      }));
+    } catch (e) {
+      console.error('Erro ao sincronizar status de cobranças:', e);
+    }
   };
+
 
   // Função para calcular valor com IPCA aplicado
   const calcularValorComIPCA = (mes: number, valorBase: number): number => {
@@ -587,8 +537,9 @@ export function CaixaDetalhes() {
         setParticipantes(participantesValidos);
         saveParticipantes(participantesValidos);
 
-        // Sincronizar pagamentos assim que os participantes forem carregados
-        await syncPaymentsForParticipantes(participantesValidos);
+        // ✅ Sincronizar status de cobranças existentes (lê apenas do banco local)
+        // NÃO gera novas cobranças no Lytex - apenas atualiza localPaidByMes
+        await sincronizarStatusCobrancas(participantesValidos);
       } else {
         setParticipantes([]);
       }
@@ -1207,7 +1158,7 @@ export function CaixaDetalhes() {
       const correcaoIPCA = parcela > 1 ? valorParcelaReal * TAXA_IPCA_MENSAL : 0;
       const fundoReserva = parcela === 1 ? (valorParcelaReal / caixa.qtdParticipantes) : 0;
       const taxaAdmin = 0;
-      const comissaoAdmin = parcela === numParcelas ? caixa.valorTotal * 0.10 : 0;
+      const comissaoAdmin = parcela === numParcelas ? (caixa.valorTotal * 0.10) / caixa.qtdParticipantes : 0;
 
       const valorTotal = valorParcelaReal + TAXA_SERVICO + correcaoIPCA + fundoReserva + comissaoAdmin;
       const basePagamentos = selectedParticipante ? pagamentosParticipante : pagamentosMes;
@@ -2095,7 +2046,7 @@ export function CaixaDetalhes() {
                                   const base = caixa.valorParcela || (caixa.valorTotal / caixa.qtdParticipantes);
                                   const fundoReserva = referenciaMes === 1 ? (base / caixa.qtdParticipantes) : 0;
                                   const ipca = referenciaMes > 1 ? base * TAXA_IPCA_MENSAL : 0;
-                                  const comissaoAdmin = referenciaMes === (caixa.duracaoMeses || caixa.qtdParticipantes) ? caixa.valorTotal * 0.10 : 0;
+                                  const comissaoAdmin = referenciaMes === (caixa.duracaoMeses || caixa.qtdParticipantes) ? (caixa.valorTotal * 0.10) / caixa.qtdParticipantes : 0;
                                   const total = base + TAXA_SERVICO + fundoReserva + ipca + comissaoAdmin;
                                   return formatCurrency(isPago ? total : 0);
                                 })()}

@@ -274,7 +274,7 @@ export function Pagamentos() {
               ? (valorParcelaBase / (caixa.qtdParticipantes || 1))
               : 0;
             const comissaoAdmin = parcelaIndex === (caixa.duracaoMeses || caixa.qtdParticipantes || 1)
-              ? ((caixa.valorTotal ? caixa.valorTotal : valorParcelaBase * (caixa.qtdParticipantes || 1)) * 0.10)
+              ? ((caixa.valorTotal ? caixa.valorTotal : valorParcelaBase * (caixa.qtdParticipantes || 1)) * 0.10) / (caixa.qtdParticipantes || 1)
               : 0;
             const valorTotal = valorParcelaBase + taxaServico + correcaoIPCA + fundoReserva + comissaoAdmin;
 
