@@ -94,6 +94,7 @@ interface Caixa {
   fundoGarantidor: number;
   codigoConvite: string;
   dataInicio?: string;
+  dataVencimento?: string;
   adminId: {
     _id: string;
     nome: string;
@@ -311,7 +312,7 @@ export function CaixaDetalhes() {
 
     if (!caixa) return { isPago: false, isAtrasado: false, isVenceHoje: false };
 
-    const dataBase = new Date(caixa.dataInicio || new Date());
+    const dataBase = new Date(caixa.dataVencimento || caixa.dataInicio || new Date());
     const dataVencimento = new Date(dataBase);
 
     if (caixa.tipo === 'semanal') {
@@ -470,15 +471,27 @@ export function CaixaDetalhes() {
     try {
       const response = await caixasService.getById(id!);
       setCaixa(response);
-      const dataVenc = new Date();
-      if (response.diaVencimento) {
-        dataVenc.setDate(response.diaVencimento);
-        if (dataVenc <= new Date()) {
-          dataVenc.setMonth(dataVenc.getMonth() + 1);
-        }
+
+      // Usar dataVencimento salva, ou calcular uma nova se não existir
+      let dataVencFormatted: string;
+      if (response.dataVencimento) {
+        // Usar a data de vencimento salva
+        const dataVencSalva = new Date(response.dataVencimento);
+        dataVencFormatted = dataVencSalva.toISOString().split('T')[0];
       } else {
-        dataVenc.setDate(dataVenc.getDate() + 5);
+        // Calcular uma nova data de vencimento (fallback)
+        const dataVenc = new Date();
+        if (response.diaVencimento) {
+          dataVenc.setDate(response.diaVencimento);
+          if (dataVenc <= new Date()) {
+            dataVenc.setMonth(dataVenc.getMonth() + 1);
+          }
+        } else {
+          dataVenc.setDate(dataVenc.getDate() + 5);
+        }
+        dataVencFormatted = dataVenc.toISOString().split('T')[0];
       }
+
       setEditForm({
         nome: response.nome,
         descricao: response.descricao || '',
@@ -486,8 +499,9 @@ export function CaixaDetalhes() {
         valorTotal: response.valorTotal,
         qtdParticipantes: response.qtdParticipantes,
         duracaoMeses: response.duracaoMeses,
-        dataVencimento: dataVenc.toISOString().split('T')[0],
+        dataVencimento: dataVencFormatted,
       });
+
     } catch (error) {
       console.error('Erro ao carregar caixa:', error);
       // Mock data
@@ -711,7 +725,7 @@ export function CaixaDetalhes() {
     if (!caixa) return [];
 
     const cronograma = [];
-    const dataBase = caixa.dataInicio ? new Date(caixa.dataInicio) : new Date();
+    const dataBase = caixa.dataVencimento ? new Date(caixa.dataVencimento) : (caixa.dataInicio ? new Date(caixa.dataInicio) : new Date());
     const isSemanal = caixa.tipo === 'semanal';
 
     for (let i = 0; i < caixa.qtdParticipantes; i++) {
@@ -769,6 +783,7 @@ export function CaixaDetalhes() {
       const updateData = {
         ...editForm,
         diaVencimento: dataVenc.getDate(),
+        dataVencimento: editForm.dataVencimento,
         dataInicio: editForm.dataVencimento,
         valorParcela: editForm.valorTotal / editForm.qtdParticipantes,
       };
@@ -778,11 +793,13 @@ export function CaixaDetalhes() {
           ...caixa,
           ...editForm,
           diaVencimento: dataVenc.getDate(),
+          dataVencimento: editForm.dataVencimento,
           valorParcela: editForm.valorTotal / editForm.qtdParticipantes,
         });
       }
       loadCaixa();
       setShowEditCaixa(false);
+
     } catch (error) {
       console.error('Erro ao atualizar:', error);
       if (caixa) {
@@ -1135,7 +1152,7 @@ export function CaixaDetalhes() {
     const isSemanal = caixa.tipo === 'semanal';
 
     // Parse the date without timezone conversion issues
-    const dataInicioStr = caixa.dataInicio || new Date().toISOString();
+    const dataInicioStr = caixa.dataVencimento || caixa.dataInicio || new Date().toISOString();
     const parts = dataInicioStr.split('T')[0].split('-');
     const baseYear = parseInt(parts[0]);
     const baseMonth = parseInt(parts[1]) - 1; // JS months are 0-indexed

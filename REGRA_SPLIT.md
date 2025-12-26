@@ -13,7 +13,7 @@ JSON
     {
         "percentage": 21.26,
         "description": "Fundo de Reserva + Taxa de Servico",
-        "_recipientId": "693881d90b94786c6437a441"
+        "_recipientId": "693c5c508d48ed94888798a6"
     },
     {
         "percentage": 78.74,
@@ -41,7 +41,7 @@ JSON
     {
       "value": 1000,
       "description": "Taxa de Serviço (R$ 10,00)",
-      "_recipientId": "693881d90b94786c6437a441"
+      "_recipientId": "693c5c508d48ed94888798a6"
     },
     {
       "value": 100410,
@@ -67,7 +67,7 @@ JSON
     {
         "percentage": 1.41,
         "description": "Taxa de Servico Fixa (5.00)",
-        "_recipientId": "693881d90b94786c6437a441"
+        "_recipientId": "693c5c508d48ed94888798a6"
     },
     {
         "percentage": 28.17,

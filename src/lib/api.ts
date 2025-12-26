@@ -69,6 +69,10 @@ export const usuariosService = {
     const response = await api.get('/usuarios/estatisticas');
     return response.data;
   },
+  getAdministradores: async () => {
+    const response = await api.get('/usuarios/administradores');
+    return response.data;
+  },
 };
 
 // Caixas
@@ -361,6 +365,11 @@ export const subcontasService = {
     const response = await api.get(`/subcontas/check/${cpf}`);
     return response.data;
   },
+  // Busca subconta por usuarioId
+  getByUsuarioId: async (usuarioId: string) => {
+    const response = await api.get(`/subcontas/usuario/${usuarioId}`);
+    return response.data;
+  },
   // Atualiza credenciais Lytex de uma subconta por usuarioId
   updateCredentials: async (usuarioId: string, data: { clientId?: string; clientSecret?: string; nomeCaixa?: string }) => {
     const response = await api.patch(`/subcontas/usuario/${usuarioId}/credentials`, data);
@@ -413,6 +422,11 @@ export const splitConfigService = {
       fundoReservaSubId?: string;
       adminSubId?: string;
       participantesMesOrdem?: string[];
+      dadosBancarios?: {
+        banco: string;
+        agencia: string;
+        conta: string;
+      };
     },
   ) => {
     const response = await api.post(`/split-config/${caixaId}`, data);
@@ -425,6 +439,11 @@ export const splitConfigService = {
       fundoReservaSubId?: string;
       adminSubId?: string;
       participantesMesOrdem?: string[];
+      dadosBancarios?: {
+        banco: string;
+        agencia: string;
+        conta: string;
+      };
     },
   ) => {
     const response = await api.put(`/split-config/${id}`, data);
@@ -432,6 +451,10 @@ export const splitConfigService = {
   },
   delete: async (id: string) => {
     const response = await api.delete(`/split-config/${id}`);
+    return response.data;
+  },
+  migrateAll: async () => {
+    const response = await api.post('/split-config/migrate-all');
     return response.data;
   },
 };
