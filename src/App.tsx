@@ -17,6 +17,7 @@ import Carteira from './pages/Carteira';
 import CarteiraBanco from './pages/CarteiraBanco';
 import SplitConfig from './pages/SplitConfig';
 import GerenciarSplit from './pages/GerenciarSplit';
+import { GerenciarComunicacao } from './pages/GerenciarComunicacao';
 
 // Protected Route Component
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -112,6 +113,11 @@ function AppRoutes() {
         <Route path="/painel-master/split/gerenciar" element={
           <RoleRoute allow={["master"]}>
             <GerenciarSplit />
+          </RoleRoute>
+        } />
+        <Route path="/painel-master/comunicacao" element={
+          <RoleRoute allow={["master"]}>
+            <GerenciarComunicacao />
           </RoleRoute>
         } />
         <Route path="/perfil" element={<Perfil />} />

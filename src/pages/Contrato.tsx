@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { CheckCircle, FileText } from 'lucide-react';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
-import contratoMd from '../../CONTRATO.MD?raw';
+import contratoMd from '../../../docs/CONTRATO.MD?raw';
 
 export function Contrato() {
   const [aceitoEm, setAceitoEm] = useState<string | null>(null);

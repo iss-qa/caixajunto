@@ -466,4 +466,6 @@ export const transacoesService = {
   },
 };
 
+// Comunicação (Evolution API - WhatsApp)
+export { comunicacaoService } from './api/comunicacao.service';
 
