@@ -106,20 +106,30 @@ export function Caixas() {
           };
         });
 
-        // Fetch full caixa details for missing fields
+        // Fetch full caixa details for ALL caixas to get accurate participantesAtivos
         const caixasComDetalhes = await Promise.all(
           caixasList.map(async (c: Caixa) => {
             try {
-              if (!c.qtdParticipantes || !c.duracaoMeses) {
-                const fullCaixa = await caixasService.getById(c._id);
-                return {
-                  ...c,
-                  qtdParticipantes: fullCaixa.qtdParticipantes || 0,
-                  duracaoMeses: fullCaixa.duracaoMeses || 0,
-                  participantesAtivos: fullCaixa.participantesAtivos || c.participantesAtivos || 0,
-                };
+              const fullCaixa = await caixasService.getById(c._id);
+              let participantesAtivos = fullCaixa.participantesAtivos || 0;
+
+              // If participantesAtivos is 0, manually count by fetching participants
+              if (participantesAtivos === 0) {
+                try {
+                  const parts = await participantesService.getByCaixa(c._id);
+                  const partsList = Array.isArray(parts) ? parts : parts?.participantes || [];
+                  participantesAtivos = partsList.length;
+                } catch (err) {
+                  console.error(`Error counting participants for caixa ${c._id}:`, err);
+                }
               }
-              return c;
+
+              return {
+                ...c,
+                qtdParticipantes: fullCaixa.qtdParticipantes,
+                duracaoMeses: fullCaixa.duracaoMeses,
+                participantesAtivos,  // Use manually counted value
+              };
             } catch (error) {
               console.error(`Error fetching caixa ${c._id}:`, error);
               return c;
@@ -483,7 +493,9 @@ export function Caixas() {
                         </Badge>
                       ) : (
                         <Badge variant={getStatusBadge(caixa.status)} size="sm">
-                          {getStatusLabel(caixa.status)}
+                          {isCompleto && caixa.status === 'aguardando'
+                            ? 'Pronto para iniciar'
+                            : getStatusLabel(caixa.status)}
                         </Badge>
                       )}
                     </div>

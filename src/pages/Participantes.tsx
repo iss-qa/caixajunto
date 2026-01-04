@@ -17,8 +17,12 @@ import {
   CheckCircle2,
   MapPin,
   Home,
+  MoreVertical,
+  CheckCircle,
+  XCircle,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { fetchAddressByCEP, formatCEP } from '../utils/cep';
 import { usuariosService, participantesService, caixasService } from '../lib/api';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -45,6 +49,8 @@ interface Usuario {
   adminNome?: string;
   criadoPorId?: string;
   criadoPorNome?: string;
+  caixasConcluidos?: number;
+  ativo?: boolean;
   address?: {
     street?: string;
     zone?: string;
@@ -138,6 +144,8 @@ export function Participantes() {
   const [selectedParticipante, setSelectedParticipante] = useState<Usuario | null>(null);
   const [imagePreview, setImagePreview] = useState<string>('');
   const [caixas, setCaixas] = useState<CaixaResumo[]>([]);
+  const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
+  const [loadingCEP, setLoadingCEP] = useState(false);
   const [selectedCaixaId, setSelectedCaixaId] = useState('');
 
   const [formData, setFormData] = useState({
@@ -148,6 +156,10 @@ export function Participantes() {
     chavePix: '',
     picture: '',
     senha: '',
+    score: 70,
+    tipo: 'usuario' as 'usuario' | 'administrador' | 'master',
+    ativo: true,
+    caixasConcluidos: 0,
     address: {
       street: '',
       zone: '',
@@ -195,10 +207,11 @@ export function Participantes() {
         console.error('Erro ao carregar caixas para mapear administradores:', e);
       }
 
-      // 2️⃣ Buscar todos os usuários do tipo 'usuario'
+      // 2️⃣ Buscar todos os usuários (removido filtro de tipo para exibir todos)
       const responseUsuarios = await usuariosService.getAll();
       const listaUsuarios = Array.isArray(responseUsuarios) ? responseUsuarios : responseUsuarios.usuarios || [];
-      const usuarios = listaUsuarios.filter((u: any) => u.tipo === 'usuario');
+      // Exibir todos os usuários, não apenas tipo 'usuario'
+      const usuarios = listaUsuarios;
 
       // 3️⃣ Buscar todos os participantes (vínculos)
       const responseParticipantes = await participantesService.getAll();
@@ -388,6 +401,42 @@ export function Participantes() {
     setFormData({ ...formData, telefone: masked });
   };
 
+  // Handler para buscar endereço pelo CEP
+  const handleCEPLookup = async (cep: string) => {
+    const cleanCEP = cep.replace(/\D/g, '');
+
+    // Só busca se tiver 8 dígitos
+    if (cleanCEP.length !== 8) return;
+
+    try {
+      setLoadingCEP(true);
+      const addressData = await fetchAddressByCEP(cep);
+
+      if (addressData) {
+        setFormData({
+          ...formData,
+          address: {
+            ...formData.address,
+            street: addressData.street,
+            zone: addressData.zone,
+            city: addressData.city,
+            state: addressData.state,
+            zip: cep, // Mantém o CEP formatado
+          },
+        });
+      } else {
+        setErrorMessage('CEP não encontrado. Verifique o número digitado.');
+        setShowErrorModal(true);
+      }
+    } catch (error: any) {
+      console.error('Erro ao buscar CEP:', error);
+      setErrorMessage(error.message || 'Erro ao buscar CEP. Tente novamente.');
+      setShowErrorModal(true);
+    } finally {
+      setLoadingCEP(false);
+    }
+  };
+
   const handleAdd = async () => {
     if (!formData.nome || !formData.email || !formData.telefone) {
       setErrorMessage('Preencha todos os campos obrigatórios (nome, email e telefone)');
@@ -429,7 +478,8 @@ export function Participantes() {
         chavePix: formData.chavePix,
         picture: formData.picture,
         senha: formData.senha,
-        tipo: 'usuario',
+        // Note: tipo, score, ativo, and caixasConcluidos are set by backend defaults
+        // Backend will set: tipo='usuario', score=70, ativo=true, caixasConcluidos=0
         criadoPorId: usuarioLogado?._id || '',
         criadoPorNome: usuarioLogado?.nome || '',
         address: {
@@ -485,13 +535,53 @@ export function Participantes() {
     }
 
     try {
+      const zipDigits = formData.address.zip.replace(/\D/g, '');
       await usuariosService.update(selectedParticipante._id, {
-        ...formData,
-        cpf: cpfDigits,
+        nome: formData.nome,
+        email: formData.email,
         telefone: telefoneDigits,
+        cpf: cpfDigits,
+        chavePix: formData.chavePix,
+        picture: formData.picture,
+        score: formData.score,
+        tipo: formData.tipo,
+        ativo: formData.ativo,
+        caixasConcluidos: formData.caixasConcluidos,
+        address: {
+          street: formData.address.street,
+          zone: formData.address.zone,
+          city: formData.address.city,
+          state: formData.address.state,
+          number: formData.address.number,
+          complement: formData.address.complement,
+          zip: zipDigits,
+        },
         // Envia senha somente se informada
         ...(formData.senha ? { senha: formData.senha } : {}),
       });
+
+      // Handle caixa change if caixa was changed
+      const oldCaixaId = selectedParticipante.caixaId;
+      const newCaixaId = selectedCaixaId;
+
+      if (oldCaixaId !== newCaixaId) {
+        // If there's a new caixa, create or update the participant-caixa association
+        if (newCaixaId) {
+          try {
+            await participantesService.create({
+              caixaId: newCaixaId,
+              usuarioId: selectedParticipante._id,
+              aceite: true,
+              status: 'ativo',
+            });
+          } catch (error: any) {
+            // If creation fails, it might already exist, which is okay
+            console.log('Caixa association may already exist or was updated');
+          }
+        }
+        // Note: We don't delete old associations to preserve history
+      }
+
       await loadParticipantes();
       setShowEditModal(false);
       setSelectedParticipante(null);
@@ -529,11 +619,15 @@ export function Participantes() {
     setFormData({
       nome: participante.nome,
       email: participante.email,
-      telefone: participante.telefone,
-      cpf: participante.cpf || '',
+      telefone: maskPhone(participante.telefone),
+      cpf: participante.cpf ? maskCPF(participante.cpf) : '',
       chavePix: participante.chavePix || '',
       picture: participante.picture || '',
       senha: '',
+      score: participante.score || 70,
+      tipo: participante.tipo || 'usuario',
+      ativo: participante.ativo !== undefined ? participante.ativo : true,
+      caixasConcluidos: participante.caixasConcluidos || 0,
       address: {
         street: participante.address?.street || (participante as any).endereco || '',
         zone: participante.address?.zone || '',
@@ -541,10 +635,12 @@ export function Participantes() {
         state: participante.address?.state || (participante as any).estado || '',
         number: participante.address?.number || '',
         complement: participante.address?.complement || '',
-        zip: participante.address?.zip || (participante as any).cep || '',
+        zip: participante.address?.zip ? formatCEP(participante.address.zip) : (participante as any).cep ? formatCEP((participante as any).cep) : '',
       },
     });
     setImagePreview(participante.picture || '');
+    // Set the caixa ID if participant has one
+    setSelectedCaixaId(participante.caixaId || '');
     setShowEditModal(true);
   };
 
@@ -567,6 +663,10 @@ export function Participantes() {
       chavePix: '',
       picture: '',
       senha: '',
+      score: 70,
+      tipo: 'usuario',
+      ativo: true,
+      caixasConcluidos: 0,
       address: {
         street: '',
         zone: '',
@@ -719,29 +819,58 @@ export function Participantes() {
                       </td>
                     )}
 
+
                     <td className="py-3 px-4">
-                      <div className="flex items-center justify-end gap-2">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => openDetailModal(participante)}
+                      <div className="flex items-center justify-end gap-2 relative">
+                        <button
+                          onClick={() => setOpenDropdownId(openDropdownId === participante._id ? null : participante._id)}
+                          className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
                         >
-                          <Eye className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => openEditModal(participante)}
-                        >
-                          <Edit className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => openDeleteModal(participante)}
-                        >
-                          <Trash2 className="w-4 h-4 text-red-500" />
-                        </Button>
+                          <MoreVertical className="w-5 h-5 text-gray-600" />
+                        </button>
+
+                        {openDropdownId === participante._id && (
+                          <>
+                            {/* Backdrop to close dropdown */}
+                            <div
+                              className="fixed inset-0 z-10"
+                              onClick={() => setOpenDropdownId(null)}
+                            />
+                            {/* Dropdown menu */}
+                            <div className="absolute right-0 top-full mt-1 bg-white rounded-lg shadow-lg border border-gray-200 py-1 min-w-[200px] z-20">
+                              <button
+                                onClick={() => {
+                                  openDetailModal(participante);
+                                  setOpenDropdownId(null);
+                                }}
+                                className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                              >
+                                <Eye className="w-4 h-4" />
+                                Visualizar Detalhes
+                              </button>
+                              <button
+                                onClick={() => {
+                                  openEditModal(participante);
+                                  setOpenDropdownId(null);
+                                }}
+                                className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                              >
+                                <Edit className="w-4 h-4" />
+                                Editar Participante
+                              </button>
+                              <button
+                                onClick={() => {
+                                  openDeleteModal(participante);
+                                  setOpenDropdownId(null);
+                                }}
+                                className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                                Excluir Participante
+                              </button>
+                            </div>
+                          </>
+                        )}
                       </div>
                     </td>
                   </motion.tr>
@@ -864,17 +993,18 @@ export function Participantes() {
                   <Input
                     label="CEP"
                     placeholder="00000-000"
-                    leftIcon={<MapPin className="w-4 h-4" />}
+                    leftIcon={loadingCEP ? <div className="animate-spin w-4 h-4 border-2 border-green-500 border-t-transparent rounded-full" /> : <MapPin className="w-4 h-4" />}
                     value={formData.address.zip}
                     onChange={(e) => {
-                      const digits = e.target.value.replace(/\D/g, '').slice(0, 8);
-                      const masked = digits.replace(/(\d{5})(\d)/, '$1-$2');
+                      const formatted = formatCEP(e.target.value);
                       setFormData({
                         ...formData,
-                        address: { ...formData.address, zip: masked },
+                        address: { ...formData.address, zip: formatted },
                       });
                     }}
+                    onBlur={(e) => handleCEPLookup(e.target.value)}
                     maxLength={9}
+                    disabled={loadingCEP}
                   />
                 </div>
                 <div className="md:col-span-3">
@@ -1136,7 +1266,6 @@ export function Participantes() {
               value={formData.chavePix}
               onChange={(e) => setFormData({ ...formData, chavePix: e.target.value })}
             />
-            {/* Nota: Senha geralmente não é exibida na edição por segurança, mas o usuário pediu para manter os campos iguais. Podemos deixar vazio para não alterar ou permitir redefinir. */}
             <Input
               label="Nova Senha"
               type="password"
@@ -1144,6 +1273,92 @@ export function Participantes() {
               value={formData.senha}
               onChange={(e) => setFormData({ ...formData, senha: e.target.value })}
             />
+          </div>
+
+          {/* Campos Adicionais: SCORE, TIPO, STATUS, Caixas Concluídos */}
+          <div className="border-t border-gray-100 pt-5">
+            <h3 className="text-sm font-semibold text-gray-700 mb-4">Informações Adicionais</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Input
+                label="Score"
+                type="number"
+                placeholder="Score (0-100)"
+                value={formData.score}
+                onChange={(e) => {
+                  const value = Math.min(100, Math.max(0, Number(e.target.value)));
+                  setFormData({ ...formData, score: value });
+                }}
+                min={0}
+                max={100}
+              />
+
+              {usuarioLogado?.tipo === 'master' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Tipo de Usuário
+                  </label>
+                  <select
+                    className="w-full h-[42px] px-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 bg-white"
+                    value={formData.tipo}
+                    onChange={(e) => setFormData({ ...formData, tipo: e.target.value as any })}
+                  >
+                    <option value="usuario">Usuário</option>
+                    <option value="administrador">Administrador</option>
+                    <option value="master">Master</option>
+                  </select>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Status
+                </label>
+                <select
+                  className="w-full h-[42px] px-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 bg-white"
+                  value={formData.ativo ? 'true' : 'false'}
+                  onChange={(e) => setFormData({ ...formData, ativo: e.target.value === 'true' })}
+                >
+                  <option value="true">Ativo</option>
+                  <option value="false">Inativo</option>
+                </select>
+              </div>
+
+              <Input
+                label="Caixas Concluídos"
+                type="number"
+                placeholder="0"
+                value={formData.caixasConcluidos}
+                onChange={(e) => setFormData({ ...formData, caixasConcluidos: Number(e.target.value) })}
+                min={0}
+              />
+            </div>
+
+            {/* Caixa Selection */}
+            {(usuarioLogado?.tipo === 'master' || usuarioLogado?.tipo === 'administrador') && caixas.length > 0 && (
+              <div className="mt-4">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Caixa do Participante
+                </label>
+                <select
+                  className="w-full h-[42px] px-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 bg-white"
+                  value={selectedCaixaId}
+                  onChange={(e) => setSelectedCaixaId(e.target.value)}
+                >
+                  <option value="">Sem caixa</option>
+                  {caixas.map((c) => (
+                    <option key={c._id} value={c._id}>
+                      {c.nome}
+                      {c.adminId && typeof c.adminId === 'object' && c.adminId.nome
+                        ? ` • Admin: ${c.adminId.nome}`
+                        : ''}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-500 mt-1">
+                  Altere para mover o participante para outro caixa
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Seção de Endereço */}
@@ -1158,17 +1373,18 @@ export function Participantes() {
                   <Input
                     label="CEP"
                     placeholder="00000-000"
-                    leftIcon={<MapPin className="w-4 h-4" />}
+                    leftIcon={loadingCEP ? <div className="animate-spin w-4 h-4 border-2 border-green-500 border-t-transparent rounded-full" /> : <MapPin className="w-4 h-4" />}
                     value={formData.address.zip}
                     onChange={(e) => {
-                      const digits = e.target.value.replace(/\D/g, '').slice(0, 8);
-                      const masked = digits.replace(/(\d{5})(\d)/, '$1-$2');
+                      const formatted = formatCEP(e.target.value);
                       setFormData({
                         ...formData,
-                        address: { ...formData.address, zip: masked },
+                        address: { ...formData.address, zip: formatted },
                       });
                     }}
+                    onBlur={(e) => handleCEPLookup(e.target.value)}
                     maxLength={9}
+                    disabled={loadingCEP}
                   />
                 </div>
                 <div className="md:col-span-3">
@@ -1389,6 +1605,47 @@ export function Participantes() {
             </div>
 
             <div className="space-y-3 border-t border-gray-200 pt-4">
+              <div className="grid grid-cols-2 gap-4 mb-3">
+                <div className="bg-gray-50 p-3 rounded-lg">
+                  <p className="text-xs text-gray-500 mb-1">Tipo</p>
+                  <Badge
+                    variant={
+                      selectedParticipante.tipo === 'master' ? 'success' :
+                        selectedParticipante.tipo === 'administrador' ? 'info' : 'gray'
+                    }
+                    size="sm"
+                  >
+                    {selectedParticipante.tipo === 'master' ? 'Master' :
+                      selectedParticipante.tipo === 'administrador' ? 'Administrador' : 'Usuário'}
+                  </Badge>
+                </div>
+                <div className="bg-gray-50 p-3 rounded-lg">
+                  <p className="text-xs text-gray-500 mb-1">Status</p>
+                  <Badge
+                    variant={selectedParticipante.ativo ? 'success' : 'danger'}
+                    size="sm"
+                  >
+                    {selectedParticipante.ativo ? (
+                      <><CheckCircle className="w-3 h-3 mr-1" />Ativo</>
+                    ) : (
+                      <><XCircle className="w-3 h-3 mr-1" />Inativo</>
+                    )}
+                  </Badge>
+                </div>
+              </div>
+
+              <div className="bg-gray-50 p-3 rounded-lg">
+                <p className="text-xs text-gray-500 mb-1">Caixas Concluídos</p>
+                <p className="text-lg font-semibold text-gray-900">{selectedParticipante.caixasConcluidos || 0}</p>
+              </div>
+
+              {selectedParticipante.caixaNome && (
+                <div className="bg-green-50 p-3 rounded-lg">
+                  <p className="text-xs text-green-600 mb-1">Caixa Atual</p>
+                  <p className="text-sm font-semibold text-green-900">{selectedParticipante.caixaNome}</p>
+                </div>
+              )}
+
               <div className="flex items-center gap-3">
                 <Mail className="w-5 h-5 text-gray-400" />
                 <div>
@@ -1400,7 +1657,7 @@ export function Participantes() {
                 <Phone className="w-5 h-5 text-gray-400" />
                 <div>
                   <p className="text-xs text-gray-500">Telefone</p>
-                  <p className="text-sm font-medium text-gray-900">{selectedParticipante.telefone}</p>
+                  <p className="text-sm font-medium text-gray-900">{maskPhone(selectedParticipante.telefone)}</p>
                 </div>
               </div>
               {selectedParticipante.cpf && (
@@ -1408,7 +1665,7 @@ export function Participantes() {
                   <User className="w-5 h-5 text-gray-400" />
                   <div>
                     <p className="text-xs text-gray-500">CPF</p>
-                    <p className="text-sm font-medium text-gray-900">{selectedParticipante.cpf}</p>
+                    <p className="text-sm font-medium text-gray-900">{maskCPF(selectedParticipante.cpf)}</p>
                   </div>
                 </div>
               )}
@@ -1421,8 +1678,42 @@ export function Participantes() {
                   </div>
                 </div>
               )}
+
+              {/* Address Section */}
+              {(selectedParticipante.address?.street || selectedParticipante.address?.zip) && (
+                <div className="border-t border-gray-200 pt-4 mt-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Home className="w-5 h-5 text-gray-600" />
+                    <h4 className="text-sm font-semibold text-gray-700">Endereço</h4>
+                  </div>
+                  <div className="space-y-2 text-sm text-gray-600">
+                    {selectedParticipante.address?.street && (
+                      <p>
+                        <span className="font-medium">Rua:</span> {selectedParticipante.address.street}
+                        {selectedParticipante.address?.number && `, ${selectedParticipante.address.number}`}
+                      </p>
+                    )}
+                    {selectedParticipante.address?.complement && (
+                      <p><span className="font-medium">Complemento:</span> {selectedParticipante.address.complement}</p>
+                    )}
+                    {selectedParticipante.address?.zone && (
+                      <p><span className="font-medium">Bairro:</span> {selectedParticipante.address.zone}</p>
+                    )}
+                    {(selectedParticipante.address?.city || selectedParticipante.address?.state) && (
+                      <p>
+                        <span className="font-medium">Cidade/UF:</span>{' '}
+                        {selectedParticipante.address.city}, {selectedParticipante.address.state}
+                      </p>
+                    )}
+                    {selectedParticipante.address?.zip && (
+                      <p><span className="font-medium">CEP:</span> {formatCEP(selectedParticipante.address.zip)}</p>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {selectedParticipante.lytexClientId && (
-                <div className="flex items-center gap-3 bg-blue-50 p-3 rounded-lg">
+                <div className="flex items-center gap-3 bg-blue-50 p-3 rounded-lg mt-4">
                   <div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
                     <span className="text-white text-xs font-bold">L</span>
                   </div>

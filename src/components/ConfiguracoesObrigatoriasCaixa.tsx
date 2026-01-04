@@ -216,28 +216,80 @@ export function ConfiguracoesObrigatoriasCaixa({
                                     </li>
                                     <li className="flex items-start gap-2">
                                         <Shield className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
-                                        <span>Administrador gerencia e distribui os valores</span>
+                                        <span>Administrador deve gerenciar e cobrar pela adimplência dos participantes.</span>
                                     </li>
                                 </ul>
                             </div>
 
                             <div className="bg-white rounded-lg p-3 shadow-sm">
                                 <p className="font-semibold text-gray-900 mb-2">💰 Composição da Parcela:</p>
-                                <ul className="space-y-2">
-                                    <li className="pl-3 border-l-2 border-green-400">
-                                        <span className="font-medium text-green-700">1ª Parcela:</span>{' '}
-                                        {formatCurrency(caixa.valorTotal / caixa.qtdParticipantes)} + R$ 5,00 (serviço) +
-                                        R$ 50,00 (fundo reserva) + R$ 50,00 (taxa administrativa)
-                                    </li>
-                                    <li className="pl-3 border-l-2 border-blue-400">
-                                        <span className="font-medium text-blue-700">Parcelas 2-{caixa.duracaoMeses - 1}:</span>{' '}
-                                        {formatCurrency(caixa.valorTotal / caixa.qtdParticipantes)} + R$ 5,00 (serviço) + IPCA
-                                    </li>
-                                    <li className="pl-3 border-l-2 border-purple-400">
-                                        <span className="font-medium text-purple-700">Última Parcela:</span>{' '}
-                                        {formatCurrency(caixa.valorTotal / caixa.qtdParticipantes)} + R$ 5,00 (serviço) +
-                                        IPCA + R$ 400,00 (comissão admin)
-                                    </li>
+                                <ul className="space-y-3">
+                                    {(() => {
+                                        const valorParcela = caixa.valorTotal / caixa.qtdParticipantes;
+                                        const taxaServico = 10; // R$ 10,00 fixa
+                                        const fundoReserva = valorParcela / caixa.qtdParticipantes;
+                                        const comissaoAdmin = (caixa.valorTotal * 0.10) / caixa.qtdParticipantes;
+                                        const taxaIPCA = 0.004; // 0.4% ao mês
+
+                                        // 1ª Parcela
+                                        const primeira = valorParcela + taxaServico + fundoReserva;
+
+                                        return (
+                                            <>
+                                                <li className="pl-3 border-l-4 border-green-500 bg-green-50 p-3 rounded-r-lg">
+                                                    <div className="space-y-1">
+                                                        <div className="flex items-baseline gap-2">
+                                                            <span className="font-bold text-green-700">1ª Parcela:</span>
+                                                            <span className="text-lg font-bold text-green-800">
+                                                                {formatCurrency(primeira)}
+                                                            </span>
+                                                        </div>
+                                                        <div className="text-xs text-gray-600 space-y-0.5 ml-2">
+                                                            <div>• {formatCurrency(valorParcela)} - valor da parcela</div>
+                                                            <div>• {formatCurrency(taxaServico)} - taxa operacional de serviço</div>
+                                                            <div>• {formatCurrency(fundoReserva)} - fundo de reserva (somente 1ª parcela)</div>
+                                                        </div>
+                                                    </div>
+                                                </li>
+
+                                                {caixa.duracaoMeses > 2 && (
+                                                    <li className="pl-3 border-l-4 border-blue-500 bg-blue-50 p-3 rounded-r-lg">
+                                                        <div className="space-y-1">
+                                                            <div className="flex items-baseline gap-2">
+                                                                <span className="font-bold text-blue-700">
+                                                                    Parcelas 2-{caixa.duracaoMeses - 1}:
+                                                                </span>
+                                                                <span className="text-sm text-blue-700">
+                                                                    (intermediárias)
+                                                                </span>
+                                                            </div>
+                                                            <div className="text-xs text-gray-600 space-y-0.5 ml-2">
+                                                                <div>• {formatCurrency(valorParcela)} - valor da parcela base</div>
+                                                                <div>• {formatCurrency(taxaServico)} - taxa operacional de serviço</div>
+                                                                <div>• IPCA sobre o valor da parcela ({(taxaIPCA * 100).toFixed(1)}% ao mês)</div>
+                                                            </div>
+                                                        </div>
+                                                    </li>
+                                                )}
+
+                                                <li className="pl-3 border-l-4 border-purple-500 bg-purple-50 p-3 rounded-r-lg">
+                                                    <div className="space-y-1">
+                                                        <div className="flex items-baseline gap-2">
+                                                            <span className="font-bold text-purple-700">
+                                                                Última Parcela ({caixa.duracaoMeses}ª):
+                                                            </span>
+                                                        </div>
+                                                        <div className="text-xs text-gray-600 space-y-0.5 ml-2">
+                                                            <div>• {formatCurrency(valorParcela)} - valor da parcela base</div>
+                                                            <div>• {formatCurrency(taxaServico)} - taxa operacional de serviço</div>
+                                                            <div>• IPCA sobre o valor da parcela ({(taxaIPCA * 100).toFixed(1)}% ao mês)</div>
+                                                            <div>• {formatCurrency(comissaoAdmin)} - comissão organizador (10% do caixa ÷ {caixa.qtdParticipantes})</div>
+                                                        </div>
+                                                    </div>
+                                                </li>
+                                            </>
+                                        );
+                                    })()}
                                 </ul>
                             </div>
                         </div>

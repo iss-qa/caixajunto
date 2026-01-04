@@ -459,3 +459,11 @@ export const splitConfigService = {
   },
 };
 
+export const transacoesService = {
+  getDetalhadas: async () => {
+    const response = await api.get('/split-history/transacoes-detalhadas');
+    return response.data;
+  },
+};
+
+

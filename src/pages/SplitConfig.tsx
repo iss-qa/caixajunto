@@ -248,6 +248,27 @@ export default function SplitConfig() {
         const resp = await bancosService.getAccounts();
         const account = getFirstLytexAccount(resp);
         setPjPrincipalInfo(account);
+
+        // Auto-preencher dados bancários da empresa principal
+        if (account?.bank?.code && account?.agency?.number && account?.account?.number) {
+          const bankName = account.bank.name || '';
+          const bankCode = account.bank.code || '';
+          const agencyNumber = account.agency.number || '';
+          const accountNumber = account.account.number || '';
+          const accountDv = account.account.dv || '';
+
+          setDadosBancarios({
+            banco: `${bankCode}${bankName ? ' - ' + bankName : ''}`,
+            agencia: agencyNumber,
+            conta: `${accountNumber}${accountDv ? '-' + accountDv : ''}`,
+          });
+
+          console.log('✅ Dados bancários preenchidos automaticamente:', {
+            banco: `${bankCode} - ${bankName}`,
+            agencia: agencyNumber,
+            conta: `${accountNumber}-${accountDv}`,
+          });
+        }
       } catch {
         void 0;
       }
@@ -683,11 +704,48 @@ export default function SplitConfig() {
               </label>
               <select
                 value={selectedAdminUserId}
-                onChange={(e) => {
-                  setSelectedAdminUserId(e.target.value);
+                onChange={async (e) => {
+                  const adminId = e.target.value;
+                  setSelectedAdminUserId(adminId);
                   setAdminLytexId('');
                   setAdminInfo(null);
                   setAdminCredentials({ clientId: '', clientSecret: '' });
+
+                  // Auto-carregar lytexId do administrador selecionado
+                  if (adminId) {
+                    try {
+                      console.log('🔍 Buscando subconta do administrador:', adminId);
+                      const subcontaResp = await subcontasService.getByUsuarioId(adminId);
+                      const subcontaRec = asRecord(subcontaResp);
+
+                      if (subcontaRec.success && subcontaRec.subconta) {
+                        const subconta = asRecord(subcontaRec.subconta);
+                        const lytexId = toStringSafe(subconta.lytexId);
+                        const clientId = toStringSafe(subconta.clientId);
+                        const clientSecret = toStringSafe(subconta.clientSecret);
+
+                        console.log('✅ Subconta encontrada:', { lytexId, clientId: clientId ? '***' : 'N/A' });
+
+                        if (lytexId) {
+                          setAdminLytexId(lytexId);
+                          setAdminSubId(lytexId);
+
+                          // Carregar informações do admin
+                          await handleFetchAdminInfo(lytexId);
+                        }
+
+                        // Preencher credenciais se existirem
+                        if (clientId || clientSecret) {
+                          setAdminCredentials({
+                            clientId: clientId,
+                            clientSecret: clientSecret === '***' ? '' : clientSecret,
+                          });
+                        }
+                      }
+                    } catch (error: any) {
+                      console.error('❌ Erro ao buscar subconta do administrador:', error);
+                    }
+                  }
                 }}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm"
               >

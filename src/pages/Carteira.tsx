@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import { Wallet, TrendingUp, Download, Plus, Eye, EyeOff, Building2, Check, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { carteiraService, cobrancasService, caixasService, pagamentosService, subcontasService, bancosService } from '../lib/api';
 import { formatCurrency, formatDate } from '../lib/utils';
+import { TransacoesDetalhadas } from './Carteira/components/TransacoesDetalhadas';
 
 type StatusTransacaoCarteira = 'em_dia' | 'atrasado';
 type TipoTransacaoCarteira = 'entrada' | 'saida';
@@ -89,6 +91,8 @@ const WalletDashboard = () => {
   );
   const [creatingSubAccount, setCreatingSubAccount] = useState(false);
   const [subAccountError, setSubAccountError] = useState<string | null>(null);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
   const [recentTransactions, setRecentTransactions] = useState<TransacaoRecenteCarteira[]>([]);
   const [transactionsLoading, setTransactionsLoading] = useState(false);
   const [transactionsError, setTransactionsError] = useState<string | null>(null);
@@ -246,7 +250,7 @@ const WalletDashboard = () => {
             console.log('ℹ️ Usuário não é master, não usando fallback para carteira geral');
 
             if (errorCode === 'CREDENTIALS_NOT_CONFIGURED') {
-              setWalletError('Subconta existe, mas credenciais API (clientId/clientSecret) não configuradas. Veja aba "Dados da Conta".');
+              setWalletError('Subconta existe, mas credenciais API (clientId/clientSecret) não configuradas. Solicite ao Administrador a configuração do seu clientID e clientSecret. Veja aba "Dados da Conta".');
             } else if (errorCode === 'SUBCONTA_NOT_FOUND') {
               setWalletError('Subconta não encontrada. Crie sua subconta primeiro.');
             } else if (errorCode === 'LYTEX_AUTH_FAILED') {
@@ -730,14 +734,20 @@ const WalletDashboard = () => {
           '[Carteira] Subconta criada com sucesso, id:',
           subAccountId,
         );
-        alert('Subconta criada com sucesso');
+        setSuccessMessage('Subconta criada com sucesso! ✅');
+        setShowSuccessModal(true);
+        setTimeout(() => {
+          setShowSuccessModal(false);
+          window.location.reload();
+        }, 2000);
         return;
       }
       console.warn(
         '[Carteira] Chamada de criação de subconta não retornou ID',
         resp,
       );
-      alert('Não foi possível obter o ID da subconta criada');
+      setSubAccountError('Não foi possível obter o ID da subconta criada');
+      setTimeout(() => setSubAccountError(null), 5000);
     } catch (e: any) {
       const status = e?.response?.status;
       const data = e?.response?.data;
@@ -800,7 +810,7 @@ const WalletDashboard = () => {
       }
 
       setSubAccountError(message);
-      alert(`Erro ao criar subconta: ${message}`);
+      setTimeout(() => setSubAccountError(null), 5000);
     } finally {
       setCreatingSubAccount(false);
     }
@@ -1356,6 +1366,11 @@ const WalletDashboard = () => {
                 </div>
               </div>
             )}
+        </div>
+
+        {/* Transações Detalhadas */}
+        <div className="mt-6">
+          <TransacoesDetalhadas />
         </div>
       </div>
     );
@@ -2070,6 +2085,59 @@ const WalletDashboard = () => {
         {activeTab === 'overview' && <OverviewTab />}
         {activeTab === 'account' && <AccountTab />}
       </div>
+
+      {/* Success Modal */}
+      {showSuccessModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl"
+          >
+            <div className="text-center">
+              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <h3 className="text-xl font-bold text-gray-900 mb-2">Sucesso!</h3>
+              <p className="text-gray-600">{successMessage}</p>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Error Toast (if needed) */}
+      {subAccountError && (
+        <div className="fixed bottom-6 right-6 z-50">
+          <motion.div
+            initial={{ x: 100, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: 100, opacity: 0 }}
+            className="bg-red-50 border-l-4 border-red-500 rounded-lg shadow-lg p-4 max-w-md"
+          >
+            <div className="flex items-start gap-3">
+              <div className="flex-shrink-0">
+                <svg className="w-5 h-5 text-red-600" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="flex-1">
+                <h3 className="text-sm font-medium text-red-800">Erro ao criar subconta</h3>
+                <p className="mt-1 text-sm text-red-700">{subAccountError}</p>
+              </div>
+              <button
+                onClick={() => setSubAccountError(null)}
+                className="flex-shrink-0 text-red-400 hover:text-red-600"
+              >
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 };
