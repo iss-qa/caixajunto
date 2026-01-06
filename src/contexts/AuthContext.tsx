@@ -36,7 +36,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const storedUsuario = localStorage.getItem('usuario');
     const storedToken = localStorage.getItem('token');
-    
+
     if (storedUsuario && storedToken) {
       setUsuario(JSON.parse(storedUsuario));
     }
@@ -52,9 +52,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const register = async (data: any) => {
     const response = await authService.register(data);
-    localStorage.setItem('token', response.accessToken);
-    localStorage.setItem('usuario', JSON.stringify(response.usuario));
-    setUsuario(response.usuario);
+
+    // Só salva token e faz login se o token não estiver vazio
+    // Administradores recebem token vazio e não devem fazer login automático
+    if (response.accessToken && response.accessToken.trim() !== '') {
+      localStorage.setItem('token', response.accessToken);
+      localStorage.setItem('usuario', JSON.stringify(response.usuario));
+      setUsuario(response.usuario);
+    }
+    // Se token vazio, não salva nada (administrador pendente de aprovação)
   };
 
   const logout = () => {

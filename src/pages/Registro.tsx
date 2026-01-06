@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Users, Mail, Lock, Eye, EyeOff, Phone, User, ArrowRight, CheckCircle } from 'lucide-react';
+import { Users, Mail, Lock, Eye, EyeOff, Phone, User, ArrowRight, CheckCircle, AlertCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Card } from '../components/ui/Card';
 import { cn } from '../lib/utils';
+import { formatPhone, unformatPhone } from '../lib/phoneMask';
 
 export function Registro() {
   const navigate = useNavigate();
@@ -33,8 +34,24 @@ export function Registro() {
 
     try {
       setLoading(true);
-      await register(form);
-      navigate('/dashboard');
+      // Remove máscara do telefone antes de enviar
+      const formData = {
+        ...form,
+        telefone: unformatPhone(form.telefone),
+      };
+      await register(formData);
+
+      // Administradores vão para login (precisam de aprovação)
+      // Participantes vão direto para dashboard
+      if (form.tipo === 'administrador') {
+        navigate('/login', {
+          state: {
+            message: 'Conta criada com sucesso! Aguarde a aprovação do administrador master para fazer login.'
+          }
+        });
+      } else {
+        navigate('/dashboard');
+      }
     } catch (err: any) {
       setError(err.response?.data?.message || 'Erro ao criar conta');
     } finally {
@@ -139,8 +156,9 @@ export function Registro() {
               label="Telefone (WhatsApp)"
               placeholder="(11) 99999-9999"
               value={form.telefone}
-              onChange={(e) => setForm({ ...form, telefone: e.target.value })}
+              onChange={(e) => setForm({ ...form, telefone: formatPhone(e.target.value) })}
               leftIcon={<Phone className="w-4 h-4" />}
+              maxLength={15}
             />
 
             <Input
@@ -171,6 +189,19 @@ export function Registro() {
               </motion.div>
             )}
 
+            {form.tipo === 'administrador' && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="p-3 bg-blue-50 text-blue-700 text-sm rounded-xl flex items-start gap-2"
+              >
+                <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                <p>
+                  Seu cadastro será analisado pelo administrador master antes de você poder acessar a plataforma.
+                </p>
+              </motion.div>
+            )}
+
             <div className="flex items-start gap-2">
               <input
                 type="checkbox"
@@ -180,13 +211,23 @@ export function Registro() {
               />
               <label htmlFor="termos" className="text-sm text-gray-600">
                 Concordo com os{' '}
-                <Link to="/termos" className="text-primary-600 hover:underline">
+                <a
+                  href="https://drive.google.com/file/d/1k-uURKA1B1ZUBpDTw1Hd483w8yIwGMQK/view?usp=sharing"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary-600 hover:underline"
+                >
                   Termos de Uso
-                </Link>{' '}
+                </a>{' '}
                 e{' '}
-                <Link to="/privacidade" className="text-primary-600 hover:underline">
-                  Política de Privacidade
-                </Link>
+                <a
+                  href="https://drive.google.com/file/d/1WUZXJ4b6QgOiDSyBIy6LChHJAOiTYGX5/view?usp=sharing"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary-600 hover:underline"
+                >
+                  Contrato
+                </a>
               </label>
             </div>
 

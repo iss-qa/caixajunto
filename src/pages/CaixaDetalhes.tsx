@@ -571,6 +571,36 @@ export function CaixaDetalhes() {
     }
   };
 
+  const handleShareWhatsApp = () => {
+    if (!caixa) return;
+
+    const adminNome = caixa.adminId?.nome || 'Administrador';
+    const caixaNome = caixa.nome;
+    const valorTotal = formatCurrency(caixa.valorTotal);
+    const valorParcela = formatCurrency(caixa.valorTotal / caixa.qtdParticipantes);
+    const dataInicio = getPrimeiraParcelaData();
+    const tipoParcela = caixa.tipo === 'semanal' ? 'semanais' : 'mensais';
+
+    const mensagem = `🎉 *Convite para Caixa Juntix*
+
+Você foi convidado por *${adminNome}* para participar do caixa *${caixaNome}*!
+
+💰 *Valor total:* ${valorTotal}
+📅 *Parcelas:* ${caixa.qtdParticipantes}x de ${valorParcela} (${tipoParcela})
+🗓️ *Início previsto:* ${dataInicio}
+
+🔑 *Código de convite:* ${caixa.codigoConvite}
+
+Quer saber mais? Acesse: https://juntix.com.br/
+Ou fale diretamente com o administrador!
+
+✨ *Bem-vindo ao Juntix!*
+_Junte seus amigos e realize seus sonhos_`;
+
+    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(mensagem)}`;
+    window.open(whatsappUrl, '_blank');
+  };
+
   const handleSortear = async () => {
     if (!caixa || participantes.length === 0) return;
     if (participantes.length < caixa.qtdParticipantes) {
@@ -1581,7 +1611,7 @@ export function CaixaDetalhes() {
               >
                 {copied ? 'Copiado!' : 'Copiar'}
               </Button>
-              <Button variant="ghost" size="sm" leftIcon={<Share2 className="w-4 h-4" />}>
+              <Button variant="ghost" size="sm" leftIcon={<Share2 className="w-4 h-4" />} onClick={handleShareWhatsApp}>
                 Compartilhar
               </Button>
             </div>

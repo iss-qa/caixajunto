@@ -19,6 +19,7 @@ import {
   AlertTriangle,
   XCircle,
   MessageSquare,
+  UserCheck,
 } from 'lucide-react';
 import { dashboardService, usuariosService, caixasService } from '../lib/api';
 import { Card } from '../components/ui/Card';
@@ -325,6 +326,20 @@ export function PainelMaster() {
           <p className="text-xs text-gray-500">Histórico de disparos e automações</p>
           <div className="mt-3">
             <Button onClick={() => (window.location.href = '/painel-master/comunicacao')}>Abrir</Button>
+          </div>
+        </Card>
+
+        {/* Gerenciar Administradores */}
+        <Card className="bg-gradient-to-br from-cyan-50 to-cyan-100/50 border-cyan-200/50">
+          <div className="flex items-center justify-between mb-2">
+            <div className="w-10 h-10 bg-cyan-500 rounded-xl flex items-center justify-center">
+              <UserCheck className="w-5 h-5 text-white" />
+            </div>
+          </div>
+          <p className="text-base font-semibold text-gray-900 mb-1">Gerenciar Administradores</p>
+          <p className="text-xs text-gray-500">Aprovar ou recusar novos administradores</p>
+          <div className="mt-3">
+            <Button onClick={() => (window.location.href = '/painel-master/administradores')}>Abrir</Button>
           </div>
         </Card>
       </motion.div>

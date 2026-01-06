@@ -360,105 +360,335 @@ export function ConfiguracoesObrigatoriasCaixa({
                 size="xl"
             >
                 <div className="space-y-4">
-                    {/* Scrollable content */}
-                    <div className="max-h-[60vh] overflow-y-auto pr-2 text-sm text-gray-700 leading-relaxed">
-                        <div className="space-y-4">
-                            <p className="text-xs text-gray-500">Última atualização: Dezembro de 2024</p>
+                    {/* Header with download button */}
+                    <div className="bg-gradient-to-r from-green-600 to-emerald-600 -mx-5 -mt-5 px-5 py-4 mb-4">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm">
+                                    <FileText className="w-6 h-6 text-white" />
+                                </div>
+                                <div>
+                                    <h3 className="text-xl font-bold text-white">Termos de Uso - Juntix</h3>
+                                    <p className="text-sm text-green-100">Plataforma Tecnológica de Gestão de Caixas Coletivos</p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => {
+                                    const element = document.getElementById('terms-content');
+                                    if (element) {
+                                        const printWindow = window.open('', '_blank');
+                                        if (!printWindow) return;
 
-                            <div>
-                                <h2 className="text-lg font-bold text-gray-900 mb-2">1. DEFINIÇÕES E NATUREZA DO SERVIÇO</h2>
-                                <p className="mb-2"><strong>1.1.</strong> A plataforma <strong>[NOME DO APP]</strong> é um sistema de tecnologia que facilita a organização e gestão de grupos de poupança coletiva informal ("Caixinhas") entre pessoas físicas previamente conhecidas.</p>
+                                        const htmlContent = `
+                                            <!DOCTYPE html>
+                                            <html>
+                                                <head>
+                                                    <title>Termos de Uso - Juntix</title>
+                                                    <style>
+                                                        body { font-family: Arial, sans-serif; margin: 40px; line-height: 1.6; color: #333; }
+                                                        h2 { color: #059669; font-size: 18px; margin-top: 25px; }
+                                                        p, li { font-size: 13px; }
+                                                        .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #10b981; padding-bottom: 15px; }
+                                                        .highlight { background-color: #d1fae5; padding: 15px; border-radius: 8px; margin: 15px 0; border-left: 4px solid #10b981; }
+                                                        ul { margin: 10px 0; padding-left: 25px; }
+                                                        .footer { margin-top: 40px; padding-top: 20px; border-top: 2px solid #e5e7eb; font-size: 11px; color: #6b7280; text-align: center; }
+                                                        
+                                                        /* Fix SVG sizes for print */
+                                                        svg { max-width: 16px !important; max-height: 16px !important; width: 16px !important; height: 16px !important; display: inline-block !important; vertical-align: middle !important; }
+                                                        
+                                                        /* Hide decorative number badges */
+                                                        h2 span { display: none !important; }
+                                                        
+                                                        /* Better spacing for lists */
+                                                        .flex { display: block !important; }
+                                                        .flex svg { margin-right: 8px; }
+                                                        
+                                                        /* Simplify backgrounds for print */
+                                                        .bg-white, .bg-green-50, .bg-blue-50, .bg-purple-50, .bg-amber-50, .bg-indigo-50, .bg-red-50, .bg-orange-50, .bg-teal-50 {
+                                                            background: transparent !important;
+                                                            border: 1px solid #e5e7eb !important;
+                                                            page-break-inside: avoid;
+                                                        }
+                                                        
+                                                        .rounded-xl, .rounded-lg { border-radius: 4px !important; }
+                                                        
+                                                        /* Ensure readability */
+                                                        .shadow-sm { box-shadow: none !important; }
+                                                    </style>
+                                                </head>
+                                                <body>
+                                                    <div class="header">
+                                                        <h1 style="color: #10b981; margin: 0;">JUNTIX</h1>
+                                                        <p style="margin: 5px 0; color: #6b7280;">Plataforma Tecnológica de Gestão de Caixas Coletivos</p>
+                                                        <p style="font-weight: bold; margin: 10px 0; font-size: 16px;">Termos de Uso e Condições Gerais</p>
+                                                    </div>
+                                                    ${element.innerHTML}
+                                                    <div class="footer">
+                                                        <p>Este documento foi impresso em ${new Date().toLocaleDateString('pt-BR')}</p>
+                                                        <p>JUNTIX - Plataforma Tecnológica | www.juntix.com.br</p>
+                                                    </div>
+                                                    <script>
+                                                        window.onload = function() {
+                                                            window.print();
+                                                            window.onafterprint = function() {
+                                                                window.close();
+                                                            }
+                                                        }
+                                                    </script>
+                                                </body>
+                                            </html>
+                                        `;
+
+                                        printWindow.document.write(htmlContent);
+                                        printWindow.document.close();
+                                    }
+                                }}
+                                className="flex items-center gap-2 bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg transition-colors backdrop-blur-sm text-white font-medium"
+                            >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                                <span className="hidden sm:inline">Baixar PDF</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Scrollable content */}
+                    <div id="terms-content" className="max-h-[60vh] overflow-y-auto pr-2 text-sm text-gray-700 leading-relaxed">
+                        <div className="space-y-5">
+                            <div className="bg-green-50 border-l-4 border-green-500 p-4 rounded-r-lg">
+                                <p className="text-xs text-gray-600 font-semibold mb-2">Última atualização: Fevereiro de 2026</p>
+                                <p className="text-sm text-green-900">
+                                    Bem-vindo ao <strong>JUNTIX</strong>, uma plataforma tecnológica moderna que facilita a organização
+                                    e gestão de grupos de poupança coletiva informal entre amigos, familiares e conhecidos.
+                                </p>
+                            </div>
+
+                            <div className="bg-white rounded-xl p-5 border border-gray-200 shadow-sm">
+                                <h2 className="text-lg font-bold text-gray-900 mb-3 flex items-center gap-2">
+                                    <span className="w-8 h-8 bg-green-100 rounded-lg inline-flex items-center justify-center text-green-700 font-bold">1</span>
+                                    DEFINIÇÕES E NATUREZA DO SERVIÇO
+                                </h2>
+                                <p className="mb-2"><strong>1.1.</strong> A plataforma <strong>JUNTIX</strong> é uma plataforma tecnológica que facilita a organização e gestão de grupos de poupança coletiva informal ("Caixinhas") entre pessoas físicas previamente conhecidas.</p>
                                 <p className="mb-2"><strong>1.2.</strong> O serviço consiste exclusivamente em:</p>
-                                <ul className="list-disc list-inside ml-4 space-y-1">
+                                <ul className="list-disc list-inside ml-4 space-y-1 mb-2">
                                     <li>Ferramenta tecnológica de organização e controle</li>
                                     <li>Processamento de pagamentos via gateway terceirizado (Lytex)</li>
                                     <li>Gestão de ordem de contemplação</li>
-                                    <li>Comunicação e lembretes aos participantes</li>
+                                    <li>Comunicação e lembretes automáticos aos participantes</li>
+                                    <li>Dashboard de acompanhamento em tempo real</li>
                                 </ul>
-                                <p className="mt-2"><strong>1.3. DECLARAÇÃO IMPORTANTE:</strong> Esta plataforma <strong>NÃO é instituição financeira</strong>, <strong>NÃO oferece produtos financeiros</strong>, <strong>NÃO capta recursos do público</strong>, <strong>NÃO promete rentabilidade</strong> e <strong>NÃO realiza intermediação financeira regulada pelo Banco Central do Brasil</strong>.</p>
+                                <div className="bg-red-50 border border-red-200 rounded-lg p-3 mt-3">
+                                    <p className="text-sm text-red-900"><strong>1.3. DECLARAÇÃO IMPORTANTE:</strong> Esta plataforma <strong>NÃO é instituição financeira</strong>, <strong>NÃO oferece produtos financeiros</strong>, <strong>NÃO capta recursos do público</strong>, <strong>NÃO promete rentabilidade</strong> e <strong>NÃO realiza intermediação financeira regulada pelo Banco Central do Brasil</strong>.</p>
+                                </div>
                             </div>
 
-                            <div>
-                                <h2 className="text-lg font-bold text-gray-900 mb-2">2. REQUISITOS PARA PARTICIPAÇÃO</h2>
+                            <div className="bg-white rounded-xl p-5 border border-gray-200 shadow-sm">
+                                <h2 className="text-lg font-bold text-gray-900 mb-3 flex items-center gap-2">
+                                    <span className="w-8 h-8 bg-blue-100 rounded-lg inline-flex items-center justify-center text-blue-700 font-bold">2</span>
+                                    REQUISITOS PARA PARTICIPAÇÃO
+                                </h2>
                                 <p className="mb-2"><strong>2.1.</strong> Podem participar apenas:</p>
-                                <ul className="list-disc list-inside ml-4 space-y-1">
-                                    <li>Pessoas físicas maiores de 18 anos</li>
-                                    <li>Residentes no território brasileiro</li>
-                                    <li>Com CPF regularizado</li>
-                                    <li>Indicadas ou conhecidas de participantes existentes</li>
-                                </ul>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <div className="flex items-center gap-2 bg-blue-50 p-2 rounded">
+                                        <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                        </svg>
+                                        <span className="text-sm">Maiores de 18 anos</span>
+                                    </div>
+                                    <div className="flex items-center gap-2 bg-blue-50 p-2 rounded">
+                                        <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                        </svg>
+                                        <span className="text-sm">Residentes no Brasil</span>
+                                    </div>
+                                    <div className="flex items-center gap-2 bg-blue-50 p-2 rounded">
+                                        <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                        </svg>
+                                        <span className="text-sm">CPF regularizado</span>
+                                    </div>
+                                    <div className="flex items-center gap-2 bg-blue-50 p-2 rounded">
+                                        <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                        </svg>
+                                        <span className="text-sm">Indicados/conhecidos</span>
+                                    </div>
+                                </div>
                             </div>
 
-                            <div>
-                                <h2 className="text-lg font-bold text-gray-900 mb-2">3. FUNCIONAMENTO DO CAIXINHA</h2>
+                            <div className="bg-white rounded-xl p-5 border border-gray-200 shadow-sm">
+                                <h2 className="text-lg font-bold text-gray-900 mb-3 flex items-center gap-2">
+                                    <span className="w-8 h-8 bg-purple-100 rounded-lg inline-flex items-center justify-center text-purple-700 font-bold">3</span>
+                                    FUNCIONAMENTO DO CAIXA
+                                </h2>
                                 <p className="mb-2"><strong>3.1. Estrutura Básica</strong></p>
-                                <ul className="list-disc list-inside ml-4 space-y-1">
+                                <ul className="list-disc list-inside ml-4 space-y-1.5">
                                     <li>Cada grupo possui número definido de participantes</li>
-                                    <li>Valor total do caixinha é dividido em parcelas mensais iguais</li>
+                                    <li>Valor total do caixa é dividido em parcelas mensais iguais</li>
                                     <li>Cada participante contribui mensalmente até completar o ciclo</li>
                                     <li>Um participante é contemplado por mês na ordem estabelecida</li>
+                                    <li>Sistema automático de cobrança via PIX/Boleto</li>
+                                    <li>Notificações automáticas de vencimento e lembreteste</li>
                                 </ul>
                             </div>
 
-                            <div>
-                                <h2 className="text-lg font-bold text-gray-900 mb-2">4. OBRIGAÇÕES DOS PARTICIPANTES</h2>
+                            <div className="bg-white rounded-xl p-5 border border-gray-200 shadow-sm">
+                                <h2 className="text-lg font-bold text-gray-900 mb-3 flex items-center gap-2">
+                                    <span className="w-8 h-8 bg-amber-100 rounded-lg inline-flex items-center justify-center text-amber-700 font-bold">4</span>
+                                    OBRIGAÇÕES DOS PARTICIPANTES
+                                </h2>
                                 <p className="mb-2"><strong>4.1.</strong> O participante compromete-se a:</p>
-                                <ul className="list-disc list-inside ml-4 space-y-1">
+                                <ul className="list-disc list-inside ml-4 space-y-1.5">
                                     <li>Pagar todas as parcelas nas datas estabelecidas</li>
                                     <li>Manter dados cadastrais atualizados</li>
                                     <li>Comunicar imediatamente qualquer dificuldade de pagamento</li>
                                     <li>Respeitar a ordem de contemplação</li>
                                     <li>Não transferir sua posição sem autorização</li>
                                 </ul>
-                                <p className="mt-2"><strong>ATENÇÃO:</strong> O participante é obrigado a pagar sua própria parcela mesmo no mês em que for contemplado.</p>
+                                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mt-3">
+                                    <p className="text-sm font-semibold text-amber-900">
+                                        ⚠️ ATENÇÃO: O participante é obrigado a pagar sua própria parcela mesmo no mês em que for contemplado.
+                                    </p>
+                                </div>
                             </div>
 
-                            <div>
-                                <h2 className="text-lg font-bold text-gray-900 mb-2">5. PROCESSAMENTO DE PAGAMENTOS</h2>
+                            <div className="bg-white rounded-xl p-5 border border-gray-200 shadow-sm">
+                                <h2 className="text-lg font-bold text-gray-900 mb-3 flex items-center gap-2">
+                                    <span className="w-8 h-8 bg-indigo-100 rounded-lg inline-flex items-center justify-center text-indigo-700 font-bold">5</span>
+                                    PROCESSAMENTO DE PAGAMENTOS
+                                </h2>
                                 <p className="mb-2"><strong>5.1.</strong> Todos os pagamentos são processados via gateway de pagamento <strong>Lytex</strong>, empresa terceirizada e devidamente autorizada.</p>
                                 <p className="mb-2"><strong>5.2.</strong> A plataforma não retém, custodia ou administra os valores pagos pelos participantes, exceto Fundo de Reserva e Taxa de serviço.</p>
+                                <p className="text-sm text-indigo-700 bg-indigo-50 p-3 rounded-lg">
+                                    💳 Meios de pagamento aceitos: PIX e Boleto Bancário
+                                </p>
                             </div>
 
-                            <div>
-                                <h2 className="text-lg font-bold text-gray-900 mb-2">6. RESPONSABILIDADES E LIMITAÇÕES</h2>
-                                <p className="mb-2"><strong>6.1. A PLATAFORMA NÃO:</strong></p>
-                                <ul className="list-disc list-inside ml-4 space-y-1">
-                                    <li>❌ Garante adimplência dos participantes</li>
-                                    <li>❌ Responde por inadimplência de terceiros além do Fundo de Reserva</li>
-                                    <li>❌ Oferece seguro ou garantia financeira</li>
-                                    <li>❌ Atua como instituição financeira</li>
+                            <div className="bg-white rounded-xl p-5 border border-gray-200 shadow-sm">
+                                <h2 className="text-lg font-bold text-gray-900 mb-3 flex items-center gap-2">
+                                    <span className="w-8 h-8 bg-red-100 rounded-lg inline-flex items-center justify-center text-red-700 font-bold">6</span>
+                                    RESPONSABILIDADES E LIMITAÇÕES
+                                </h2>
+                                <p className="mb-2 font-semibold text-red-900">6.1. O JUNTIX NÃO:</p>
+                                <ul className="space-y-2">
+                                    <li className="flex items-center gap-2">
+                                        <span className="text-red-600">✗</span>
+                                        <span>Garante adimplência dos participantes</span>
+                                    </li>
+                                    <li className="flex items-center gap-2">
+                                        <span className="text-red-600">✗</span>
+                                        <span>Responde por inadimplência de terceiros além do Fundo de Reserva</span>
+                                    </li>
+                                    <li className="flex items-center gap-2">
+                                        <span className="text-red-600">✗</span>
+                                        <span>Oferece seguro ou garantia financeira</span>
+                                    </li>
+                                    <li className="flex items-center gap-2">
+                                        <span className="text-red-600">✗</span>
+                                        <span>Atua como instituição financeira</span>
+                                    </li>
                                 </ul>
-                                <p className="mt-2"><strong>6.2. RISCOS ASSUMIDOS:</strong> Existe risco real de inadimplência de outros participantes. Não há cobertura do FGC ou qualquer proteção estatal.</p>
+                                <div className="bg-red-50 border border-red-200 rounded-lg p-3 mt-3">
+                                    <p className="text-sm"><strong className="text-red-900">6.2. RISCOS ASSUMIDOS:</strong> Existe risco real de inadimplência de outros participantes. Não há cobertura do FGC ou qualquer proteção estatal.</p>
+                                </div>
                             </div>
 
-                            <div>
-                                <h2 className="text-lg font-bold text-gray-900 mb-2">7. POLÍTICA DE INADIMPLÊNCIA</h2>
+                            <div className="bg-white rounded-xl p-5 border border-gray-200 shadow-sm">
+                                <h2 className="text-lg font-bold text-gray-900 mb-3 flex items-center gap-2">
+                                    <span className="w-8 h-8 bg-orange-100 rounded-lg inline-flex items-center justify-center text-orange-700 font-bold">7</span>
+                                    POLÍTICA DE INADIMPLÊNCIA
+                                </h2>
                                 <p className="mb-2"><strong>Inadimplência Grave (acima de 15 dias):</strong></p>
-                                <ul className="list-disc list-inside ml-4 space-y-1">
-                                    <li>Utilização do Fundo de Reserva</li>
-                                    <li>Exclusão definitiva da plataforma</li>
-                                    <li>Cobrança judicial do valor devido</li>
-                                    <li>Possibilidade de negativação</li>
-                                </ul>
+                                <div className="space-y-2">
+                                    <div className="bg-orange-50 p-3 rounded-lg">
+                                        <p className="text-sm">• Utilização do Fundo de Reserva</p>
+                                    </div>
+                                    <div className="bg-orange-50 p-3 rounded-lg">
+                                        <p className="text-sm">• Exclusão definitiva da plataforma</p>
+                                    </div>
+                                    <div className="bg-orange-50 p-3 rounded-lg">
+                                        <p className="text-sm">• Cobrança judicial do valor devido</p>
+                                    </div>
+                                    <div className="bg-orange-50 p-3 rounded-lg">
+                                        <p className="text-sm">• Possibilidade de negativação</p>
+                                    </div>
+                                </div>
                             </div>
 
-                            <div>
-                                <h2 className="text-lg font-bold text-gray-900 mb-2">8. DADOS PESSOAIS E PRIVACIDADE</h2>
-                                <p className="mb-2">A plataforma coleta e trata dados pessoais conforme Lei Geral de Proteção de Dados (LGPD - Lei 13.709/2018).</p>
+                            <div className="bg-white rounded-xl p-5 border border-gray-200 shadow-sm">
+                                <h2 className="text-lg font-bold text-gray-900 mb-3 flex items-center gap-2">
+                                    <span className="w-8 h-8 bg-teal-100 rounded-lg inline-flex items-center justify-center text-teal-700 font-bold">8</span>
+                                    DADOS PESSOAIS E PRIVACIDADE
+                                </h2>
+                                <p className="mb-2">A plataforma coleta e trata dados pessoais conforme <strong>Lei Geral de Proteção de Dados (LGPD - Lei 13.709/2018)</strong>.</p>
+                                <div className="grid grid-cols-2 gap-2 mt-3">
+                                    <div className="bg-teal-50 p-2 rounded text-sm">
+                                        <strong className="text-teal-900">Segurança:</strong> Criptografia SSL
+                                    </div>
+                                    <div className="bg-teal-50 p-2 rounded text-sm">
+                                        <strong className="text-teal-900">Armazenamento:</strong> Servidores seguros
+                                    </div>
+                                </div>
                             </div>
 
-                            <div className="bg-blue-50 border-2 border-blue-300 rounded-lg p-4 mt-6">
+                            <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-300 rounded-xl p-5 mt-6">
                                 <h2 className="text-lg font-bold text-blue-900 mb-3">DECLARAÇÃO DE CIÊNCIA E CONSENTIMENTO</h2>
                                 <div className="space-y-2 text-sm">
-                                    <p>☑ Li e compreendi integralmente as condições estabelecidas</p>
-                                    <p>☑ Estou ciente de que a plataforma NÃO é instituição financeira</p>
-                                    <p>☑ Entendo os riscos de inadimplência de outros participantes</p>
-                                    <p>☑ Concordo com a utilização do Fundo de Reserva conforme descrito</p>
-                                    <p>☑ Assumo a responsabilidade pelo pagamento de todas as parcelas</p>
-                                    <p>☑ Autorizo o tratamento dos meus dados pessoais conforme LGPD</p>
-                                    <p>☑ Aceito as taxas, encargos e condições de pagamento</p>
-                                    <p>☑ Reconheço que não há garantia estatal ou proteção do FGC</p>
+                                    <p className="flex items-center gap-2">
+                                        <svg className="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                        </svg>
+                                        Li e compreendi integralmente as condições estabelecidas
+                                    </p>
+                                    <p className="flex items-center gap-2">
+                                        <svg className="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                        </svg>
+                                        Estou ciente de que o JUNTIX NÃO é instituição financeira
+                                    </p>
+                                    <p className="flex items-center gap-2">
+                                        <svg className="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                        </svg>
+                                        Entendo os riscos de inadimplência de outros participantes
+                                    </p>
+                                    <p className="flex items-center gap-2">
+                                        <svg className="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                        </svg>
+                                        Concordo com a utilização do Fundo de Reserva conforme descrito
+                                    </p>
+                                    <p className="flex items-center gap-2">
+                                        <svg className="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                        </svg>
+                                        Assumo a responsabilidade pelo pagamento de todas as parcelas
+                                    </p>
+                                    <p className="flex items-center gap-2">
+                                        <svg className="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414- 1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                        </svg>
+                                        Autorizo o tratamento dos meus dados pessoais conforme LGPD
+                                    </p>
+                                    <p className="flex items-center gap-2">
+                                        <svg className="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                        </svg>
+                                        Aceito as taxas, encargos e condições de pagamento
+                                    </p>
+                                    <p className="flex items-center gap-2">
+                                        <svg className="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                        </svg>
+                                        Reconheço que não há garantia estatal ou proteção do FGC
+                                    </p>
                                 </div>
+                            </div>
+
+                            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-center text-xs text-gray-600">
+                                <p>Documento elaborado em conformidade com o Código Civil Brasileiro, LGPD e legislações aplicáveis</p>
+                                <p className="mt-2 font-semibold">JUNTIX - Plataforma Tecnológica | www.juntix.com.br</p>
                             </div>
                         </div>
                     </div>
@@ -474,7 +704,7 @@ export function ConfiguracoesObrigatoriasCaixa({
                         </Button>
                         <Button
                             variant="primary"
-                            className="flex-1"
+                            className="flex-1 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700"
                             onClick={() => {
                                 setAceiteContrato(true);
                                 setShowTermsModal(false);
