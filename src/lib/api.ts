@@ -69,6 +69,10 @@ export const usuariosService = {
     const response = await api.get('/usuarios/estatisticas');
     return response.data;
   },
+  getAdministradores: async () => {
+    const response = await api.get('/usuarios/administradores');
+    return response.data;
+  },
 };
 
 // Caixas
@@ -289,6 +293,14 @@ export const cobrancasService = {
     const response = await api.get('/cobrancas/transactions', { params });
     return response.data;
   },
+  /**
+   * Sincroniza status de cobranças do banco local (sem chamar Lytex)
+   * Usado para verificar pagamentos sem gerar novas cobranças
+   */
+  syncStatus: async (caixaId: string) => {
+    const response = await api.get(`/cobrancas/sync-status/${caixaId}`);
+    return response.data;
+  },
 };
 
 // Bancos (Lytex - via backend)
@@ -353,6 +365,21 @@ export const subcontasService = {
     const response = await api.get(`/subcontas/check/${cpf}`);
     return response.data;
   },
+  // Busca subconta por usuarioId
+  getByUsuarioId: async (usuarioId: string) => {
+    const response = await api.get(`/subcontas/usuario/${usuarioId}`);
+    return response.data;
+  },
+  // Atualiza credenciais Lytex de uma subconta por usuarioId
+  updateCredentials: async (usuarioId: string, data: { clientId?: string; clientSecret?: string; nomeCaixa?: string }) => {
+    const response = await api.patch(`/subcontas/usuario/${usuarioId}/credentials`, data);
+    return response.data;
+  },
+  // Obtém carteira do participante usando suas credenciais Lytex
+  getMyWallet: async () => {
+    const response = await api.get('/subcontas/me/wallet');
+    return response.data;
+  },
 };
 
 export const splitService = {
@@ -395,6 +422,11 @@ export const splitConfigService = {
       fundoReservaSubId?: string;
       adminSubId?: string;
       participantesMesOrdem?: string[];
+      dadosBancarios?: {
+        banco: string;
+        agencia: string;
+        conta: string;
+      };
     },
   ) => {
     const response = await api.post(`/split-config/${caixaId}`, data);
@@ -407,6 +439,11 @@ export const splitConfigService = {
       fundoReservaSubId?: string;
       adminSubId?: string;
       participantesMesOrdem?: string[];
+      dadosBancarios?: {
+        banco: string;
+        agencia: string;
+        conta: string;
+      };
     },
   ) => {
     const response = await api.put(`/split-config/${id}`, data);
@@ -416,5 +453,19 @@ export const splitConfigService = {
     const response = await api.delete(`/split-config/${id}`);
     return response.data;
   },
+  migrateAll: async () => {
+    const response = await api.post('/split-config/migrate-all');
+    return response.data;
+  },
 };
+
+export const transacoesService = {
+  getDetalhadas: async () => {
+    const response = await api.get('/split-history/transacoes-detalhadas');
+    return response.data;
+  },
+};
+
+// Comunicação (Evolution API - WhatsApp)
+export { comunicacaoService } from './api/comunicacao.service';
 

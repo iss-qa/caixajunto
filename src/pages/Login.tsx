@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Users, Mail, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -9,14 +9,25 @@ import { Card } from '../components/ui/Card';
 
 export function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { login } = useAuth();
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
   const [form, setForm] = useState({
     email: '',
     senha: '',
   });
+
+  useEffect(() => {
+    // Mostrar mensagem de sucesso se vier do registro
+    if (location.state?.message) {
+      setSuccessMessage(location.state.message);
+      // Limpar o state para não mostrar novamente ao recarregar
+      window.history.replaceState({}, document.title);
+    }
+  }, [location]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -95,13 +106,40 @@ export function Login() {
               error={error && !form.senha ? 'Senha é obrigatória' : undefined}
             />
 
+            {successMessage && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="p-3 bg-green-50 text-green-700 text-sm rounded-xl border border-green-200"
+              >
+                {successMessage}
+              </motion.div>
+            )}
+
             {error && (
               <motion.div
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="p-3 bg-danger-50 text-danger-600 text-sm rounded-xl"
+                className={`p-3 text-sm rounded-xl ${error.includes('Aguardando aprovação')
+                  ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                  : error.includes('recusou')
+                    ? 'bg-red-50 text-red-700 border border-red-200'
+                    : 'bg-danger-50 text-danger-600'
+                  }`}
               >
-                {error}
+                {error.includes('Aguardando aprovação') && (
+                  <p className="flex items-start gap-2">
+                    <span className="text-lg">⏳</span>
+                    <span>{error}</span>
+                  </p>
+                )}
+                {error.includes('recusou') && (
+                  <p className="flex items-start gap-2">
+                    <span className="text-lg">❌</span>
+                    <span>{error}</span>
+                  </p>
+                )}
+                {!error.includes('Aguardando aprovação') && !error.includes('recusou') && error}
               </motion.div>
             )}
 

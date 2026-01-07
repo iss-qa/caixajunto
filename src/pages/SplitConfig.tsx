@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Check, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
-import { caixasService, bancosService, participantesService, splitConfigService } from '../lib/api';
+import { ArrowLeft, Check, AlertCircle, CheckCircle, XCircle, Loader2, AlertTriangle } from 'lucide-react';
+import { caixasService, bancosService, participantesService, splitConfigService, subcontasService, usuariosService } from '../lib/api';
 import { formatCurrency } from '../lib/utils';
 import { useCaixaConfiguracao } from '../hooks/useCaixaConfiguracao';
 
@@ -14,10 +14,18 @@ type LytexAccount = {
 };
 
 type ExistingSplitConfig = {
+  _id?: string;
   taxaServicoSubId?: string;
   fundoReservaSubId?: string;
   adminSubId?: string;
   participantesMesOrdem?: string[];
+  isConfigured?: boolean;
+  name?: string;
+  dadosBancarios?: {
+    banco: string;
+    agencia: string;
+    conta: string;
+  };
 };
 
 const asRecord = (v: unknown): Record<string, unknown> =>
@@ -30,6 +38,8 @@ const toNumberSafe = (v: unknown, fallback = 0): number => {
   const n = typeof v === 'number' ? v : Number(v);
   return Number.isFinite(n) ? n : fallback;
 };
+
+const toBooleanSafe = (v: unknown): boolean => Boolean(v);
 
 const getErrorMessage = (e: unknown, fallback: string): string => {
   const rec = asRecord(e);
@@ -71,6 +81,25 @@ interface ParticipanteOrdem {
   nome: string;
   subcontaId?: string;
   usuarioId?: any;
+  clientId?: string;
+  clientSecret?: string;
+}
+
+// Estado para credenciais de cada participante
+interface CredentialsMap {
+  [usuarioId: string]: {
+    clientId: string;
+    clientSecret: string;
+    saving?: boolean;
+    saved?: boolean;
+  };
+}
+
+// Interface para dados bancários
+interface DadosBancarios {
+  banco: string;
+  agencia: string;
+  conta: string;
 }
 
 const calcularValorComIPCA = (valorBase: number, meses: number): number => {
@@ -80,7 +109,7 @@ const calcularValorComIPCA = (valorBase: number, meses: number): number => {
 };
 
 // ID FIXO da empresa principal
-const EMPRESA_PRINCIPAL_SUBCONTA_ID = '693881d90b94786c6437a441';
+const EMPRESA_PRINCIPAL_SUBCONTA_ID = '693c5c508d48ed94888798a6';
 
 export default function SplitConfig() {
   const navigate = useNavigate();
@@ -96,6 +125,26 @@ export default function SplitConfig() {
   const [participantesOrdem, setParticipantesOrdem] = useState<ParticipanteOrdem[]>([]);
   const [existingConfig, setExistingConfig] = useState<ExistingSplitConfig | null>(null);
   const [showTable, setShowTable] = useState(false);
+  const [credentials, setCredentials] = useState<CredentialsMap>({});
+  const [savingCredentials, setSavingCredentials] = useState<{ [key: string]: boolean }>({});
+
+  // Novos estados para dados bancários
+  const [dadosBancarios, setDadosBancarios] = useState<DadosBancarios>({
+    banco: '',
+    agencia: '',
+    conta: '',
+  });
+  const [savingBankData, setSavingBankData] = useState(false);
+
+  // Estado para controlar caixas já configurados
+  const [configuredCaixas, setConfiguredCaixas] = useState<string[]>([]);
+
+  // Novos estados para administradores
+  const [administradores, setAdministradores] = useState<any[]>([]);
+  const [selectedAdminUserId, setSelectedAdminUserId] = useState<string>('');
+  const [adminLytexId, setAdminLytexId] = useState<string>('');
+  const [adminCredentials, setAdminCredentials] = useState({ clientId: '', clientSecret: '' });
+  const [savingAdminCredentials, setSavingAdminCredentials] = useState(false);
 
   const selectedCaixa = useMemo(() => caixas.find((c) => c._id === selectedCaixaId), [caixas, selectedCaixaId]);
 
@@ -112,6 +161,7 @@ export default function SplitConfig() {
     selectedCaixa?.adminId || ''
   );
 
+  // Carregar lista de caixas e verificar quais já estão configurados
   useEffect(() => {
     const loadCaixas = async () => {
       try {
@@ -156,11 +206,40 @@ export default function SplitConfig() {
         if (normalized.length) {
           setSelectedCaixaId(normalized[0]._id);
         }
+
+        // Carregar lista de caixas já configurados
+        try {
+          const allConfigs = await splitConfigService.getAll();
+          const configsRec = asRecord(allConfigs);
+          const configsList = Array.isArray(configsRec.configs) ? configsRec.configs : [];
+          const configuredIds = configsList
+            .filter((cfg: any) => toBooleanSafe(cfg.isConfigured))
+            .map((cfg: any) => {
+              const caixaId = cfg.caixaId;
+              return typeof caixaId === 'object' && caixaId?._id
+                ? toStringSafe(caixaId._id)
+                : toStringSafe(caixaId);
+            });
+          setConfiguredCaixas(configuredIds);
+        } catch {
+          void 0;
+        }
       } catch (e: unknown) {
         setError(getErrorMessage(e, 'Erro ao carregar caixas'));
       }
     };
     loadCaixas();
+
+    // Carregar lista de administradores
+    const loadAdministradores = async () => {
+      try {
+        const admins = await usuariosService.getAdministradores();
+        setAdministradores(Array.isArray(admins) ? admins : []);
+      } catch (e: unknown) {
+        console.error('Erro ao carregar administradores:', e);
+      }
+    };
+    loadAdministradores();
   }, []);
 
   useEffect(() => {
@@ -169,6 +248,27 @@ export default function SplitConfig() {
         const resp = await bancosService.getAccounts();
         const account = getFirstLytexAccount(resp);
         setPjPrincipalInfo(account);
+
+        // Auto-preencher dados bancários da empresa principal
+        if (account?.bank?.code && account?.agency?.number && account?.account?.number) {
+          const bankName = account.bank.name || '';
+          const bankCode = account.bank.code || '';
+          const agencyNumber = account.agency.number || '';
+          const accountNumber = account.account.number || '';
+          const accountDv = account.account.dv || '';
+
+          setDadosBancarios({
+            banco: `${bankCode}${bankName ? ' - ' + bankName : ''}`,
+            agencia: agencyNumber,
+            conta: `${accountNumber}${accountDv ? '-' + accountDv : ''}`,
+          });
+
+          console.log('✅ Dados bancários preenchidos automaticamente:', {
+            banco: `${bankCode} - ${bankName}`,
+            agencia: agencyNumber,
+            conta: `${accountNumber}-${accountDv}`,
+          });
+        }
       } catch {
         void 0;
       }
@@ -179,29 +279,68 @@ export default function SplitConfig() {
   useEffect(() => {
     if (selectedCaixaId) {
       setShowTable(false); // Reset table visibility
+      setDadosBancarios({ banco: '', agencia: '', conta: '' }); // Reset bank data
+      setAdminInfo(null); // Reset admin info
+
       (async () => {
         try {
           const cfg = await splitConfigService.getByCaixa(selectedCaixaId);
           const cfgRec = asRecord(cfg);
           const rawConfig = cfgRec.config && typeof cfgRec.config === 'object' ? asRecord(cfgRec.config) : null;
-          const data: ExistingSplitConfig | null = rawConfig
-            ? {
+
+          if (rawConfig) {
+            const dadosBancariosRaw = rawConfig.dadosBancarios && typeof rawConfig.dadosBancarios === 'object'
+              ? asRecord(rawConfig.dadosBancarios)
+              : null;
+
+            const data: ExistingSplitConfig = {
+              _id: toStringSafe(rawConfig._id),
               taxaServicoSubId: toStringSafe(rawConfig.taxaServicoSubId),
               fundoReservaSubId: toStringSafe(rawConfig.fundoReservaSubId),
               adminSubId: toStringSafe(rawConfig.adminSubId),
               participantesMesOrdem: Array.isArray(rawConfig.participantesMesOrdem)
                 ? rawConfig.participantesMesOrdem.map((v) => toStringSafe(v))
                 : [],
-            }
-            : null;
-          setExistingConfig(data);
-          if (data) {
+              isConfigured: toBooleanSafe(rawConfig.isConfigured),
+              name: toStringSafe(rawConfig.name),
+              dadosBancarios: dadosBancariosRaw
+                ? {
+                  banco: toStringSafe(dadosBancariosRaw.banco),
+                  agencia: toStringSafe(dadosBancariosRaw.agencia),
+                  conta: toStringSafe(dadosBancariosRaw.conta),
+                }
+                : undefined,
+            };
+
+            setExistingConfig(data);
             setAdminSubId(data.adminSubId || '');
-            setShowTable(true); // Show table if config exists
+            setShowTable(true);
+
+            // Carregar dados bancários se existirem
+            if (data.dadosBancarios) {
+              setDadosBancarios(data.dadosBancarios);
+            }
+
+            // Buscar info do admin se tiver ID
+            if (data.adminSubId) {
+              console.log('🔍 Buscando info do admin com ID:', data.adminSubId);
+              try {
+                const adminResp = await bancosService.getAccounts(data.adminSubId);
+                console.log('📦 Resposta do admin:', adminResp);
+                const accountInfo = getFirstLytexAccount(adminResp);
+                console.log('✅ Admin info extraída:', accountInfo);
+                setAdminInfo(accountInfo);
+              } catch (e) {
+                console.error('❌ Erro ao buscar admin info:', e);
+              }
+            }
+          } else {
+            setExistingConfig(null);
           }
         } catch {
-          void 0;
+          setExistingConfig(null);
         }
+
         try {
           const resp = await participantesService.getByCaixa(selectedCaixaId);
           const respRec = asRecord(resp);
@@ -230,6 +369,34 @@ export default function SplitConfig() {
               ) => (a.posicao || 0) - (b.posicao || 0),
             );
           setParticipantesOrdem(ordered as ParticipanteOrdem[]);
+
+          // Carregar credenciais salvas de cada participante
+          const credsMap: CredentialsMap = {};
+          for (const p of ordered) {
+            const usuarioIdObj = asRecord(p.usuarioId);
+            const usuarioIdReal = usuarioIdObj._id
+              ? toStringSafe(usuarioIdObj._id)
+              : p.id;
+            try {
+              const subcontaResp = await subcontasService.getByUsuarioId(usuarioIdReal);
+              const subcontaRec = asRecord(subcontaResp);
+              const subconta = asRecord(subcontaRec.subconta);
+              if (subconta && subcontaRec.success) {
+                const clientId = toStringSafe(subconta.clientId);
+                const clientSecret = toStringSafe(subconta.clientSecret);
+                if (clientId || clientSecret) {
+                  credsMap[usuarioIdReal] = {
+                    clientId: clientId,
+                    clientSecret: clientSecret === '***' ? '' : clientSecret, // Secret mascarado
+                    saved: Boolean(clientId),
+                  };
+                }
+              }
+            } catch {
+              // Ignora erro se não encontrar subconta
+            }
+          }
+          setCredentials(prev => ({ ...prev, ...credsMap }));
         } catch {
           void 0;
         }
@@ -248,6 +415,73 @@ export default function SplitConfig() {
     }
   };
 
+  // Auto-save de credenciais do administrador
+  const handleAutoSaveAdminCredentials = async () => {
+    if (!selectedAdminUserId || !adminLytexId) return;
+
+    try {
+      setSavingAdminCredentials(true);
+      console.log('💾 Salvando credenciais do administrador...');
+
+      await subcontasService.updateCredentials(selectedAdminUserId, {
+        clientId: adminCredentials.clientId,
+        clientSecret: adminCredentials.clientSecret,
+        nomeCaixa: selectedCaixa?.nome,
+      });
+
+      // Atualizar adminSubId se ainda não estiver definido
+      if (adminLytexId && adminLytexId !== adminSubId) {
+        setAdminSubId(adminLytexId);
+      }
+
+      console.log('✅ Credenciais do administrador salvas com sucesso');
+    } catch (e: unknown) {
+      console.error('❌ Erro ao salvar credenciais do administrador:', e);
+      setConfigError('Erro ao salvar credenciais do administrador');
+    } finally {
+      setSavingAdminCredentials(false);
+    }
+  };
+
+  // Handler para quando o Lytex ID for modificado
+  const handleAdminLytexIdBlur = async () => {
+    if (adminLytexId) {
+      // Buscar informações do administrador
+      await handleFetchAdminInfo(adminLytexId);
+      // Salvar o Lytex ID
+      setAdminSubId(adminLytexId);
+      // Auto-save das credenciais se existirem
+      if (selectedAdminUserId) {
+        await handleAutoSaveAdminCredentials();
+      }
+    }
+  };
+
+  // Auto-save de dados bancários ao sair do campo
+  const handleAutoSaveBankData = async () => {
+    if (!selectedCaixaId) return;
+    if (!dadosBancarios.banco && !dadosBancarios.agencia && !dadosBancarios.conta) return;
+
+    try {
+      setSavingBankData(true);
+
+      const payload = {
+        taxaServicoSubId: EMPRESA_PRINCIPAL_SUBCONTA_ID,
+        fundoReservaSubId: EMPRESA_PRINCIPAL_SUBCONTA_ID,
+        adminSubId: adminSubId || undefined,
+        participantesMesOrdem: participantesOrdem.map((p) => p.id),
+        dadosBancarios: dadosBancarios,
+      };
+
+      await splitConfigService.saveForCaixa(selectedCaixaId, payload);
+      console.log('✅ Dados bancários salvos automaticamente');
+    } catch (e: unknown) {
+      console.error('❌ Erro ao auto-salvar dados bancários:', e);
+    } finally {
+      setSavingBankData(false);
+    }
+  };
+
   const handleSaveConfig = async () => {
     if (!selectedCaixaId) return;
     try {
@@ -260,6 +494,9 @@ export default function SplitConfig() {
         fundoReservaSubId: EMPRESA_PRINCIPAL_SUBCONTA_ID,
         adminSubId: adminSubId || undefined,
         participantesMesOrdem: participantesOrdem.map((p) => p.id),
+        dadosBancarios: dadosBancarios.banco || dadosBancarios.agencia || dadosBancarios.conta
+          ? dadosBancarios
+          : undefined,
       };
 
       const resp = await splitConfigService.saveForCaixa(selectedCaixaId, payload);
@@ -268,21 +505,41 @@ export default function SplitConfig() {
         respRec.config && typeof respRec.config === 'object'
           ? asRecord(respRec.config)
           : null;
-      setExistingConfig(
-        rawSaved
-          ? {
-            taxaServicoSubId: toStringSafe(rawSaved.taxaServicoSubId),
-            fundoReservaSubId: toStringSafe(rawSaved.fundoReservaSubId),
-            adminSubId: toStringSafe(rawSaved.adminSubId),
-            participantesMesOrdem: Array.isArray(rawSaved.participantesMesOrdem)
-              ? rawSaved.participantesMesOrdem.map((v) => toStringSafe(v))
-              : [],
-          }
-          : payload,
-      );
+
+      if (rawSaved) {
+        const dadosBancariosRaw = rawSaved.dadosBancarios && typeof rawSaved.dadosBancarios === 'object'
+          ? asRecord(rawSaved.dadosBancarios)
+          : null;
+
+        setExistingConfig({
+          _id: toStringSafe(rawSaved._id),
+          taxaServicoSubId: toStringSafe(rawSaved.taxaServicoSubId),
+          fundoReservaSubId: toStringSafe(rawSaved.fundoReservaSubId),
+          adminSubId: toStringSafe(rawSaved.adminSubId),
+          participantesMesOrdem: Array.isArray(rawSaved.participantesMesOrdem)
+            ? rawSaved.participantesMesOrdem.map((v) => toStringSafe(v))
+            : [],
+          isConfigured: toBooleanSafe(rawSaved.isConfigured),
+          name: toStringSafe(rawSaved.name),
+          dadosBancarios: dadosBancariosRaw
+            ? {
+              banco: toStringSafe(dadosBancariosRaw.banco),
+              agencia: toStringSafe(dadosBancariosRaw.agencia),
+              conta: toStringSafe(dadosBancariosRaw.conta),
+            }
+            : undefined,
+        });
+
+        // Atualizar lista de caixas configurados
+        if (toBooleanSafe(rawSaved.isConfigured)) {
+          setConfiguredCaixas(prev =>
+            prev.includes(selectedCaixaId) ? prev : [...prev, selectedCaixaId]
+          );
+        }
+      }
 
       setConfigSuccess(true);
-      setShowTable(true); // Show table after successful save
+      setShowTable(true);
       setTimeout(() => setConfigSuccess(false), 3000);
 
       if ((resp as any)?.config?.adminSubId) {
@@ -320,13 +577,58 @@ export default function SplitConfig() {
 
   const getParticipanteStatus = (participanteId: string) => {
     const status = participantesSubcontasStatus.find(p => p._id === participanteId);
-    console.log('🔍 Buscando status para:', participanteId);
-    console.log('🔍 Status encontrado:', status);
-    console.log('🔍 Lista completa:', participantesSubcontasStatus);
     return status;
   };
 
   const comSubconta = participantesSubcontasStatus.filter(p => p.temSubconta).length;
+
+  // Handler para atualizar credenciais no estado local
+  const handleCredentialChange = (usuarioId: string, field: 'clientId' | 'clientSecret', value: string) => {
+    setCredentials(prev => ({
+      ...prev,
+      [usuarioId]: {
+        ...prev[usuarioId],
+        [field]: value,
+        saved: false,
+      }
+    }));
+  };
+
+  // Salvar credenciais no backend via onBlur
+  const handleSaveCredentials = async (usuarioId: string) => {
+    const creds = credentials[usuarioId];
+    if (!creds || (!creds.clientId && !creds.clientSecret)) return;
+
+    try {
+      setSavingCredentials(prev => ({ ...prev, [usuarioId]: true }));
+      console.log(`💾 Salvando credenciais para usuário ${usuarioId}:`, {
+        clientId: creds.clientId ? '***' : 'N/A',
+        clientSecret: creds.clientSecret ? '***' : 'N/A',
+        nomeCaixa: selectedCaixa?.nome,
+      });
+
+      await subcontasService.updateCredentials(usuarioId, {
+        clientId: creds.clientId,
+        clientSecret: creds.clientSecret,
+        nomeCaixa: selectedCaixa?.nome,
+      });
+
+      setCredentials(prev => ({
+        ...prev,
+        [usuarioId]: {
+          ...prev[usuarioId],
+          saved: true,
+        }
+      }));
+
+      console.log(`✅ Credenciais salvas para ${usuarioId}`);
+    } catch (error: any) {
+      console.error(`❌ Erro ao salvar credenciais para ${usuarioId}:`, error);
+      setConfigError(`Erro ao salvar credenciais: ${error.message}`);
+    } finally {
+      setSavingCredentials(prev => ({ ...prev, [usuarioId]: false }));
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50">
@@ -362,25 +664,170 @@ export default function SplitConfig() {
           </div>
         )}
 
-        {/* Seleção de Caixa */}
+        {/* Indicador de Configuração Existente */}
+        {existingConfig?.isConfigured && (
+          <div className="mb-4 p-3 bg-green-50 border-l-4 border-green-500 rounded-lg flex items-center gap-2">
+            <CheckCircle className="text-green-600" size={20} />
+            <span className="text-green-800 font-medium">
+              ✓ Configuração já salva para este caixa
+              {existingConfig.name && <span className="text-green-600 ml-2">({existingConfig.name})</span>}
+            </span>
+          </div>
+        )}
+
+        {/* Seleção de Caixa e Administrador - MESMA LINHA */}
         <div className="bg-white rounded-lg shadow-sm p-4 mb-4">
-          <label className="block text-sm font-semibold text-gray-700 mb-2">
-            Selecione o Caixa
-          </label>
-          <select
-            value={selectedCaixaId}
-            onChange={(e) => setSelectedCaixaId(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-          >
-            {caixas.map(c => (
-              <option key={c._id} value={c._id}>
-                {c.nome} - {formatCurrency(c.valorTotal)} ({c.tipo})
-              </option>
-            ))}
-          </select>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Seleção de Caixa */}
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Selecione o Caixa
+              </label>
+              <select
+                value={selectedCaixaId}
+                onChange={(e) => setSelectedCaixaId(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+              >
+                {caixas.map(c => (
+                  <option key={c._id} value={c._id}>
+                    {c.nome} - {formatCurrency(c.valorTotal)} ({c.tipo})
+                    {configuredCaixas.includes(c._id) && ' ✓'}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Administrador/Gestor do Caixa */}
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Administrador/Gestor do Caixa
+              </label>
+              <select
+                value={selectedAdminUserId}
+                onChange={async (e) => {
+                  const adminId = e.target.value;
+                  setSelectedAdminUserId(adminId);
+                  setAdminLytexId('');
+                  setAdminInfo(null);
+                  setAdminCredentials({ clientId: '', clientSecret: '' });
+
+                  // Auto-carregar lytexId do administrador selecionado
+                  if (adminId) {
+                    try {
+                      console.log('🔍 Buscando subconta do administrador:', adminId);
+                      const subcontaResp = await subcontasService.getByUsuarioId(adminId);
+                      const subcontaRec = asRecord(subcontaResp);
+
+                      if (subcontaRec.success && subcontaRec.subconta) {
+                        const subconta = asRecord(subcontaRec.subconta);
+                        const lytexId = toStringSafe(subconta.lytexId);
+                        const clientId = toStringSafe(subconta.clientId);
+                        const clientSecret = toStringSafe(subconta.clientSecret);
+
+                        console.log('✅ Subconta encontrada:', { lytexId, clientId: clientId ? '***' : 'N/A' });
+
+                        if (lytexId) {
+                          setAdminLytexId(lytexId);
+                          setAdminSubId(lytexId);
+
+                          // Carregar informações do admin
+                          await handleFetchAdminInfo(lytexId);
+                        }
+
+                        // Preencher credenciais se existirem
+                        if (clientId || clientSecret) {
+                          setAdminCredentials({
+                            clientId: clientId,
+                            clientSecret: clientSecret === '***' ? '' : clientSecret,
+                          });
+                        }
+                      }
+                    } catch (error: any) {
+                      console.error('❌ Erro ao buscar subconta do administrador:', error);
+                    }
+                  }
+                }}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm"
+              >
+                <option value="">Selecione um administrador</option>
+                {administradores.map(admin => (
+                  <option key={admin._id} value={admin._id}>
+                    {admin.nome} - {admin.email}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Campos adicionais para Lytex ID e Credenciais - aparece após selecionar administrador */}
+          {selectedAdminUserId && (
+            <div className="mt-4 pt-4 border-t border-gray-200">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Lytex ID */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    ID do Lytex (lytextid)
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="Digite o ID da subconta"
+                      value={adminLytexId}
+                      onChange={(e) => setAdminLytexId(e.target.value)}
+                      onBlur={handleAdminLytexIdBlur}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm"
+                    />
+                    {savingAdminCredentials && (
+                      <Loader2 size={14} className="absolute right-2 top-1/2 -translate-y-1/2 animate-spin text-green-500" />
+                    )}
+                  </div>
+                </div>
+
+                {/* Client ID */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Client ID
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Client ID"
+                    value={adminCredentials.clientId}
+                    onChange={(e) => setAdminCredentials({ ...adminCredentials, clientId: e.target.value })}
+                    onBlur={handleAutoSaveAdminCredentials}
+                    disabled={!adminLytexId}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
+                  />
+                </div>
+
+                {/* Client Secret */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Client Secret
+                  </label>
+                  <input
+                    type="password"
+                    placeholder="Client Secret"
+                    value={adminCredentials.clientSecret}
+                    onChange={(e) => setAdminCredentials({ ...adminCredentials, clientSecret: e.target.value })}
+                    onBlur={handleAutoSaveAdminCredentials}
+                    disabled={!adminLytexId}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Erro de configuração */}
+          {configError && (
+            <div className="mt-3 p-2 bg-red-50 border border-red-200 rounded-lg flex items-start gap-2">
+              <AlertCircle className="text-red-600 flex-shrink-0" size={18} />
+              <span className="text-sm text-red-800">{configError}</span>
+            </div>
+          )}
         </div>
 
-        {/* Empresa Principal */}
+        {/* Empresa Principal + Dados Bancários do Administrador */}
         <div className="bg-white rounded-lg shadow-sm p-5 mb-4 border-2 border-blue-500 relative">
           <div className="absolute top-3 right-3">
             <span className="px-2 py-1 bg-blue-500 text-white text-xs font-bold uppercase rounded-full">
@@ -396,86 +843,94 @@ export default function SplitConfig() {
             <h3 className="text-xl font-bold text-gray-900 mb-1">
               {pjPrincipalInfo?.owner?.name || 'ISS SOFTWARE QUALITY SOLUTIONS (CAIXA JUNTO)'}
             </h3>
-            <p className="text-sm text-gray-600 mb-3">
+            <p className="text-sm text-gray-600">
               CNPJ: {pjPrincipalInfo?.owner?.cpfCnpj || '39997807000186'}
             </p>
+          </div>
 
-            {pjPrincipalInfo && (
+          {/* Dados Bancários do Administrador */}
+          <div className="mt-4 pt-4 border-t border-gray-200">
+            <div className="flex items-center gap-2 mb-3">
+              <AlertTriangle className="text-amber-500" size={18} />
+              <span className="text-sm text-amber-700 font-medium">
+                Confirme os dados bancários do administrador antes de salvar. Estes dados serão usados para transferências do bônus de 10%.
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Banco</label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="Ex: 260 - NU PAGAMENTOS - IP"
+                    value={dadosBancarios.banco}
+                    onChange={(e) => setDadosBancarios({ ...dadosBancarios, banco: e.target.value })}
+                    onBlur={handleAutoSaveBankData}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                  />
+                  {savingBankData && (
+                    <Loader2 size={14} className="absolute right-2 top-1/2 -translate-y-1/2 animate-spin text-blue-500" />
+                  )}
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Agência</label>
+                <input
+                  type="text"
+                  placeholder="Ex: 0001"
+                  value={dadosBancarios.agencia}
+                  onChange={(e) => setDadosBancarios({ ...dadosBancarios, agencia: e.target.value })}
+                  onBlur={handleAutoSaveBankData}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Conta Corrente</label>
+                <input
+                  type="text"
+                  placeholder="Ex: 7146725-9"
+                  value={dadosBancarios.conta}
+                  onChange={(e) => setDadosBancarios({ ...dadosBancarios, conta: e.target.value })}
+                  onBlur={handleAutoSaveBankData}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Info do Administrador (exibe após buscar) */}
+        {adminInfo && (
+          <div className="bg-white rounded-lg shadow-sm p-4 mb-4 border-2 border-green-500 relative">
+            <div className="absolute top-2 right-2">
+              <span className="px-2 py-1 bg-green-500 text-white text-xs font-bold uppercase rounded-full">
+                Administrador
+              </span>
+            </div>
+
+            <div className="bg-gradient-to-br from-green-50 to-teal-50 rounded-lg p-4">
+              <h4 className="text-lg font-bold text-gray-900 mb-1">
+                {adminInfo.owner?.name}
+              </h4>
+              <p className="text-sm text-gray-600 mb-2">
+                CPF/CNPJ: {adminInfo.owner?.cpfCnpj}
+              </p>
+
               <div className="space-y-1 text-sm text-gray-700">
                 <p>
-                  <span className="font-medium">Banco:</span> {pjPrincipalInfo.bank?.code} - {pjPrincipalInfo.bank?.name}
+                  <span className="font-medium">Banco:</span> {adminInfo.bank?.code} - {adminInfo.bank?.name}
                 </p>
                 <p>
-                  <span className="font-medium">Agência:</span> {pjPrincipalInfo.agency?.number}-{pjPrincipalInfo.agency?.dv}
+                  <span className="font-medium">Agência:</span> {adminInfo.agency?.number}-{adminInfo.agency?.dv}
                 </p>
                 <p>
-                  <span className="font-medium">Conta:</span> {pjPrincipalInfo.account?.type} {pjPrincipalInfo.account?.number}-{pjPrincipalInfo.account?.dv}
+                  <span className="font-medium">Conta:</span> {adminInfo.account?.type} {adminInfo.account?.number}-{adminInfo.account?.dv}
                 </p>
               </div>
-            )}
-          </div>
-        </div>
-
-        {/* Administrador */}
-        <div className="bg-white rounded-lg shadow-sm p-4 mb-4">
-          <h3 className="text-base font-semibold text-gray-900 mb-3">
-            Administrador/Gestor do Caixa
-          </h3>
-
-          {configError && (
-            <div className="mb-3 p-2 bg-red-50 border border-red-200 rounded-lg flex items-start gap-2">
-              <AlertCircle className="text-red-600 flex-shrink-0" size={18} />
-              <span className="text-sm text-red-800">{configError}</span>
             </div>
-          )}
-
-          <div className="space-y-3">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                ID da Subconta
-              </label>
-              <input
-                type="text"
-                placeholder="Digite o ID da subconta (subrecipientId)"
-                value={adminSubId}
-                onChange={(e) => setAdminSubId(e.target.value)}
-                onBlur={() => adminSubId && handleFetchAdminInfo(adminSubId)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm"
-              />
-            </div>
-
-            {adminInfo && (
-              <div className="bg-white rounded-lg p-4 border-2 border-green-500 relative">
-                <div className="absolute top-2 right-2">
-                  <span className="px-2 py-1 bg-green-500 text-white text-xs font-bold uppercase rounded-full">
-                    Administrador
-                  </span>
-                </div>
-
-                <div className="bg-gradient-to-br from-green-50 to-teal-50 rounded-lg p-4">
-                  <h4 className="text-lg font-bold text-gray-900 mb-1">
-                    {adminInfo.owner?.name}
-                  </h4>
-                  <p className="text-sm text-gray-600 mb-2">
-                    CPF/CNPJ: {adminInfo.owner?.cpfCnpj}
-                  </p>
-
-                  <div className="space-y-1 text-sm text-gray-700">
-                    <p>
-                      <span className="font-medium">Banco:</span> {adminInfo.bank?.code} - {adminInfo.bank?.name}
-                    </p>
-                    <p>
-                      <span className="font-medium">Agência:</span> {adminInfo.agency?.number}-{adminInfo.agency?.dv}
-                    </p>
-                    <p>
-                      <span className="font-medium">Conta:</span> {adminInfo.account?.type} {adminInfo.account?.number}-{adminInfo.account?.dv}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
-        </div>
+        )}
 
         {/* Botão Salvar */}
         <div className="mb-6">
@@ -515,6 +970,12 @@ export default function SplitConfig() {
                       Status Subconta
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase">
+                      Client ID
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase">
+                      Client Secret
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase">
                       Data Prevista
                     </th>
                     <th className="px-4 py-3 text-right text-xs font-bold text-gray-600 uppercase">
@@ -535,14 +996,6 @@ export default function SplitConfig() {
                       : p.id;
                     const statusByUsuarioId = getParticipanteStatus(usuarioIdReal);
                     const finalStatus = status || statusByUsuarioId;
-
-                    console.log('🔍 Linha da tabela:', {
-                      nome: p.nome,
-                      participanteId: p.id,
-                      usuarioIdReal,
-                      status: finalStatus,
-                      temSubconta: finalStatus?.temSubconta
-                    });
 
                     return (
                       <tr key={p.id} className="hover:bg-gray-50 transition-colors">
@@ -568,6 +1021,54 @@ export default function SplitConfig() {
                               Sem subconta
                             </span>
                           )}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="relative">
+                            <input
+                              type="text"
+                              placeholder="Client ID"
+                              value={credentials[usuarioIdReal]?.clientId || p.clientId || ''}
+                              onChange={(e) => handleCredentialChange(usuarioIdReal, 'clientId', e.target.value)}
+                              onBlur={() => handleSaveCredentials(usuarioIdReal)}
+                              disabled={!finalStatus?.temSubconta}
+                              className={`w-full px-2 py-1 text-xs border rounded ${!finalStatus?.temSubconta
+                                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                : credentials[usuarioIdReal]?.saved
+                                  ? 'border-green-300 bg-green-50'
+                                  : 'border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500'
+                                }`}
+                            />
+                            {savingCredentials[usuarioIdReal] && (
+                              <Loader2 size={12} className="absolute right-2 top-1/2 -translate-y-1/2 animate-spin text-blue-500" />
+                            )}
+                            {credentials[usuarioIdReal]?.saved && !savingCredentials[usuarioIdReal] && (
+                              <CheckCircle size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-green-500" />
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="relative">
+                            <input
+                              type="password"
+                              placeholder="Client Secret"
+                              value={credentials[usuarioIdReal]?.clientSecret || p.clientSecret || ''}
+                              onChange={(e) => handleCredentialChange(usuarioIdReal, 'clientSecret', e.target.value)}
+                              onBlur={() => handleSaveCredentials(usuarioIdReal)}
+                              disabled={!finalStatus?.temSubconta}
+                              className={`w-full px-2 py-1 text-xs border rounded ${!finalStatus?.temSubconta
+                                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                : credentials[usuarioIdReal]?.saved
+                                  ? 'border-green-300 bg-green-50'
+                                  : 'border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500'
+                                }`}
+                            />
+                            {savingCredentials[usuarioIdReal] && (
+                              <Loader2 size={12} className="absolute right-2 top-1/2 -translate-y-1/2 animate-spin text-blue-500" />
+                            )}
+                            {credentials[usuarioIdReal]?.saved && !savingCredentials[usuarioIdReal] && (
+                              <CheckCircle size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-green-500" />
+                            )}
+                          </div>
                         </td>
                         <td className="px-4 py-3 text-gray-700 text-sm">
                           {calcularDataPrevista(idx)}

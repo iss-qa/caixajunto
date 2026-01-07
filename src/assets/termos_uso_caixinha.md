@@ -1,10 +1,10 @@
 # TERMOS DE USO E CONDIÇÕES GERAIS
 
-**Última atualização:** Dezembro de 2024
+**Última atualização:** Fevereiro de 2026
 
 ## 1. DEFINIÇÕES E NATUREZA DO SERVIÇO
 
-**1.1.** A plataforma **[NOME DO APP]** é um sistema de tecnologia que facilita a organização e gestão de grupos de poupança coletiva informal ("Caixinhas") entre pessoas físicas previamente conhecidas.
+**1.1.** A plataforma **JUNTIX** é uma plataforma tecnologica que facilita a organização e gestão de grupos de poupança coletiva informal ("Caixinhas") entre pessoas físicas previamente conhecidas.
 
 **1.2.** O serviço consiste exclusivamente em:
 - Ferramenta tecnológica de organização e controle

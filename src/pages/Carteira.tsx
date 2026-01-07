@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import { Wallet, TrendingUp, Download, Plus, Eye, EyeOff, Building2, Check, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { carteiraService, cobrancasService, caixasService, pagamentosService, subcontasService, bancosService } from '../lib/api';
 import { formatCurrency, formatDate } from '../lib/utils';
+import { TransacoesDetalhadas } from './Carteira/components/TransacoesDetalhadas';
 
 type StatusTransacaoCarteira = 'em_dia' | 'atrasado';
 type TipoTransacaoCarteira = 'entrada' | 'saida';
@@ -89,6 +91,8 @@ const WalletDashboard = () => {
   );
   const [creatingSubAccount, setCreatingSubAccount] = useState(false);
   const [subAccountError, setSubAccountError] = useState<string | null>(null);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
   const [recentTransactions, setRecentTransactions] = useState<TransacaoRecenteCarteira[]>([]);
   const [transactionsLoading, setTransactionsLoading] = useState(false);
   const [transactionsError, setTransactionsError] = useState<string | null>(null);
@@ -111,6 +115,34 @@ const WalletDashboard = () => {
     status: 'Ativa',
     createdAt: '',
   });
+
+  // Dados completos da subconta (Lytex)
+  const [subcontaData, setSubcontaData] = useState<{
+    _id?: string;
+    lytexId?: string;
+    name?: string;
+    email?: string;
+    cpfCnpj?: string;
+    cellphone?: string;
+    type?: string;
+    createdAt?: string;
+    address?: {
+      street?: string;
+      zone?: string;
+      city?: string;
+      state?: string;
+      number?: string;
+      complement?: string;
+      zip?: string;
+    };
+    hasCredentials?: boolean; // Se tem clientId/clientSecret
+    clientId?: string; // ID da aplicação Lytex
+    clientSecret?: string; // Segredo da aplicação (mascarado)
+    nomeCaixa?: string; // Nome do caixa associado
+  } | null>(null);
+
+  // Lista de caixas que o admin gerencia
+  const [caixasGerenciados, setCaixasGerenciados] = useState<Array<{ _id: string; nome: string; status?: string; dataFim?: string }>>([]);
 
   const [subForm, setSubForm] = useState({
     type: 'pf',
@@ -169,6 +201,97 @@ const WalletDashboard = () => {
   const fetchWallet = async () => {
     try {
       setWalletError(null);
+
+      // Primeiro tenta buscar a carteira usando credenciais individuais do participante
+      console.log('💰 Tentando buscar carteira individual do participante...');
+
+      try {
+        const individualResponse = await subcontasService.getMyWallet();
+        console.log('📦 Resposta da carteira individual:', individualResponse);
+
+        // Se obteve sucesso com carteira individual, usa esses valores
+        if (individualResponse?.success && individualResponse?.wallet) {
+          console.log('✅ Carteira individual obtida com sucesso:', individualResponse.wallet);
+          const wallet = individualResponse.wallet;
+          const availableRaw = typeof wallet?.balance === 'number' ? wallet.balance : 0;
+          const pendingRaw = typeof wallet?.futureBalance === 'number' ? wallet.futureBalance : 0;
+          const blockedRaw = typeof wallet?.blockedBalance === 'number' ? wallet.blockedBalance : 0;
+          const futureTaxesRaw = typeof wallet?.futureTaxes === 'number' ? wallet.futureTaxes : 0;
+          const available = availableRaw / 100;
+          const pending = pendingRaw / 100;
+          const blocked = blockedRaw / 100;
+          const futureTaxes = futureTaxesRaw / 100;
+
+          console.log('💵 Valores da carteira individual:', {
+            balance: available,
+            pendingBalance: pending,
+            blockedBalance: blocked,
+            futureTaxes,
+          });
+
+          setAccountData((prev) => ({
+            ...prev,
+            balance: available,
+            pendingBalance: pending,
+            blockedBalance: blocked,
+            futureTaxes,
+          }));
+          return; // Sucesso, não precisa do fallback
+        }
+
+        // Se sucesso=false, verifica se pode usar fallback
+        if (individualResponse?.success === false) {
+          const errorCode = individualResponse?.error;
+          console.log('⚠️ Erro na carteira individual:', errorCode, individualResponse?.message);
+
+          // CORREÇÃO: Só usa fallback (carteira master) para usuário master
+          // Para admin e participante, mostra saldo zerado e mensagem
+          if (usuario?.tipo !== 'master') {
+            console.log('ℹ️ Usuário não é master, não usando fallback para carteira geral');
+
+            if (errorCode === 'CREDENTIALS_NOT_CONFIGURED') {
+              setWalletError('Subconta existe, mas credenciais API (clientId/clientSecret) não configuradas. Solicite ao Administrador a configuração do seu clientID e clientSecret. Veja aba "Dados da Conta".');
+            } else if (errorCode === 'SUBCONTA_NOT_FOUND') {
+              setWalletError('Subconta não encontrada. Crie sua subconta primeiro.');
+            } else if (errorCode === 'LYTEX_AUTH_FAILED') {
+              setWalletError('Falha de autenticação Lytex. Verifique suas credenciais.');
+            } else {
+              setWalletError(individualResponse?.message || 'Erro ao buscar carteira individual.');
+            }
+
+            // Mostra saldo zerado para não exibir valores de outro usuário
+            setAccountData((prev) => ({
+              ...prev,
+              balance: 0,
+              pendingBalance: 0,
+              blockedBalance: 0,
+              futureTaxes: 0,
+            }));
+            return;
+          }
+
+          // Para usuário master, continua para o fallback
+          console.log('ℹ️ Usuário é master, usando fallback para carteira geral...');
+        }
+      } catch (individualError: any) {
+        console.log('❌ Exceção ao buscar carteira individual:', individualError?.message);
+
+        // CORREÇÃO: Só usa fallback para master
+        if (usuario?.tipo !== 'master') {
+          setWalletError('Erro ao buscar sua carteira. Verifique se sua subconta está configurada.');
+          setAccountData((prev) => ({
+            ...prev,
+            balance: 0,
+            pendingBalance: 0,
+            blockedBalance: 0,
+            futureTaxes: 0,
+          }));
+          return;
+        }
+      }
+
+      // Fallback: busca carteira geral (APENAS para master)
+      console.log('📊 Usando fallback: buscando carteira geral (master)...');
       const response = await cobrancasService.wallet();
       const wallet = (response && response.wallet) || response;
       const availableRaw =
@@ -185,6 +308,12 @@ const WalletDashboard = () => {
       const pending = pendingRaw / 100;
       const blocked = blockedRaw / 100;
       const futureTaxes = futureTaxesRaw / 100;
+
+      console.log('💵 Valores da carteira geral (master fallback):', {
+        balance: available,
+        pendingBalance: pending,
+      });
+
       setAccountData((prev) => ({
         ...prev,
         balance: available,
@@ -193,6 +322,7 @@ const WalletDashboard = () => {
         futureTaxes,
       }));
     } catch (e: any) {
+      console.error('❌ Erro fatal ao consultar carteira:', e);
       setWalletError(e?.message || 'Erro ao consultar carteira');
     }
   };
@@ -604,14 +734,20 @@ const WalletDashboard = () => {
           '[Carteira] Subconta criada com sucesso, id:',
           subAccountId,
         );
-        alert('Subconta criada com sucesso');
+        setSuccessMessage('Subconta criada com sucesso! ✅');
+        setShowSuccessModal(true);
+        setTimeout(() => {
+          setShowSuccessModal(false);
+          window.location.reload();
+        }, 2000);
         return;
       }
       console.warn(
         '[Carteira] Chamada de criação de subconta não retornou ID',
         resp,
       );
-      alert('Não foi possível obter o ID da subconta criada');
+      setSubAccountError('Não foi possível obter o ID da subconta criada');
+      setTimeout(() => setSubAccountError(null), 5000);
     } catch (e: any) {
       const status = e?.response?.status;
       const data = e?.response?.data;
@@ -674,7 +810,7 @@ const WalletDashboard = () => {
       }
 
       setSubAccountError(message);
-      alert(`Erro ao criar subconta: ${message}`);
+      setTimeout(() => setSubAccountError(null), 5000);
     } finally {
       setCreatingSubAccount(false);
     }
@@ -693,10 +829,68 @@ const WalletDashboard = () => {
         lytexSubAccountId: usuario?.lytexSubAccountId,
       });
 
-      // Se já tem lytexSubAccountId no contexto, não precisa verificar
+      // Se já tem lytexSubAccountId no contexto, busca os dados completos da subconta
       if (usuario?.lytexSubAccountId) {
         console.log('✅ lytexSubAccountId já existe no contexto:', usuario.lytexSubAccountId);
         setHasSubAccount(true);
+
+        // Mesmo assim, buscar os dados completos da subconta
+        try {
+          const localResp = await subcontasService.getMine();
+          const local = (localResp && localResp.subconta) || null;
+
+          if (local) {
+            console.log('📦 Subconta completa carregada:', local);
+            setSubcontaData({
+              _id: local._id,
+              lytexId: local.lytexId,
+              name: local.name,
+              email: local.email,
+              cpfCnpj: local.cpfCnpj,
+              cellphone: local.cellphone,
+              type: local.type,
+              createdAt: local.createdAt,
+              address: local.address,
+              hasCredentials: Boolean(local.clientId && local.clientSecret),
+              clientId: local.clientId || undefined,
+              clientSecret: local.clientSecret ? '••••••••••••••••' : undefined,
+              nomeCaixa: local.nomeCaixa || undefined,
+            });
+
+            setAccountData((prev) => ({
+              ...prev,
+              name: local.name || prev.name,
+              email: local.email || prev.email,
+              cpf: local.cpfCnpj || prev.cpf,
+              createdAt: local.createdAt ? formatDate(local.createdAt) : prev.createdAt,
+            }));
+
+            // Buscar caixas gerenciados pelo admin
+            if (usuario?.tipo === 'administrador' || usuario?.tipo === 'master') {
+              try {
+                const caixasResp = usuario?.tipo === 'master'
+                  ? await caixasService.getAll()
+                  : await caixasService.getByAdmin(usuario._id);
+                const listaCaixas = Array.isArray(caixasResp)
+                  ? caixasResp
+                  : caixasResp?.caixas || [];
+                setCaixasGerenciados(
+                  listaCaixas.map((c: any) => ({
+                    _id: c._id,
+                    nome: c.nome,
+                    status: c.status,
+                    dataFim: c.dataFim || c.ultimaParcela, // Data de fim do caixa
+                  }))
+                );
+              } catch (e: any) {
+                console.log('⚠️ Erro ao buscar caixas gerenciados:', e?.message);
+              }
+            }
+          }
+        } catch (e: any) {
+          console.log('⚠️ Erro ao buscar detalhes da subconta:', e?.message);
+        }
+
         setCheckingSubAccount(false);
         return;
       }
@@ -724,6 +918,55 @@ const WalletDashboard = () => {
             console.log('[Carteira] ✅ Subconta encontrada no MongoDB local:', idSub);
             setHasSubAccount(true);
             updateUsuario({ lytexSubAccountId: idSub });
+
+            // Popula subcontaData com os dados completos da subconta
+            setSubcontaData({
+              _id: local._id,
+              lytexId: local.lytexId,
+              name: local.name,
+              email: local.email,
+              cpfCnpj: local.cpfCnpj,
+              cellphone: local.cellphone,
+              type: local.type,
+              createdAt: local.createdAt,
+              address: local.address,
+              hasCredentials: Boolean(local.clientId && local.clientSecret),
+              clientId: local.clientId || undefined,
+              clientSecret: local.clientSecret ? '••••••••••••••••' : undefined, // Mascarado
+              nomeCaixa: local.nomeCaixa || undefined,
+            });
+
+            // Atualiza accountData com dados da subconta
+            setAccountData((prev) => ({
+              ...prev,
+              name: local.name || prev.name,
+              email: local.email || prev.email,
+              cpf: local.cpfCnpj || prev.cpf,
+              createdAt: local.createdAt ? formatDate(local.createdAt) : prev.createdAt,
+            }));
+
+            // Buscar caixas gerenciados pelo admin (se for admin ou master)
+            if (usuario?.tipo === 'administrador' || usuario?.tipo === 'master') {
+              try {
+                const caixasResp = usuario?.tipo === 'master'
+                  ? await caixasService.getAll()
+                  : await caixasService.getByAdmin(usuario._id);
+                const listaCaixas = Array.isArray(caixasResp)
+                  ? caixasResp
+                  : caixasResp?.caixas || [];
+                setCaixasGerenciados(
+                  listaCaixas.map((c: any) => ({
+                    _id: c._id,
+                    nome: c.nome,
+                    status: c.status,
+                  }))
+                );
+                console.log('📦 Caixas gerenciados:', listaCaixas.length);
+              } catch (e: any) {
+                console.log('⚠️ Erro ao buscar caixas gerenciados:', e?.message);
+              }
+            }
+
             setCheckingSubAccount(false);
             console.log('========================================\n');
             return;
@@ -799,334 +1042,361 @@ const WalletDashboard = () => {
     }
   }, [hasSubAccount, usuario]);
 
-  const OverviewTab = () => (
-    <div className="space-y-6">
-      <div className="bg-gradient-to-br from-blue-600 to-blue-800 rounded-2xl p-6 text-white">
-        <div className="flex justify-between items-start mb-6">
-          <div>
-            <p className="text-blue-100 text-sm mb-1">Saldo Disponível</p>
-            <div className="flex items-center gap-3">
-              <h2 className="text-3xl font-bold">
-                {showBalance ? formatCurrency(accountData.balance) : 'R$ ••••••'}
-              </h2>
-              <button
-                onClick={() => setShowBalance(!showBalance)}
-                className="text-blue-100 hover:text-white"
-              >
-                {showBalance ? <EyeOff size={20} /> : <Eye size={20} />}
-              </button>
-            </div>
-          </div>
-          <Wallet size={40} className="text-blue-300" />
-        </div>
+  const OverviewTab = () => {
+    // Calcular a próxima data de recebimento baseado nos caixas gerenciados
+    const proximoRecebimento = caixasGerenciados
+      .filter((c) => c.dataFim && c.status === 'ativo')
+      .map((c) => ({ nome: c.nome, data: new Date(c.dataFim!) }))
+      .sort((a, b) => a.data.getTime() - b.data.getTime())[0];
 
-        <div className="flex gap-4">
-          <button
-            onClick={() => setShowModal('withdraw')}
-            className="flex-1 bg-white text-blue-600 py-3 rounded-lg font-semibold hover:bg-blue-50 transition-colors flex items-center justify-center gap-2"
-          >
-            <Download size={18} />
-            Solicitar Saque
-          </button>
-          <button
-            onClick={() => navigate('/carteira/banco')}
-            className="flex-1 bg-blue-700 text-white py-3 rounded-lg font-semibold hover:bg-blue-600 transition-colors flex items-center justify-center gap-2"
-          >
-            <Plus size={18} />
-            Adicionar Banco
-          </button>
-        </div>
-        {walletError && (
-          <div className="mt-3 text-xs bg-red-50 border border-red-200 text-red-700 rounded-lg p-2">
-            {walletError}
-          </div>
-        )}
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
-          <div className="flex justify-between items-center">
+    return (
+      <div className="space-y-6">
+        {/* Card principal com os 3 saldos */}
+        <div className="bg-gradient-to-br from-blue-600 to-blue-800 rounded-2xl p-6 text-white">
+          <div className="flex justify-between items-start mb-4">
             <div>
-              <p className="text-yellow-800 text-sm mb-1">Saldo Pendente</p>
-              <p className="text-2xl font-bold text-yellow-900">
-                {formatCurrency(accountData.pendingBalance)}
-              </p>
-            </div>
-            <TrendingUp size={32} className="text-yellow-600" />
-          </div>
-          <p className="text-xs text-yellow-700 mt-2">
-            Valores aguardando confirmação de pagamento
-          </p>
-        </div>
-
-        <div className="bg-orange-50 border border-orange-200 rounded-xl p-4">
-          <div className="flex justify-between items-center">
-            <div>
-              <p className="text-orange-800 text-sm mb-1">Saldo Bloqueado</p>
-              <p className="text-xl font-bold text-orange-900">
-                {formatCurrency(accountData.blockedBalance)}
-              </p>
-              <p className="text-xs text-orange-700 mt-2">
-                Taxas futuras: {formatCurrency(accountData.futureTaxes)}
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div>
-        <h3 className="font-semibold text-gray-800 mb-3">Transações Recentes</h3>
-        {transactionsLoading && (
-          <p className="text-sm text-gray-500">Carregando transações...</p>
-        )}
-        {transactionsError && !transactionsLoading && (
-          <p className="text-sm text-red-600">{transactionsError}</p>
-        )}
-        {!transactionsLoading &&
-          !transactionsError &&
-          recentTransactions.length === 0 && (
-            <p className="text-sm text-gray-500">
-              Nenhuma transação recente encontrada.
-            </p>
-          )}
-        {!transactionsLoading &&
-          !transactionsError &&
-          recentTransactions.length > 0 && (
-            <div className="space-y-4">
-              {Array.from(
-                recentTransactions.reduce(
-                  (map, t) => {
-                    const key = t.caixaId;
-                    const grupo =
-                      map.get(key) ||
-                      {
-                        caixaId: t.caixaId,
-                        caixaNome: t.caixaNome,
-                        caixaAdminNome: t.caixaAdminNome,
-                        transacoes: [] as TransacaoRecenteCarteira[],
-                      };
-                    grupo.transacoes.push(t);
-                    map.set(key, grupo);
-                    return map;
-                  },
-                  new Map<
-                    string,
-                    {
-                      caixaId: string;
-                      caixaNome: string;
-                      caixaAdminNome: string;
-                      transacoes: TransacaoRecenteCarteira[];
-                    }
-                  >(),
-                ).values(),
-              )
-                .sort((a, b) => {
-                  const dataA =
-                    a.transacoes[0]?.dataPagamento ||
-                    new Date(0).toISOString();
-                  const dataB =
-                    b.transacoes[0]?.dataPagamento ||
-                    new Date(0).toISOString();
-                  return (
-                    new Date(dataB).getTime() - new Date(dataA).getTime()
-                  );
-                })
-                .map((grupo) => (
-                  <div key={grupo.caixaId} className="space-y-4">
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <p className="text-sm font-semibold text-gray-800">
-                          {grupo.caixaNome}
-                        </p>
-                        {grupo.caixaAdminNome && (
-                          <p className="text-xs text-gray-500">
-                            Organizado por {grupo.caixaAdminNome}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Agrupamento por Participante dentro do Caixa */}
-                    {Array.from(
-                      grupo.transacoes.reduce((mapPart, t) => {
-                        const key = t.participanteNome;
-                        const list = mapPart.get(key) || [];
-                        list.push(t);
-                        mapPart.set(key, list);
-                        return mapPart;
-                      }, new Map<string, TransacaoRecenteCarteira[]>()).entries()
-                    ).map(([participanteNome, transacoesParticipante], idxPart) => {
-                      // Ordenar por semana/mês
-                      const sortedTransacoes = transacoesParticipante.sort((a, b) => {
-                        const mesA = a.mesReferencia || 0;
-                        const mesB = b.mesReferencia || 0;
-                        return mesA - mesB;
-                      });
-
-                      // Cor de fundo alternada por participante
-                      const hash = participanteNome.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-                      const bgColor = hash % 2 === 0 ? 'bg-white' : 'bg-gray-50';
-
-                      return (
-                        <div key={participanteNome} className={`rounded-xl border border-gray-200 overflow-hidden ${bgColor}`}>
-                          <div className="px-4 py-2 bg-opacity-50 border-b border-gray-100 flex justify-between items-center">
-                            <span className="font-medium text-gray-700">{participanteNome}</span>
-                            <span className="text-xs text-gray-500">{sortedTransacoes.length} pagamentos</span>
-                          </div>
-                          <div className="divide-y divide-gray-100">
-                            {sortedTransacoes.map((t) => (
-                              <div
-                                key={t.id}
-                                className="p-4 hover:bg-black hover:bg-opacity-5 transition-colors"
-                              >
-                                <div className="flex justify-between items-start">
-                                  <div className="flex-1">
-                                    <p className="text-xs text-gray-500">
-                                      {formatDate(t.dataPagamento)} •{' '}
-                                      {t.status === 'em_dia'
-                                        ? 'Pago em dia'
-                                        : 'Pago em atraso'}
-                                      {typeof t.mesReferencia === 'number' &&
-                                        t.mesReferencia > 0
-                                        ? ` • ${t.mesReferencia}ª ${t.tipoCaixa === 'semanal'
-                                          ? 'semana'
-                                          : 'mês'
-                                        }`
-                                        : ''}
-                                    </p>
-                                  </div>
-                                  <div className="text-right">
-                                    <p
-                                      className={`font-bold ${t.tipo === 'entrada'
-                                        ? 'text-green-600'
-                                        : 'text-red-600'
-                                        }`}
-                                    >
-                                      {t.tipo === 'entrada' ? '+' : '-'}{' '}
-                                      {formatCurrency(t.valorPago)}
-                                    </p>
-                                  </div>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ))}
-            </div>
-          )}
-      </div>
-      <div className="mt-6">
-        <h3 className="font-semibold text-gray-800 mb-3">
-          Transações da Carteira (Lytex)
-        </h3>
-        {lytexTransactionsLoading && (
-          <p className="text-sm text-gray-500">
-            Carregando transações da carteira...
-          </p>
-        )}
-        {lytexTransactionsError && !lytexTransactionsLoading && (
-          <p className="text-sm text-red-600">{lytexTransactionsError}</p>
-        )}
-        {!lytexTransactionsLoading &&
-          !lytexTransactionsError &&
-          lytexTransactions.length === 0 && (
-            <p className="text-sm text-gray-500">
-              Nenhuma transação de saque ou split encontrada.
-            </p>
-          )}
-        {!lytexTransactionsLoading &&
-          !lytexTransactionsError &&
-          lytexTransactions.length > 0 && (
-            <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-              <table className="min-w-full text-sm">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-4 py-2 text-left text-gray-600 font-medium">
-                      Data
-                    </th>
-                    <th className="px-4 py-2 text-left text-gray-600 font-medium">
-                      Tipo
-                    </th>
-                    <th className="px-4 py-2 text-left text-gray-600 font-medium">
-                      Descrição
-                    </th>
-                    <th className="px-4 py-2 text-right text-gray-600 font-medium">
-                      Valor
-                    </th>
-                    <th className="px-4 py-2 text-right text-gray-600 font-medium">
-                      Status
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {lytexTransactions.map((t) => (
-                    <tr
-                      key={t.id}
-                      className="border-t border-gray-100 hover:bg-gray-50"
-                    >
-                      <td className="px-4 py-2 text-gray-700">
-                        {t.createdAt ? formatDate(t.createdAt) : '-'}
-                      </td>
-                      <td className="px-4 py-2 text-gray-700 capitalize">
-                        {t.type || '-'}
-                      </td>
-                      <td className="px-4 py-2 text-gray-700">
-                        {t.description || '-'}
-                      </td>
-                      <td className="px-4 py-2 text-right font-medium text-gray-800">
-                        {formatCurrency(t.amount || 0)}
-                      </td>
-                      <td className="px-4 py-2 text-right">
-                        <span className="inline-flex px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
-                          {t.status || '-'}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <div className="flex items-center justify-between px-4 py-2 border-t border-gray-100 bg-gray-50">
+              <p className="text-blue-100 text-sm mb-1">Carteira</p>
+              <div className="flex items-center gap-3">
                 <button
-                  disabled={lytexPage <= 1 || lytexTransactionsLoading}
-                  onClick={() =>
-                    lytexPage > 1 && fetchLytexTransactions(lytexPage - 1)
-                  }
-                  className="text-xs text-blue-600 disabled:text-gray-400 disabled:cursor-not-allowed"
+                  onClick={() => setShowBalance(!showBalance)}
+                  className="text-blue-100 hover:text-white"
                 >
-                  Anterior
-                </button>
-                <span className="text-xs text-gray-500">
-                  Página {lytexPage}
-                </span>
-                <button
-                  disabled={!lytexHasMore || lytexTransactionsLoading}
-                  onClick={() =>
-                    lytexHasMore && fetchLytexTransactions(lytexPage + 1)
-                  }
-                  className="text-xs text-blue-600 disabled:text-gray-400 disabled:cursor-not-allowed"
-                >
-                  Próxima
+                  {showBalance ? <EyeOff size={20} /> : <Eye size={20} />}
                 </button>
               </div>
             </div>
+            <Wallet size={40} className="text-blue-300" />
+          </div>
+
+          {/* 3 Cards de Saldo */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+            {/* Saldo Disponível */}
+            <div className="bg-white/10 backdrop-blur rounded-xl p-4">
+              <p className="text-blue-100 text-xs mb-1">Saldo Disponível</p>
+              <p className="text-2xl font-bold">
+                {showBalance ? formatCurrency(accountData.balance) : 'R$ ••••••'}
+              </p>
+            </div>
+
+            {/* Saldo Pendente */}
+            <div className="bg-white/10 backdrop-blur rounded-xl p-4">
+              <p className="text-blue-100 text-xs mb-1">Saldo Pendente</p>
+              <p className="text-2xl font-bold">
+                {showBalance ? formatCurrency(accountData.pendingBalance) : 'R$ ••••••'}
+              </p>
+              <p className="text-blue-200 text-xs mt-1">Aguardando confirmação</p>
+            </div>
+
+            {/* Saldo Bloqueado */}
+            <div className="bg-white/10 backdrop-blur rounded-xl p-4">
+              <p className="text-blue-100 text-xs mb-1">Saldo Bloqueado</p>
+              <p className="text-2xl font-bold">
+                {showBalance ? formatCurrency(accountData.blockedBalance) : 'R$ ••••••'}
+              </p>
+              <p className="text-blue-200 text-xs mt-1">
+                Taxas futuras: {showBalance ? formatCurrency(accountData.futureTaxes) : 'R$ •••'}
+              </p>
+            </div>
+          </div>
+
+          {/* Data de Recebimento */}
+          {proximoRecebimento ? (
+            <div className="bg-white/15 backdrop-blur rounded-xl p-4 text-center">
+              <p className="text-blue-100 text-sm mb-1">📅 Próximo Recebimento Previsto</p>
+              <p className="text-xl font-bold">
+                {formatDate(proximoRecebimento.data.toISOString())}
+              </p>
+              <p className="text-blue-200 text-xs mt-1">
+                Caixa: {proximoRecebimento.nome}
+              </p>
+            </div>
+          ) : caixasGerenciados.length > 0 ? (
+            <div className="bg-white/15 backdrop-blur rounded-xl p-4 text-center">
+              <p className="text-blue-100 text-sm mb-1">📅 Recebimento</p>
+              <p className="text-sm text-blue-200">
+                A data de recebimento será definida conforme encerramento dos caixas ativos
+              </p>
+            </div>
+          ) : null}
+
+          {/* Erro de carteira */}
+          {walletError && (
+            <div className="mt-3 text-xs bg-red-50/20 border border-red-200/30 text-red-100 rounded-lg p-2">
+              {walletError}
+            </div>
           )}
+        </div>
+
+        <div>
+          <h3 className="font-semibold text-gray-800 mb-3">Transações Recentes</h3>
+          {transactionsLoading && (
+            <p className="text-sm text-gray-500">Carregando transações...</p>
+          )}
+          {transactionsError && !transactionsLoading && (
+            <p className="text-sm text-red-600">{transactionsError}</p>
+          )}
+          {!transactionsLoading &&
+            !transactionsError &&
+            recentTransactions.length === 0 && (
+              <p className="text-sm text-gray-500">
+                Nenhuma transação recente encontrada.
+              </p>
+            )}
+          {!transactionsLoading &&
+            !transactionsError &&
+            recentTransactions.length > 0 && (
+              <div className="space-y-4">
+                {Array.from(
+                  recentTransactions.reduce(
+                    (map, t) => {
+                      const key = t.caixaId;
+                      const grupo =
+                        map.get(key) ||
+                        {
+                          caixaId: t.caixaId,
+                          caixaNome: t.caixaNome,
+                          caixaAdminNome: t.caixaAdminNome,
+                          transacoes: [] as TransacaoRecenteCarteira[],
+                        };
+                      grupo.transacoes.push(t);
+                      map.set(key, grupo);
+                      return map;
+                    },
+                    new Map<
+                      string,
+                      {
+                        caixaId: string;
+                        caixaNome: string;
+                        caixaAdminNome: string;
+                        transacoes: TransacaoRecenteCarteira[];
+                      }
+                    >(),
+                  ).values(),
+                )
+                  .sort((a, b) => {
+                    const dataA =
+                      a.transacoes[0]?.dataPagamento ||
+                      new Date(0).toISOString();
+                    const dataB =
+                      b.transacoes[0]?.dataPagamento ||
+                      new Date(0).toISOString();
+                    return (
+                      new Date(dataB).getTime() - new Date(dataA).getTime()
+                    );
+                  })
+                  .map((grupo) => (
+                    <div key={grupo.caixaId} className="space-y-4">
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <p className="text-sm font-semibold text-gray-800">
+                            {grupo.caixaNome}
+                          </p>
+                          {grupo.caixaAdminNome && (
+                            <p className="text-xs text-gray-500">
+                              Organizado por {grupo.caixaAdminNome}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Agrupamento por Participante dentro do Caixa */}
+                      {Array.from(
+                        grupo.transacoes.reduce((mapPart, t) => {
+                          const key = t.participanteNome;
+                          const list = mapPart.get(key) || [];
+                          list.push(t);
+                          mapPart.set(key, list);
+                          return mapPart;
+                        }, new Map<string, TransacaoRecenteCarteira[]>()).entries()
+                      ).map(([participanteNome, transacoesParticipante], idxPart) => {
+                        // Ordenar por semana/mês
+                        const sortedTransacoes = transacoesParticipante.sort((a, b) => {
+                          const mesA = a.mesReferencia || 0;
+                          const mesB = b.mesReferencia || 0;
+                          return mesA - mesB;
+                        });
+
+                        // Cor de fundo alternada por participante
+                        const hash = participanteNome.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+                        const bgColor = hash % 2 === 0 ? 'bg-white' : 'bg-gray-50';
+
+                        return (
+                          <div key={participanteNome} className={`rounded-xl border border-gray-200 overflow-hidden ${bgColor}`}>
+                            <div className="px-4 py-2 bg-opacity-50 border-b border-gray-100 flex justify-between items-center">
+                              <span className="font-medium text-gray-700">{participanteNome}</span>
+                              <span className="text-xs text-gray-500">{sortedTransacoes.length} pagamentos</span>
+                            </div>
+                            <div className="divide-y divide-gray-100">
+                              {sortedTransacoes.map((t) => (
+                                <div
+                                  key={t.id}
+                                  className="p-4 hover:bg-black hover:bg-opacity-5 transition-colors"
+                                >
+                                  <div className="flex justify-between items-start">
+                                    <div className="flex-1">
+                                      <p className="text-xs text-gray-500">
+                                        {formatDate(t.dataPagamento)} •{' '}
+                                        {t.status === 'em_dia'
+                                          ? 'Pago em dia'
+                                          : 'Pago em atraso'}
+                                        {typeof t.mesReferencia === 'number' &&
+                                          t.mesReferencia > 0
+                                          ? ` • ${t.mesReferencia}ª ${t.tipoCaixa === 'semanal'
+                                            ? 'semana'
+                                            : 'mês'
+                                          }`
+                                          : ''}
+                                      </p>
+                                    </div>
+                                    <div className="text-right">
+                                      <p
+                                        className={`font-bold ${t.tipo === 'entrada'
+                                          ? 'text-green-600'
+                                          : 'text-red-600'
+                                          }`}
+                                      >
+                                        {t.tipo === 'entrada' ? '+' : '-'}{' '}
+                                        {formatCurrency(t.valorPago)}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ))}
+              </div>
+            )}
+        </div>
+        <div className="mt-6">
+          <h3 className="font-semibold text-gray-800 mb-3">
+            Transações da Carteira (Lytex)
+          </h3>
+          {lytexTransactionsLoading && (
+            <p className="text-sm text-gray-500">
+              Carregando transações da carteira...
+            </p>
+          )}
+          {lytexTransactionsError && !lytexTransactionsLoading && (
+            <p className="text-sm text-red-600">{lytexTransactionsError}</p>
+          )}
+          {!lytexTransactionsLoading &&
+            !lytexTransactionsError &&
+            lytexTransactions.length === 0 && (
+              <p className="text-sm text-gray-500">
+                Nenhuma transação de saque ou split encontrada.
+              </p>
+            )}
+          {!lytexTransactionsLoading &&
+            !lytexTransactionsError &&
+            lytexTransactions.length > 0 && (
+              <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                <table className="min-w-full text-sm">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-2 text-left text-gray-600 font-medium">
+                        Data
+                      </th>
+                      <th className="px-4 py-2 text-left text-gray-600 font-medium">
+                        Tipo
+                      </th>
+                      <th className="px-4 py-2 text-left text-gray-600 font-medium">
+                        Descrição
+                      </th>
+                      <th className="px-4 py-2 text-right text-gray-600 font-medium">
+                        Valor
+                      </th>
+                      <th className="px-4 py-2 text-right text-gray-600 font-medium">
+                        Status
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {lytexTransactions.map((t) => (
+                      <tr
+                        key={t.id}
+                        className="border-t border-gray-100 hover:bg-gray-50"
+                      >
+                        <td className="px-4 py-2 text-gray-700">
+                          {t.createdAt ? formatDate(t.createdAt) : '-'}
+                        </td>
+                        <td className="px-4 py-2 text-gray-700 capitalize">
+                          {t.type || '-'}
+                        </td>
+                        <td className="px-4 py-2 text-gray-700">
+                          {t.description || '-'}
+                        </td>
+                        <td className="px-4 py-2 text-right font-medium text-gray-800">
+                          {formatCurrency(t.amount || 0)}
+                        </td>
+                        <td className="px-4 py-2 text-right">
+                          <span className="inline-flex px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
+                            {t.status || '-'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div className="flex items-center justify-between px-4 py-2 border-t border-gray-100 bg-gray-50">
+                  <button
+                    disabled={lytexPage <= 1 || lytexTransactionsLoading}
+                    onClick={() =>
+                      lytexPage > 1 && fetchLytexTransactions(lytexPage - 1)
+                    }
+                    className="text-xs text-blue-600 disabled:text-gray-400 disabled:cursor-not-allowed"
+                  >
+                    Anterior
+                  </button>
+                  <span className="text-xs text-gray-500">
+                    Página {lytexPage}
+                  </span>
+                  <button
+                    disabled={!lytexHasMore || lytexTransactionsLoading}
+                    onClick={() =>
+                      lytexHasMore && fetchLytexTransactions(lytexPage + 1)
+                    }
+                    className="text-xs text-blue-600 disabled:text-gray-400 disabled:cursor-not-allowed"
+                  >
+                    Próxima
+                  </button>
+                </div>
+              </div>
+            )}
+        </div>
+
+        {/* Transações Detalhadas */}
+        <div className="mt-6">
+          <TransacoesDetalhadas />
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   const AccountTab = () => (
     <div className="space-y-6">
+      {/* Card de Status da Conta */}
       <div className="bg-white border border-gray-200 rounded-xl p-6">
         <div className="flex items-center gap-3 mb-4">
-          <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
-            <Check className="text-green-600" size={24} />
+          <div className={`w-12 h-12 ${subcontaData ? 'bg-green-100' : 'bg-yellow-100'} rounded-full flex items-center justify-center`}>
+            {subcontaData ? (
+              <Check className="text-green-600" size={24} />
+            ) : (
+              <X className="text-yellow-600" size={24} />
+            )}
           </div>
           <div>
-            <h3 className="font-semibold text-gray-800">Conta Ativa</h3>
-            <p className="text-sm text-gray-600">Sua conta está funcionando normalmente</p>
+            <h3 className="font-semibold text-gray-800">
+              {subcontaData ? 'Conta Ativa' : 'Subconta Não Encontrada'}
+            </h3>
+            <p className="text-sm text-gray-600">
+              {subcontaData
+                ? 'Sua conta está funcionando normalmente'
+                : 'Crie sua subconta para começar a receber'}
+            </p>
           </div>
         </div>
 
@@ -1145,186 +1415,169 @@ const WalletDashboard = () => {
           </div>
         )}
 
+        {/* Dados Principais */}
         <div className="space-y-3 pt-4 border-t border-gray-200">
           <div className="flex justify-between">
             <span className="text-gray-600">Nome Completo</span>
-            <span className="font-medium text-gray-800">{accountData.name}</span>
+            <span className="font-medium text-gray-800">{subcontaData?.name || accountData.name}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-gray-600">CPF</span>
-            <span className="font-medium text-gray-800">{accountData.cpf}</span>
+            <span className="text-gray-600">CPF/CNPJ</span>
+            <span className="font-medium text-gray-800">{subcontaData?.cpfCnpj || accountData.cpf}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-gray-600">E-mail</span>
-            <span className="font-medium text-gray-800">{accountData.email}</span>
+            <span className="font-medium text-gray-800">{subcontaData?.email || accountData.email}</span>
           </div>
+          {subcontaData?.cellphone && (
+            <div className="flex justify-between">
+              <span className="text-gray-600">Celular</span>
+              <span className="font-medium text-gray-800">{subcontaData.cellphone}</span>
+            </div>
+          )}
+          {subcontaData?.type && (
+            <div className="flex justify-between">
+              <span className="text-gray-600">Tipo</span>
+              <span className="font-medium text-gray-800">{subcontaData.type.toUpperCase()}</span>
+            </div>
+          )}
           <div className="flex justify-between">
             <span className="text-gray-600">Status</span>
-            <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm font-medium">
-              {accountData.status}
+            <span className={`px-3 py-1 ${subcontaData ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'} rounded-full text-sm font-medium`}>
+              {subcontaData ? 'Ativa' : 'Pendente'}
             </span>
           </div>
-          <div className="flex justify-between">
-            <span className="text-gray-600">Conta criada em</span>
-            <span className="font-medium text-gray-800">{accountData.createdAt}</span>
-          </div>
+          {subcontaData?.createdAt && (
+            <div className="flex justify-between">
+              <span className="text-gray-600">Conta criada em</span>
+              <span className="font-medium text-gray-800">{formatDate(subcontaData.createdAt)}</span>
+            </div>
+          )}
         </div>
       </div>
 
+      {/* Card de Dados Lytex */}
+      {subcontaData?.lytexId && (
+        <div className="bg-white border border-gray-200 rounded-xl p-6">
+          <h4 className="font-semibold text-gray-800 mb-4">📋 Dados Lytex</h4>
+          <div className="space-y-3">
+            <div className="flex justify-between items-center">
+              <span className="text-gray-600">ID Lytex</span>
+              <span className="font-mono text-sm bg-gray-100 px-2 py-1 rounded text-gray-800">
+                {subcontaData.lytexId}
+              </span>
+            </div>
+            {subcontaData._id && (
+              <div className="flex justify-between items-center">
+                <span className="text-gray-600">ID Local</span>
+                <span className="font-mono text-sm bg-gray-100 px-2 py-1 rounded text-gray-800">
+                  {subcontaData._id}
+                </span>
+              </div>
+            )}
+            <div className="flex justify-between items-center">
+              <span className="text-gray-600">Credenciais API</span>
+              <span className={`px-3 py-1 ${subcontaData.hasCredentials ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'} rounded-full text-sm font-medium`}>
+                {subcontaData.hasCredentials ? '✓ Configuradas' : '⚠ Não configuradas'}
+              </span>
+            </div>
+            {subcontaData.clientId && (
+              <div className="flex justify-between items-center">
+                <span className="text-gray-600">Client ID</span>
+                <span className="font-mono text-sm bg-blue-50 px-2 py-1 rounded text-blue-800">
+                  {subcontaData.clientId}
+                </span>
+              </div>
+            )}
+            {subcontaData.clientSecret && (
+              <div className="flex justify-between items-center">
+                <span className="text-gray-600">Client Secret</span>
+                <span className="font-mono text-sm bg-blue-50 px-2 py-1 rounded text-blue-800">
+                  {subcontaData.clientSecret}
+                </span>
+              </div>
+            )}
+            {subcontaData.nomeCaixa && (
+              <div className="flex justify-between items-center">
+                <span className="text-gray-600">Caixa Associado</span>
+                <span className="font-medium text-gray-800">
+                  {subcontaData.nomeCaixa}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Card de Caixas Gerenciados (apenas admin/master) */}
+      {caixasGerenciados.length > 0 && (
+        <div className="bg-white border border-gray-200 rounded-xl p-6">
+          <h4 className="font-semibold text-gray-800 mb-4">📦 Caixas Gerenciados ({caixasGerenciados.length})</h4>
+          <div className="space-y-2">
+            {caixasGerenciados.map((caixa) => (
+              <div key={caixa._id} className="flex justify-between items-center py-2 border-b border-gray-100 last:border-b-0">
+                <span className="font-medium text-gray-800">{caixa.nome}</span>
+                <span className={`px-2 py-1 rounded-full text-xs font-medium ${caixa.status === 'ativo' ? 'bg-green-100 text-green-700' :
+                  caixa.status === 'completo' ? 'bg-blue-100 text-blue-700' :
+                    caixa.status === 'finalizado' ? 'bg-gray-100 text-gray-700' :
+                      'bg-yellow-100 text-yellow-700'
+                  }`}>
+                  {caixa.status || 'Rascunho'}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Card de Endereço */}
+      {subcontaData?.address && (
+        <div className="bg-white border border-gray-200 rounded-xl p-6">
+          <h4 className="font-semibold text-gray-800 mb-4">📍 Endereço</h4>
+          <div className="space-y-3">
+            <div className="flex justify-between">
+              <span className="text-gray-600">Logradouro</span>
+              <span className="font-medium text-gray-800">
+                {subcontaData.address.street}{subcontaData.address.number ? `, ${subcontaData.address.number}` : ''}
+              </span>
+            </div>
+            {subcontaData.address.complement && (
+              <div className="flex justify-between">
+                <span className="text-gray-600">Complemento</span>
+                <span className="font-medium text-gray-800">{subcontaData.address.complement}</span>
+              </div>
+            )}
+            <div className="flex justify-between">
+              <span className="text-gray-600">Bairro</span>
+              <span className="font-medium text-gray-800">{subcontaData.address.zone}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-600">Cidade/UF</span>
+              <span className="font-medium text-gray-800">{subcontaData.address.city}/{subcontaData.address.state}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-600">CEP</span>
+              <span className="font-medium text-gray-800">{subcontaData.address.zip}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Informações Importantes */}
       <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
         <h4 className="font-semibold text-blue-900 mb-2">Informações Importantes</h4>
         <ul className="space-y-2 text-sm text-blue-800">
           <li>• Saques processados em até 1 dia útil</li>
           <li>• Sem taxa para transferências acima de R$ 100</li>
           <li>• Suporte disponível de segunda a sexta, 9h às 18h</li>
+          {!subcontaData?.hasCredentials && (
+            <li className="text-orange-700">• ⚠ Credenciais API não configuradas - solicite ao master</li>
+          )}
         </ul>
       </div>
     </div>
   );
 
-  const BanksTab = () => (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h3 className="font-semibold text-gray-800">Minhas Contas Bancárias</h3>
-        <button
-          onClick={() => navigate('/carteira/banco')}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
-        >
-          <Plus size={18} />
-          Adicionar Conta
-        </button>
-      </div>
-
-      <div className="space-y-3">
-        {bankAccounts.map((bank) => (
-          <div
-            key={bank._id || `${bank.bankCode}-${bank.agency}-${bank.account}`}
-            className="bg-white border border-gray-200 rounded-xl p-5 hover:shadow-md transition-shadow"
-          >
-            <div className="flex justify-between items-start">
-              <div className="flex gap-4">
-                <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                  <Building2 className="text-blue-600" size={24} />
-                </div>
-                <div>
-                  <h4 className="font-semibold text-gray-800">
-                    {bank.bankName}
-                  </h4>
-                  <p className="text-sm text-gray-600">Código: {bank.bankCode}</p>
-                  <div className="mt-2 space-y-1">
-                    <p className="text-sm text-gray-700">
-                      <span className="text-gray-500">Agência:</span> {bank.agency}
-                    </p>
-                    <p className="text-sm text-gray-700">
-                      <span className="text-gray-500">
-                        Conta {bank.accountType}:
-                      </span>{' '}
-                      {bank.account}
-                    </p>
-                  </div>
-                </div>
-              </div>
-              {bank.isDefault && (
-                <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">
-                  Principal
-                </span>
-              )}
-            </div>
-            {!bank.isDefault && (
-              <button className="mt-3 w-full py-2 text-sm text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
-                Tornar Principal
-              </button>
-            )}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-
-  const WithdrawModal = () => (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-2xl max-w-md w-full p-6">
-        <div className="flex justify-between items-center mb-6">
-          <h3 className="text-xl font-bold text-gray-800">Solicitar Saque</h3>
-          <button onClick={() => setShowModal(null)} className="text-gray-400 hover:text-gray-600">
-            <X size={24} />
-          </button>
-        </div>
-
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Valor do Saque
-            </label>
-            <input
-              type="text"
-              value={withdrawAmount}
-              onChange={(e) => setWithdrawAmount(e.target.value)}
-              placeholder="R$ 0,00"
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              Disponível: {formatCurrency(accountData.balance)}
-            </p>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Conta para Recebimento
-            </label>
-            <div className="space-y-2">
-              {bankAccounts.map((bank) => {
-                const id =
-                  bank._id || `${bank.bankCode}-${bank.agency}-${bank.account}`;
-                return (
-                  <button
-                    key={id}
-                    onClick={() => setSelectedBank(id)}
-                    className={`w-full p-4 rounded-lg border-2 text-left transition-all ${selectedBank === id
-                      ? 'border-blue-600 bg-blue-50'
-                      : 'border-gray-200 hover:border-gray-300'
-                      }`}
-                  >
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <p className="font-medium text-gray-800">
-                          {bank.bankName}
-                        </p>
-                        <p className="text-sm text-gray-600">
-                          Ag: {bank.agency} | Conta: {bank.account}
-                        </p>
-                      </div>
-                      {selectedBank === id && (
-                        <Check className="text-blue-600" size={20} />
-                      )}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-            <p className="text-sm text-yellow-800">
-              <strong>Atenção:</strong> O saque será processado em até 1 dia útil. Taxa de R$ 3,50 para valores abaixo de R$ 100.
-            </p>
-          </div>
-
-          <button
-            onClick={() => {
-              alert('Saque solicitado com sucesso!');
-              setShowModal(null);
-              setWithdrawAmount('');
-              setSelectedBank(null);
-            }}
-            className="w-full py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors"
-          >
-            Confirmar Saque
-          </button>
-        </div>
-      </div>
-    </div>
-  );
 
   if (!hasSubAccount) {
     return (
@@ -1793,7 +2046,7 @@ const WalletDashboard = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="bg-white border-b border-gray-200">
-        <div className="max-w-4xl mx-auto px-4 py-4">
+        <div className="max-w-6xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
               <Wallet className="text-blue-600" />
@@ -1824,26 +2077,67 @@ const WalletDashboard = () => {
             >
               Dados da Conta
             </button>
-            <button
-              onClick={() => setActiveTab('banks')}
-              className={`py-4 px-2 border-b-2 font-medium transition-colors ${activeTab === 'banks'
-                ? 'border-blue-600 text-blue-600'
-                : 'border-transparent text-gray-600 hover:text-gray-800'
-                }`}
-            >
-              Contas Bancárias
-            </button>
           </div>
         </div>
       </div>
 
-      <div className="max-w-4xl mx-auto px-4 py-6">
+      <div className="max-w-6xl mx-auto px-6 py-6">
         {activeTab === 'overview' && <OverviewTab />}
         {activeTab === 'account' && <AccountTab />}
-        {activeTab === 'banks' && <BanksTab />}
       </div>
 
-      {showModal === 'withdraw' && <WithdrawModal />}
+      {/* Success Modal */}
+      {showSuccessModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl"
+          >
+            <div className="text-center">
+              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <h3 className="text-xl font-bold text-gray-900 mb-2">Sucesso!</h3>
+              <p className="text-gray-600">{successMessage}</p>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Error Toast (if needed) */}
+      {subAccountError && (
+        <div className="fixed bottom-6 right-6 z-50">
+          <motion.div
+            initial={{ x: 100, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: 100, opacity: 0 }}
+            className="bg-red-50 border-l-4 border-red-500 rounded-lg shadow-lg p-4 max-w-md"
+          >
+            <div className="flex items-start gap-3">
+              <div className="flex-shrink-0">
+                <svg className="w-5 h-5 text-red-600" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="flex-1">
+                <h3 className="text-sm font-medium text-red-800">Erro ao criar subconta</h3>
+                <p className="mt-1 text-sm text-red-700">{subAccountError}</p>
+              </div>
+              <button
+                onClick={() => setSubAccountError(null)}
+                className="flex-shrink-0 text-red-400 hover:text-red-600"
+              >
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 };

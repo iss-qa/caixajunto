@@ -12,11 +12,13 @@ import { Perfil } from './pages/Perfil';
 import { Notificacoes } from './pages/Notificacoes';
 import { Pagamentos } from './pages/Pagamentos';
 import { PainelMaster } from './pages/PainelMaster';
-import { Contrato } from './pages/Contrato';
+import ContratoViewer from './pages/Contrato';
 import Carteira from './pages/Carteira';
 import CarteiraBanco from './pages/CarteiraBanco';
 import SplitConfig from './pages/SplitConfig';
 import GerenciarSplit from './pages/GerenciarSplit';
+import { GerenciarComunicacao } from './pages/GerenciarComunicacao';
+import { GerenciarAdministradores } from './pages/GerenciarAdministradores';
 
 // Protected Route Component
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -101,7 +103,7 @@ function AppRoutes() {
             <Participantes />
           </RoleRoute>
         } />
-        <Route path="/contrato" element={<Contrato />} />
+        <Route path="/contrato" element={<ContratoViewer />} />
         <Route path="/carteira" element={<Carteira />} />
         <Route path="/carteira/banco" element={<CarteiraBanco />} />
         <Route path="/painel-master/split" element={
@@ -112,6 +114,16 @@ function AppRoutes() {
         <Route path="/painel-master/split/gerenciar" element={
           <RoleRoute allow={["master"]}>
             <GerenciarSplit />
+          </RoleRoute>
+        } />
+        <Route path="/painel-master/comunicacao" element={
+          <RoleRoute allow={["master"]}>
+            <GerenciarComunicacao />
+          </RoleRoute>
+        } />
+        <Route path="/painel-master/administradores" element={
+          <RoleRoute allow={["master"]}>
+            <GerenciarAdministradores />
           </RoleRoute>
         } />
         <Route path="/perfil" element={<Perfil />} />

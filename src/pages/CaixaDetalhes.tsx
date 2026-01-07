@@ -94,6 +94,7 @@ interface Caixa {
   fundoGarantidor: number;
   codigoConvite: string;
   dataInicio?: string;
+  dataVencimento?: string;
   adminId: {
     _id: string;
     nome: string;
@@ -311,7 +312,7 @@ export function CaixaDetalhes() {
 
     if (!caixa) return { isPago: false, isAtrasado: false, isVenceHoje: false };
 
-    const dataBase = new Date(caixa.dataInicio || new Date());
+    const dataBase = new Date(caixa.dataVencimento || caixa.dataInicio || new Date());
     const dataVencimento = new Date(dataBase);
 
     if (caixa.tipo === 'semanal') {
@@ -363,96 +364,46 @@ export function CaixaDetalhes() {
     }
   };
 
-  // Sincronização de pagamentos (Gateway Check) reaproveitando lógica do modal
-  const syncPaymentsForParticipantes = async (lista: Participante[]) => {
-    if (!id || !lista.length) return;
+  // ✅ NOVA FUNÇÃO: sincronizarStatusCobrancas
+  // Esta função busca APENAS do banco local (MongoDB) os status das cobranças existentes.
+  // NÃO chama a API do Lytex, então NÃO gera novas cobranças.
+  // Atualiza o localPaidByMes para refletir os pagamentos já realizados.
+  const sincronizarStatusCobrancas = async (listaParticipantes: Participante[]) => {
+    if (!id || !listaParticipantes.length) return;
 
-    const promises = lista.map(async (p) => {
-      try {
-        const response = await cobrancasService.getAllByAssociacao({
-          caixaId: id,
-          participanteId: p._id,
-        });
+    const statusPagos = ['pago', 'paid', 'liquidated', 'settled', 'aprovado', 'inqueue'];
 
-        const cobrancas = response?.cobrancas || [];
-        const cobrancasPorMes = new Map<number, any[]>();
+    try {
+      // Processar cada participante
+      await Promise.all(listaParticipantes.map(async (p) => {
+        try {
+          // Buscar cobranças existentes do banco LOCAL (não chama Lytex)
+          const response = await cobrancasService.getAllByAssociacao({
+            caixaId: id,
+            participanteId: p._id,
+          });
 
-        for (const c of cobrancas) {
-          const mes = c.mesReferencia;
-          if (!mes) continue;
-          if (!cobrancasPorMes.has(mes)) {
-            cobrancasPorMes.set(mes, []);
-          }
-          cobrancasPorMes.get(mes)!.push(c);
-        }
+          const cobrancas = response?.cobrancas || [];
 
-        const tarefasMes: Promise<void>[] = [];
+          // Atualizar localPaidByMes para cada cobrança paga
+          cobrancas.forEach((c: any) => {
+            const status = String(c.status || '').toLowerCase();
+            const mes = c.mesReferencia;
 
-        for (const [mes, candidatos] of cobrancasPorMes.entries()) {
-          const tarefa = (async () => {
-            try {
-              const resultados = await Promise.allSettled(
-                candidatos.map(async (c: any) => {
-                  if (!c.lytexId) {
-                    const statusLocal = String(c.status || '').toLowerCase();
-                    const pagos = ['pago', 'paid', 'liquidated', 'settled', 'aprovado', 'inqueue'];
-                    if (pagos.includes(statusLocal)) {
-                      markPaid(mes, p._id);
-                    }
-                    return null;
-                  }
-
-                  try {
-                    const [invoiceResp, detailResp] = await Promise.all([
-                      cobrancasService.buscar(c.lytexId, {
-                        caixaId: id,
-                        participanteId: p._id,
-                        mes,
-                      }),
-                      cobrancasService.paymentDetail(c.lytexId),
-                    ]);
-
-                    const invoice = invoiceResp?.cobranca || invoiceResp || {};
-                    const detail = detailResp?.paymentDetail || detailResp?.detail || detailResp || {};
-                    const localStatus = String(detailResp?.local?.status || '').toLowerCase();
-                    const statusList = [invoice?.status, detail?.status, localStatus]
-                      .map((s: unknown) => String(s || '').toLowerCase())
-                      .filter(Boolean);
-                    const pagos = ['paid', 'liquidated', 'settled', 'pago', 'inqueue', 'aprovado'];
-                    const paidAt =
-                      detail?.payedAt ||
-                      detail?.paidAt ||
-                      detail?.paid_at ||
-                      detailResp?.local?.data_pagamento;
-                    const isPago = Boolean(paidAt) || statusList.some((s) => pagos.includes(s));
-
-                    if (isPago) {
-                      markPaid(mes, p._id);
-                    }
-
-                    return null;
-                  } catch {
-                    return null;
-                  }
-                }),
-              );
-
-              void resultados;
-            } catch {
+            if (mes && statusPagos.includes(status)) {
+              markPaid(mes, p._id);
             }
-          })();
-
-          tarefasMes.push(tarefa);
+          });
+        } catch (err) {
+          // Silently ignore errors - não queremos bloquear a UI
+          console.debug(`Erro ao sincronizar status para participante ${p._id}:`, err);
         }
-
-        await Promise.allSettled(tarefasMes);
-      } catch (e) {
-        console.error(`Erro ao sincronizar pagamentos do participante ${p.usuarioId?.nome}:`, e);
-      }
-    });
-
-    await Promise.allSettled(promises);
+      }));
+    } catch (e) {
+      console.error('Erro ao sincronizar status de cobranças:', e);
+    }
   };
+
 
   // Função para calcular valor com IPCA aplicado
   const calcularValorComIPCA = (mes: number, valorBase: number): number => {
@@ -520,15 +471,27 @@ export function CaixaDetalhes() {
     try {
       const response = await caixasService.getById(id!);
       setCaixa(response);
-      const dataVenc = new Date();
-      if (response.diaVencimento) {
-        dataVenc.setDate(response.diaVencimento);
-        if (dataVenc <= new Date()) {
-          dataVenc.setMonth(dataVenc.getMonth() + 1);
-        }
+
+      // Usar dataVencimento salva, ou calcular uma nova se não existir
+      let dataVencFormatted: string;
+      if (response.dataVencimento) {
+        // Usar a data de vencimento salva
+        const dataVencSalva = new Date(response.dataVencimento);
+        dataVencFormatted = dataVencSalva.toISOString().split('T')[0];
       } else {
-        dataVenc.setDate(dataVenc.getDate() + 5);
+        // Calcular uma nova data de vencimento (fallback)
+        const dataVenc = new Date();
+        if (response.diaVencimento) {
+          dataVenc.setDate(response.diaVencimento);
+          if (dataVenc <= new Date()) {
+            dataVenc.setMonth(dataVenc.getMonth() + 1);
+          }
+        } else {
+          dataVenc.setDate(dataVenc.getDate() + 5);
+        }
+        dataVencFormatted = dataVenc.toISOString().split('T')[0];
       }
+
       setEditForm({
         nome: response.nome,
         descricao: response.descricao || '',
@@ -536,8 +499,9 @@ export function CaixaDetalhes() {
         valorTotal: response.valorTotal,
         qtdParticipantes: response.qtdParticipantes,
         duracaoMeses: response.duracaoMeses,
-        dataVencimento: dataVenc.toISOString().split('T')[0],
+        dataVencimento: dataVencFormatted,
       });
+
     } catch (error) {
       console.error('Erro ao carregar caixa:', error);
       // Mock data
@@ -587,8 +551,9 @@ export function CaixaDetalhes() {
         setParticipantes(participantesValidos);
         saveParticipantes(participantesValidos);
 
-        // Sincronizar pagamentos assim que os participantes forem carregados
-        await syncPaymentsForParticipantes(participantesValidos);
+        // ✅ Sincronizar status de cobranças existentes (lê apenas do banco local)
+        // NÃO gera novas cobranças no Lytex - apenas atualiza localPaidByMes
+        await sincronizarStatusCobrancas(participantesValidos);
       } else {
         setParticipantes([]);
       }
@@ -604,6 +569,36 @@ export function CaixaDetalhes() {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
+  };
+
+  const handleShareWhatsApp = () => {
+    if (!caixa) return;
+
+    const adminNome = caixa.adminId?.nome || 'Administrador';
+    const caixaNome = caixa.nome;
+    const valorTotal = formatCurrency(caixa.valorTotal);
+    const valorParcela = formatCurrency(caixa.valorTotal / caixa.qtdParticipantes);
+    const dataInicio = getPrimeiraParcelaData();
+    const tipoParcela = caixa.tipo === 'semanal' ? 'semanais' : 'mensais';
+
+    const mensagem = `🎉 *Convite para Caixa Juntix*
+
+Você foi convidado por *${adminNome}* para participar do caixa *${caixaNome}*!
+
+💰 *Valor total:* ${valorTotal}
+📅 *Parcelas:* ${caixa.qtdParticipantes}x de ${valorParcela} (${tipoParcela})
+🗓️ *Início previsto:* ${dataInicio}
+
+🔑 *Código de convite:* ${caixa.codigoConvite}
+
+Quer saber mais? Acesse: https://juntix.com.br/
+Ou fale diretamente com o administrador!
+
+✨ *Bem-vindo ao Juntix!*
+_Junte seus amigos e realize seus sonhos_`;
+
+    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(mensagem)}`;
+    window.open(whatsappUrl, '_blank');
   };
 
   const handleSortear = async () => {
@@ -760,7 +755,7 @@ export function CaixaDetalhes() {
     if (!caixa) return [];
 
     const cronograma = [];
-    const dataBase = caixa.dataInicio ? new Date(caixa.dataInicio) : new Date();
+    const dataBase = caixa.dataVencimento ? new Date(caixa.dataVencimento) : (caixa.dataInicio ? new Date(caixa.dataInicio) : new Date());
     const isSemanal = caixa.tipo === 'semanal';
 
     for (let i = 0; i < caixa.qtdParticipantes; i++) {
@@ -818,6 +813,7 @@ export function CaixaDetalhes() {
       const updateData = {
         ...editForm,
         diaVencimento: dataVenc.getDate(),
+        dataVencimento: editForm.dataVencimento,
         dataInicio: editForm.dataVencimento,
         valorParcela: editForm.valorTotal / editForm.qtdParticipantes,
       };
@@ -827,11 +823,13 @@ export function CaixaDetalhes() {
           ...caixa,
           ...editForm,
           diaVencimento: dataVenc.getDate(),
+          dataVencimento: editForm.dataVencimento,
           valorParcela: editForm.valorTotal / editForm.qtdParticipantes,
         });
       }
       loadCaixa();
       setShowEditCaixa(false);
+
     } catch (error) {
       console.error('Erro ao atualizar:', error);
       if (caixa) {
@@ -1184,7 +1182,7 @@ export function CaixaDetalhes() {
     const isSemanal = caixa.tipo === 'semanal';
 
     // Parse the date without timezone conversion issues
-    const dataInicioStr = caixa.dataInicio || new Date().toISOString();
+    const dataInicioStr = caixa.dataVencimento || caixa.dataInicio || new Date().toISOString();
     const parts = dataInicioStr.split('T')[0].split('-');
     const baseYear = parseInt(parts[0]);
     const baseMonth = parseInt(parts[1]) - 1; // JS months are 0-indexed
@@ -1207,7 +1205,7 @@ export function CaixaDetalhes() {
       const correcaoIPCA = parcela > 1 ? valorParcelaReal * TAXA_IPCA_MENSAL : 0;
       const fundoReserva = parcela === 1 ? (valorParcelaReal / caixa.qtdParticipantes) : 0;
       const taxaAdmin = 0;
-      const comissaoAdmin = parcela === numParcelas ? caixa.valorTotal * 0.10 : 0;
+      const comissaoAdmin = parcela === numParcelas ? (caixa.valorTotal * 0.10) / caixa.qtdParticipantes : 0;
 
       const valorTotal = valorParcelaReal + TAXA_SERVICO + correcaoIPCA + fundoReserva + comissaoAdmin;
       const basePagamentos = selectedParticipante ? pagamentosParticipante : pagamentosMes;
@@ -1613,7 +1611,7 @@ export function CaixaDetalhes() {
               >
                 {copied ? 'Copiado!' : 'Copiar'}
               </Button>
-              <Button variant="ghost" size="sm" leftIcon={<Share2 className="w-4 h-4" />}>
+              <Button variant="ghost" size="sm" leftIcon={<Share2 className="w-4 h-4" />} onClick={handleShareWhatsApp}>
                 Compartilhar
               </Button>
             </div>
@@ -1707,17 +1705,117 @@ export function CaixaDetalhes() {
             </div>
           )}
 
-          <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-xl">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-green-600 font-medium">Seu ganho como administrador (10%)</p>
-                <p className="text-xl font-bold text-green-700">
-                  {formatCurrency(caixa.valorTotal * 0.10)}
+          {/* Admin Earnings OR User Summary */}
+          {usuario?.tipo !== 'usuario' ? (
+            <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-xl">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-green-600 font-medium">Seu ganho como administrador (10%)</p>
+                  <p className="text-xl font-bold text-green-700">
+                    {formatCurrency(caixa.valorTotal * 0.10)}
+                  </p>
+                </div>
+                <TrendingUp className="w-8 h-8 text-green-500" />
+              </div>
+            </div>
+          ) : (
+            <Card className="mt-4 p-4 bg-gradient-to-br from-blue-50 to-green-50 border-2 border-blue-200">
+              <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                <Wallet className="w-5 h-5 text-blue-600" />
+                Resumo do Seu Caixa
+              </h4>
+
+              <div className="grid grid-cols-2 gap-3 mb-3">
+                <div className="bg-green-50 p-3 rounded-lg border border-green-200">
+                  <p className="text-sm text-green-600 font-medium mb-1">Você Recebe</p>
+                  <p className="text-2xl font-bold text-green-700">
+                    {(() => {
+                      // Find logged user's position
+                      const userParticipante = participantes.find(p =>
+                        (p.usuarioId?._id || p.usuarioId) === usuario?._id
+                      );
+                      const posicao = userParticipante?.posicao || 1;
+
+                      // Calculate IPCA based on position (position 1 = no IPCA, position 2 = 1 month IPCA, etc.)
+                      const ipca = caixa.valorTotal * TAXA_IPCA_MENSAL * (posicao - 1);
+                      const totalRecebido = caixa.valorTotal + ipca;
+
+                      return formatCurrency(totalRecebido);
+                    })()}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    R$ {(caixa.valorTotal / 1000).toFixed(1)}k + IPCA
+                  </p>
+                  <p className="text-xs text-green-600 mt-2 leading-tight">
+                    *Caso o caixa finalize com todos os participantes adimplentes, você ainda poderá receber o valor do fundo de reserva dividido igualitariamente ({formatCurrency(
+                      ((caixa.valorTotal / caixa.qtdParticipantes / caixa.qtdParticipantes) * caixa.duracaoMeses) / 5
+                    )})
+                  </p>
+                </div>
+
+                <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
+                  <p className="text-sm text-blue-600 font-medium mb-1">Você Paga (total)</p>
+                  <p className="text-2xl font-bold text-blue-700">
+                    {(() => {
+                      // 1. Parcelas: valorTotal (usuário paga 1250 por mês durante duracaoMeses)
+                      const parcelas = caixa.valorTotal;
+
+                      // 2. Taxa de serviço: 10,00 por mês × duracaoMeses
+                      const taxaServico = caixa.duracaoMeses * TAXA_SERVICO;
+
+                      // 3. Fundo de reserva: (valorParcela / qtdParticipantes)
+                      const fundoReserva = (caixa.valorTotal / caixa.qtdParticipantes) / caixa.qtdParticipantes;
+
+                      // 4. Comissão admin: 10% do caixa dividido entre participantes (pago no último mês)
+                      const comissaoAdmin = (caixa.valorTotal * 0.10) / caixa.qtdParticipantes;
+
+                      const total = parcelas + taxaServico + fundoReserva + comissaoAdmin;
+
+                      return formatCurrency(total);
+                    })()}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Parcelas + Taxa de Serviço + Fundo de Reserva + Comissão Organizador do Caixa
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600 font-medium">Resultado Final</span>
+                  <span className="text-lg font-bold text-amber-600">
+                    {(() => {
+                      // Find logged user's position
+                      const userParticipante = participantes.find(p =>
+                        (p.usuarioId?._id || p.usuarioId) === usuario?._id
+                      );
+                      const posicao = userParticipante?.posicao || 1;
+
+                      // Valor recebido (com IPCA)
+                      const ipca = caixa.valorTotal * TAXA_IPCA_MENSAL * (posicao - 1);
+                      const valorRecebido = caixa.valorTotal + ipca;
+
+                      // Valor pago
+                      const parcelas = caixa.valorTotal;
+                      const taxaServico = caixa.duracaoMeses * TAXA_SERVICO;
+                      const fundoReserva = (caixa.valorTotal / caixa.qtdParticipantes) / caixa.qtdParticipantes;
+                      const comissaoAdmin = (caixa.valorTotal * 0.10) / caixa.qtdParticipantes;
+                      const valorPago = parcelas + taxaServico + fundoReserva + comissaoAdmin;
+
+                      const diferenca = valorRecebido - valorPago;
+
+                      return diferenca >= 0
+                        ? `+${formatCurrency(diferenca)}`
+                        : `-${formatCurrency(Math.abs(diferenca))}`;
+                    })()}
+                  </span>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Diferença entre o que você recebe e o que paga. Caso receba o fundo de reserva a diferença pode ser ainda menor.
                 </p>
               </div>
-              <TrendingUp className="w-8 h-8 text-green-500" />
-            </div>
-          </div>
+            </Card>
+          )}
         </Card>
       </motion.div>
 
@@ -1850,7 +1948,7 @@ export function CaixaDetalhes() {
                   )}
                 </>
               )}
-              {caixa.status === 'aguardando' && participantesFaltando === 0 && (
+              {caixa.status === 'aguardando' && participantesFaltando === 0 && usuario?.tipo !== 'usuario' && (
                 <Button
                   variant="primary"
                   size="sm"
@@ -1929,10 +2027,12 @@ export function CaixaDetalhes() {
                     const { isPago, isAtrasado, isVenceHoje } = obterStatusParticipante(participante, cronogramaParcela);
                     const isMaster = usuario?.tipo === 'master';
                     const isAdmin = isMaster || caixa?.adminId?._id === usuario?._id;
-                    // Master: sempre vê lixeira
-                    // Admin: vê lixeira apenas se participante SEM posição
-                    // Participante comum: nunca vê lixeira
-                    const canRemove = isMaster || (isAdmin && !participante.posicao);
+
+                    // Check if ANY participant has a position (meaning positions were drawn)
+                    const positionsDrawn = participantes.some(p => (p.posicao || 0) > 0);
+
+                    // Show trash ONLY if positions haven't been drawn AND user has permission AND caixa not started
+                    const showTrash = !positionsDrawn && !caixaIniciado && (isMaster || isAdmin);
 
                     // Check if this card belongs to the logged user (for participants only)
                     const isOwnCard = usuario?.tipo === 'usuario'
@@ -1968,15 +2068,15 @@ export function CaixaDetalhes() {
                             <button
                               type="button"
                               onClick={(e) => {
-                                if (!canRemove) return;
+                                if (!showTrash) return;
                                 e.stopPropagation();
                                 setParticipanteToRemove(participante);
                                 setShowRemoveParticipanteModal(true);
                               }}
                               className={cn(
                                 'w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm',
-                                canRemove
-                                  ? 'bg-red-50 text-red-600 hover:bg-red-100'
+                                showTrash
+                                  ? 'bg-red-50 text-red-600 hover:bg-red-100 cursor-pointer'
                                   : isPago
                                     ? 'bg-blue-500 text-white'
                                     : participante.posicao === caixa.mesAtual
@@ -1984,7 +2084,7 @@ export function CaixaDetalhes() {
                                       : 'bg-gray-100 text-gray-500'
                               )}
                             >
-                              {canRemove ? (
+                              {showTrash ? (
                                 <Trash2 className="w-4 h-4" />
                               ) : (
                                 participante.posicao || '-'
@@ -2095,7 +2195,7 @@ export function CaixaDetalhes() {
                                   const base = caixa.valorParcela || (caixa.valorTotal / caixa.qtdParticipantes);
                                   const fundoReserva = referenciaMes === 1 ? (base / caixa.qtdParticipantes) : 0;
                                   const ipca = referenciaMes > 1 ? base * TAXA_IPCA_MENSAL : 0;
-                                  const comissaoAdmin = referenciaMes === (caixa.duracaoMeses || caixa.qtdParticipantes) ? caixa.valorTotal * 0.10 : 0;
+                                  const comissaoAdmin = referenciaMes === (caixa.duracaoMeses || caixa.qtdParticipantes) ? (caixa.valorTotal * 0.10) / caixa.qtdParticipantes : 0;
                                   const total = base + TAXA_SERVICO + fundoReserva + ipca + comissaoAdmin;
                                   return formatCurrency(isPago ? total : 0);
                                 })()}
@@ -2142,7 +2242,11 @@ export function CaixaDetalhes() {
                 </div>
                 <div>
                   <span className="text-gray-600">Comissão admin (último):</span>
-                  <span className="font-medium text-gray-900 ml-1">{formatCurrency(caixa.valorTotal * 0.10)}</span>
+                  <span className="font-medium text-gray-900 ml-1">
+                    {usuario?.tipo === 'usuario'
+                      ? formatCurrency((caixa.valorTotal * 0.10) / caixa.qtdParticipantes)
+                      : formatCurrency(caixa.valorTotal * 0.10)}
+                  </span>
                 </div>
               </div>
               <div className="mt-3 space-y-3 text-sm text-gray-700">
@@ -2173,9 +2277,14 @@ export function CaixaDetalhes() {
                   </p>
                 </div>
                 <div>
-                  <p className="font-medium text-gray-900">Comissão do Administrador: {formatCurrency(caixa.valorTotal * 0.10)}</p>
+                  <p className="font-medium text-gray-900">Comissão do Administrador:
+                    {usuario?.tipo === 'usuario'
+                      ? formatCurrency((caixa.valorTotal * 0.10) / caixa.qtdParticipantes)
+                      : formatCurrency(caixa.valorTotal * 0.10)}
+
+                  </p>
                   <p>
-                    Remuneração do administrador responsável por recrutar e organizar o grupo, gerenciar as operações do caixa, manter comunicação ativa com os participantes e garantir o cumprimento dos pagamentos. Esta comissão corresponde a 10% do valor total do caixa e é paga exclusivamente no último mês do ciclo, pelos participantes, apenas se o caixa for concluído com sucesso e todas as obrigações forem cumpridas conforme planejado.
+                    Remuneração do administrador responsável por recrutar e organizar o grupo, gerenciar as operações do caixa, manter comunicação ativa com os participantes e garantir o cumprimento dos pagamentos. Esta comissão corresponde a 10% do valor total do caixa dividido igualitariamente entre os participantes e é paga exclusivamente no último mês do ciclo. Pagamento é realizado apenas se o caixa for concluído com sucesso e todas as obrigações forem cumpridas conforme planejado.
                   </p>
                 </div>
               </div>
