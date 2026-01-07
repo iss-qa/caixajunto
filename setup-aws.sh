@@ -102,3 +102,5 @@ echo "3. docker-compose up -d"
 echo "4. Obter URL do Ngrok: curl http://localhost:4040/api/tunnels | jq '.tunnels[0].public_url'"
 echo "5. Atualizar WEBHOOK_BASE_URL em backend/.env.production"
 echo "6. docker-compose restart backend"
+
+
