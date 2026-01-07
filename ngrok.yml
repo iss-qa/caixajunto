@@ -1,0 +1,7 @@
+version: "2"
+authtoken: 36j3FIZzM6uQ6WroQV2YY2VBR6A_2XWpdWfY44JjhXCaNXMEc
+tunnels:
+  backend:
+    proto: http
+    addr: backend:3000
+    bind_tls: true
