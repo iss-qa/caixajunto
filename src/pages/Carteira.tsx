@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Wallet, TrendingUp, Download, Plus, Eye, EyeOff, Building2, Check, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { carteiraService, cobrancasService, caixasService, pagamentosService, subcontasService, bancosService } from '../lib/api';
+import { carteiraService, cobrancasService, caixasService, pagamentosService, subcontasService, bancosService, contaBancariaService } from '../lib/api';
 import { formatCurrency, formatDate } from '../lib/utils';
 import { TransacoesDetalhadas } from './Carteira/components/TransacoesDetalhadas';
 
@@ -625,37 +625,57 @@ const WalletDashboard = () => {
     }
   };
 
-  const fetchBankAccountData = async () => {
+  // Função para buscar dados bancários do usuário logado a partir do MongoDB local
+  const fetchMyBankAccountsFromLocal = async () => {
     try {
-      if (!subcontaData?.lytexId) {
-        console.log('[Carteira] Sem lytexId, não busca dados bancários');
-        return;
-      }
-
       setLoadingBankAccount(true);
       setBankAccountError(null);
 
-      console.log('[Carteira] Buscando dados bancários com admin token para subrecipientId:', subcontaData.lytexId);
+      console.log('🔍 [Carteira] Iniciando busca de dados bancários do usuário logado...');
+      console.log('👤 [Carteira] Usuario ID:', usuario?._id);
+      console.log('👤 [Carteira] Usuario Nome:', usuario?.nome);
 
-      const response = await carteiraService.getBankAccountsWithAdminToken(subcontaData.lytexId);
-      console.log('[Carteira] Resposta dos dados bancários:', response);
+      const response = await contaBancariaService.getMyBankAccounts();
+      console.log('📦 [Carteira] Resposta COMPLETA da API:', JSON.stringify(response, null, 2));
+      console.log('📊 [Carteira] Tipo da resposta:', typeof response);
+      console.log('🔢 [Carteira] É array?:', Array.isArray(response));
 
       // Extract bank account data from response
-      const accounts = Array.isArray(response) ? response : response?.data || [];
+      const accounts = Array.isArray(response) ? response : response?.contas || response?.data || [];
+      console.log('🏦 [Carteira] Contas extraídas:', accounts);
+      console.log('📈 [Carteira] Número de contas:', accounts.length);
 
       if (accounts.length > 0) {
         const firstAccount = accounts[0];
-        setBankAccountData({
-          bank: firstAccount.bank,
-          agency: firstAccount.agency,
-          account: firstAccount.account,
-        });
+        console.log('✅ [Carteira] Primeira conta encontrada:', JSON.stringify(firstAccount, null, 2));
+
+        const bankData = {
+          bank: {
+            code: firstAccount.bankCode || '',
+            name: firstAccount.bankName || '',
+          },
+          agency: {
+            number: firstAccount.agency || '',
+            dv: firstAccount.agencyDv || '',
+          },
+          account: {
+            type: firstAccount.accountType || 'corrente',
+            number: firstAccount.account || '',
+            dv: firstAccount.accountDv || '',
+          },
+        };
+
+        console.log('💾 [Carteira] Dados formatados para exibição:', JSON.stringify(bankData, null, 2));
+        setBankAccountData(bankData);
+        console.log('✅ [Carteira] Dados bancários carregados do MongoDB local');
       } else {
+        console.log('⚠️ [Carteira] Nenhuma conta bancária encontrada para este usuário');
         setBankAccountData(null);
       }
     } catch (e: any) {
-      console.error('[Carteira] Erro ao buscar dados bancários:', e);
-      setBankAccountError(e?.message || 'Erro ao buscar dados bancários');
+      console.error('❌ [Carteira] Erro ao buscar dados bancários:', e);
+      console.error('❌ [Carteira] Erro detalhado:', e?.response?.data || e?.message);
+      setBankAccountError(e?.response?.data?.message || e?.message || 'Erro ao buscar dados bancários');
       setBankAccountData(null);
     } finally {
       setLoadingBankAccount(false);
@@ -1091,12 +1111,12 @@ const WalletDashboard = () => {
     }
   }, [hasSubAccount, usuario]);
 
-  // Fetch bank account data when subcontaData is available
+  // Fetch bank account data from local MongoDB for logged-in user
   useEffect(() => {
-    if (subcontaData?.lytexId) {
-      fetchBankAccountData();
+    if (usuario?._id && hasSubAccount) {
+      fetchMyBankAccountsFromLocal();
     }
-  }, [subcontaData?.lytexId]);
+  }, [usuario?._id, hasSubAccount, subcontaData?._id]);
 
   const OverviewTab = () => {
     // Calcular a próxima data de recebimento baseado nos caixas gerenciados
@@ -1566,89 +1586,87 @@ const WalletDashboard = () => {
       )}
 
       {/* Card de Dados Bancários */}
-      {subcontaData?.lytexId && (
-        <div className="bg-white border border-gray-200 rounded-xl p-6">
-          <h4 className="font-semibold text-gray-800 mb-4">🏦 Dados Bancários</h4>
+      <div className="bg-white border border-gray-200 rounded-xl p-6">
+        <h4 className="font-semibold text-gray-800 mb-4">🏦 Dados Bancários</h4>
 
-          {loadingBankAccount ? (
-            <div className="flex items-center justify-center py-4">
-              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-              <span className="ml-2 text-sm text-gray-600">Carregando dados bancários...</span>
-            </div>
-          ) : bankAccountError ? (
-            <div className="text-sm text-red-600 py-2">
-              {bankAccountError}
-            </div>
-          ) : bankAccountData ? (
-            <div className="space-y-3">
-              {bankAccountData.bank && (
-                <>
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-600">Banco</span>
-                    <span className="font-medium text-gray-800">
-                      {bankAccountData.bank.name}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-600">Código do Banco</span>
-                    <span className="font-mono text-sm bg-gray-100 px-2 py-1 rounded text-gray-800">
-                      {bankAccountData.bank.code}
-                    </span>
-                  </div>
-                  {bankAccountData.bank.ispb && (
-                    <div className="flex justify-between items-center">
-                      <span className="text-gray-600">ISPB</span>
-                      <span className="font-mono text-sm bg-gray-100 px-2 py-1 rounded text-gray-800">
-                        {bankAccountData.bank.ispb}
-                      </span>
-                    </div>
-                  )}
-                </>
-              )}
-
-              {bankAccountData.agency && (
+        {loadingBankAccount ? (
+          <div className="flex items-center justify-center py-4">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+            <span className="ml-2 text-sm text-gray-600">Carregando dados bancários...</span>
+          </div>
+        ) : bankAccountError ? (
+          <div className="text-sm text-red-600 py-2">
+            {bankAccountError}
+          </div>
+        ) : bankAccountData ? (
+          <div className="space-y-3">
+            {bankAccountData.bank && (
+              <>
                 <div className="flex justify-between items-center">
-                  <span className="text-gray-600">Agência</span>
-                  <span className="font-mono text-sm bg-gray-100 px-2 py-1 rounded text-gray-800">
-                    {bankAccountData.agency.number}
-                    {bankAccountData.agency.dv && `-${bankAccountData.agency.dv}`}
+                  <span className="text-gray-600">Banco</span>
+                  <span className="font-medium text-gray-800">
+                    {bankAccountData.bank.name}
                   </span>
                 </div>
-              )}
-
-              {bankAccountData.account && (
-                <>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-600">Código do Banco</span>
+                  <span className="font-mono text-sm bg-gray-100 px-2 py-1 rounded text-gray-800">
+                    {bankAccountData.bank.code}
+                  </span>
+                </div>
+                {bankAccountData.bank.ispb && (
                   <div className="flex justify-between items-center">
-                    <span className="text-gray-600">Tipo de Conta</span>
-                    <span className="font-medium text-gray-800 capitalize">
-                      {bankAccountData.account.type}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-600">Conta</span>
+                    <span className="text-gray-600">ISPB</span>
                     <span className="font-mono text-sm bg-gray-100 px-2 py-1 rounded text-gray-800">
-                      {bankAccountData.account.number}
-                      {bankAccountData.account.dv && `-${bankAccountData.account.dv}`}
+                      {bankAccountData.bank.ispb}
                     </span>
                   </div>
-                  {bankAccountData.account.operation && (
-                    <div className="flex justify-between items-center">
-                      <span className="text-gray-600">Operação</span>
-                      <span className="font-mono text-sm bg-gray-100 px-2 py-1 rounded text-gray-800">
-                        {bankAccountData.account.operation}
-                      </span>
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-          ) : (
-            <div className="text-sm text-gray-600 py-2">
-              Nenhum dado bancário encontrado
-            </div>
-          )}
-        </div>
-      )}
+                )}
+              </>
+            )}
+
+            {bankAccountData.agency && (
+              <div className="flex justify-between items-center">
+                <span className="text-gray-600">Agência</span>
+                <span className="font-mono text-sm bg-gray-100 px-2 py-1 rounded text-gray-800">
+                  {bankAccountData.agency.number}
+                  {bankAccountData.agency.dv && `-${bankAccountData.agency.dv}`}
+                </span>
+              </div>
+            )}
+
+            {bankAccountData.account && (
+              <>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-600">Tipo de Conta</span>
+                  <span className="font-medium text-gray-800 capitalize">
+                    {bankAccountData.account.type}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-600">Conta</span>
+                  <span className="font-mono text-sm bg-gray-100 px-2 py-1 rounded text-gray-800">
+                    {bankAccountData.account.number}
+                    {bankAccountData.account.dv && `-${bankAccountData.account.dv}`}
+                  </span>
+                </div>
+                {bankAccountData.account.operation && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-600">Operação</span>
+                    <span className="font-mono text-sm bg-gray-100 px-2 py-1 rounded text-gray-800">
+                      {bankAccountData.account.operation}
+                    </span>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        ) : (
+          <div className="text-sm text-gray-600 py-2">
+            Nenhum dado bancário encontrado
+          </div>
+        )}
+      </div>
 
       {/* Card de Caixas Gerenciados (apenas admin/master) */}
       {caixasGerenciados.length > 0 && (

@@ -363,6 +363,26 @@ export const subcontasService = {
     const response = await api.post('/subcontas/me', data);
     return response.data;
   },
+  // Busca subconta por ID local (MongoDB _id)
+  getById: async (id: string) => {
+    const response = await api.get(`/subcontas/id/${id}`);
+    return response.data;
+  },
+  // Busca dados bancários do Lytex por ID local da subconta
+  getBankAccounts: async (id: string) => {
+    const response = await api.get(`/subcontas/id/${id}/bank-accounts`);
+    return response.data;
+  },
+  // Salva dados bancários localmente
+  saveBankAccounts: async (id: string) => {
+    const response = await api.post(`/subcontas/id/${id}/bank-accounts/save`);
+    return response.data;
+  },
+  // Busca dados bancários salvos localmente
+  getLocalBankAccounts: async (id: string) => {
+    const response = await api.get(`/subcontas/id/${id}/bank-accounts/local`);
+    return response.data;
+  },
   getByLytexId: async (lytexId: string) => {
     const response = await api.get(`/subcontas/${lytexId}`);
     return response.data;
@@ -468,6 +488,15 @@ export const splitConfigService = {
 export const transacoesService = {
   getDetalhadas: async () => {
     const response = await api.get('/split-history/transacoes-detalhadas');
+    return response.data;
+  },
+};
+
+// Contas Bancárias
+export const contaBancariaService = {
+  // Busca contas bancárias do usuário logado
+  getMyBankAccounts: async () => {
+    const response = await api.get('/usuarios/me/contas-bancarias');
     return response.data;
   },
 };

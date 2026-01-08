@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { fetchAddressByCEP, formatCEP } from '../utils/cep';
-import { usuariosService, participantesService, caixasService } from '../lib/api';
+import { usuariosService, participantesService, caixasService, subcontasService } from '../lib/api';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
@@ -147,6 +147,10 @@ export function Participantes() {
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
   const [loadingCEP, setLoadingCEP] = useState(false);
   const [selectedCaixaId, setSelectedCaixaId] = useState('');
+  const [subcontaDetails, setSubcontaDetails] = useState<any | null>(null);
+  const [loadingSubconta, setLoadingSubconta] = useState(false);
+  const [bankAccounts, setBankAccounts] = useState<any[]>([]);
+  const [loadingBankAccounts, setLoadingBankAccounts] = useState(false);
 
   const [formData, setFormData] = useState({
     nome: '',
@@ -174,6 +178,41 @@ export function Participantes() {
   useEffect(() => {
     loadParticipantes();
   }, []);
+
+  // Sincronização automática de dados bancários em background
+  useEffect(() => {
+    const syncBankAccountsInBackground = async () => {
+      if (participantes.length === 0) return;
+
+      console.log('🔄 Iniciando sincronização automática de dados bancários em background...');
+
+      for (const participante of participantes) {
+        if (!participante._id) continue;
+
+        try {
+          // Buscar subconta do participante
+          const subcontaResponse = await subcontasService.getByUsuarioId(participante._id);
+
+          if (subcontaResponse.success && subcontaResponse.subconta?._id) {
+            // Salvar dados bancários automaticamente (silencioso)
+            await subcontasService.saveBankAccounts(subcontaResponse.subconta._id);
+          }
+        } catch (error) {
+          // Silencioso - não bloqueia nem mostra erro
+          console.debug(`Sync silencioso para ${participante.nome}: sem subconta ou erro`);
+        }
+      }
+
+      console.log('✅ Sincronização automática de dados bancários concluída');
+    };
+
+    // Executar sync em background após um pequeno delay
+    const timeoutId = setTimeout(() => {
+      syncBankAccountsInBackground();
+    }, 2000);
+
+    return () => clearTimeout(timeoutId);
+  }, [participantes]);
 
   const loadParticipantes = async () => {
     try {
@@ -649,9 +688,79 @@ export function Participantes() {
     setShowDeleteModal(true);
   };
 
-  const openDetailModal = (participante: Usuario) => {
+  const openDetailModal = async (participante: Usuario) => {
     setSelectedParticipante(participante);
     setShowDetailModal(true);
+    setSubcontaDetails(null);
+    setBankAccounts([]);
+
+    // Fetch subconta details if participant has an ID
+    if (participante._id) {
+      try {
+        setLoadingSubconta(true);
+        const response = await subcontasService.getByUsuarioId(participante._id);
+        if (response.success && response.subconta) {
+          setSubcontaDetails(response.subconta);
+
+          // Fetch bank accounts using subconta _id
+          if (response.subconta._id) {
+            try {
+              setLoadingBankAccounts(true);
+
+              // 1. Buscar dados do Lytex (sempre mostra dados atualizados)
+              console.log('📡 Buscando dados bancários do Lytex...');
+              const lytexResponse = await subcontasService.getBankAccounts(response.subconta._id);
+
+              if (lytexResponse.success && lytexResponse.bankAccounts && lytexResponse.bankAccounts.length > 0) {
+                // Exibir dados do Lytex imediatamente
+                setBankAccounts(lytexResponse.bankAccounts);
+                console.log('✅ Dados bancários carregados do Lytex');
+
+                // 2. Salvar localmente em background (para próximas consultas)
+                console.log('💾 Salvando dados bancários localmente...');
+                subcontasService.saveBankAccounts(response.subconta._id)
+                  .then(() => {
+                    console.log('✅ Dados bancários salvos com sucesso no banco local');
+                  })
+                  .catch((error) => {
+                    console.error('⚠️ Erro ao salvar dados bancários:', error);
+                  });
+              } else {
+                // 3. Se Lytex não retornar dados, tenta buscar do local como fallback
+                console.log('⚠️ Nenhum dado no Lytex, tentando buscar do banco local...');
+                const localResponse = await subcontasService.getLocalBankAccounts(response.subconta._id);
+
+                if (localResponse.success && localResponse.bankAccounts && localResponse.bankAccounts.length > 0) {
+                  setBankAccounts(localResponse.bankAccounts);
+                  console.log('✅ Dados bancários carregados do banco local (fallback)');
+                }
+              }
+            } catch (error) {
+              console.error('❌ Erro ao carregar dados bancários do Lytex:', error);
+
+              // Fallback: tentar buscar do local se Lytex falhar
+              try {
+                console.log('� Tentando buscar do banco local como fallback...');
+                const localResponse = await subcontasService.getLocalBankAccounts(response.subconta._id);
+
+                if (localResponse.success && localResponse.bankAccounts && localResponse.bankAccounts.length > 0) {
+                  setBankAccounts(localResponse.bankAccounts);
+                  console.log('✅ Dados bancários carregados do banco local (fallback após erro)');
+                }
+              } catch (localError) {
+                console.error('❌ Erro ao buscar dados locais:', localError);
+              }
+            } finally {
+              setLoadingBankAccounts(false);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Erro ao carregar detalhes da subconta:', error);
+      } finally {
+        setLoadingSubconta(false);
+      }
+    }
   };
 
   const resetForm = () => {
@@ -1583,13 +1692,16 @@ export function Participantes() {
         onClose={() => {
           setShowDetailModal(false);
           setSelectedParticipante(null);
+          setSubcontaDetails(null);
+          setBankAccounts([]);
         }}
         title="Detalhes do Participante"
         size="xl"
       >
         {selectedParticipante && (
-          <div className="space-y-4">
-            <div className="flex flex-col items-center gap-3 py-4">
+          <div className="space-y-6">
+            {/* Header com Avatar e Nome */}
+            <div className="flex flex-col items-center gap-3 pb-4 border-b border-gray-200">
               <Avatar
                 src={selectedParticipante.picture}
                 name={selectedParticipante.nome}
@@ -1597,15 +1709,32 @@ export function Participantes() {
               />
               <div className="text-center">
                 <h3 className="text-xl font-bold text-gray-900">{selectedParticipante.nome}</h3>
-                <Badge variant={selectedParticipante.score >= 80 ? 'success' : 'warning'} size="sm">
-                  <Award className="w-3 h-3 mr-1" />
-                  Score: {selectedParticipante.score}
-                </Badge>
+                <div className="flex items-center justify-center gap-2 mt-2">
+                  <Badge variant={selectedParticipante.score >= 80 ? 'success' : 'warning'} size="sm">
+                    <Award className="w-3 h-3 mr-1" />
+                    Score: {selectedParticipante.score}
+                  </Badge>
+                  <Badge
+                    variant={selectedParticipante.ativo ? 'success' : 'danger'}
+                    size="sm"
+                  >
+                    {selectedParticipante.ativo ? (
+                      <><CheckCircle className="w-3 h-3 mr-1" />Ativo</>
+                    ) : (
+                      <><XCircle className="w-3 h-3 mr-1" />Inativo</>
+                    )}
+                  </Badge>
+                </div>
               </div>
             </div>
 
-            <div className="space-y-3 border-t border-gray-200 pt-4">
-              <div className="grid grid-cols-2 gap-4 mb-3">
+            {/* Informações Pessoais */}
+            <div>
+              <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                <User className="w-4 h-4" />
+                Informações Pessoais
+              </h4>
+              <div className="grid grid-cols-2 gap-4">
                 <div className="bg-gray-50 p-3 rounded-lg">
                   <p className="text-xs text-gray-500 mb-1">Tipo</p>
                   <Badge
@@ -1620,112 +1749,239 @@ export function Participantes() {
                   </Badge>
                 </div>
                 <div className="bg-gray-50 p-3 rounded-lg">
-                  <p className="text-xs text-gray-500 mb-1">Status</p>
-                  <Badge
-                    variant={selectedParticipante.ativo ? 'success' : 'danger'}
-                    size="sm"
-                  >
-                    {selectedParticipante.ativo ? (
-                      <><CheckCircle className="w-3 h-3 mr-1" />Ativo</>
-                    ) : (
-                      <><XCircle className="w-3 h-3 mr-1" />Inativo</>
-                    )}
-                  </Badge>
+                  <p className="text-xs text-gray-500 mb-1">Caixas Concluídos</p>
+                  <p className="text-lg font-semibold text-gray-900">{selectedParticipante.caixasConcluidos || 0}</p>
                 </div>
               </div>
 
-              <div className="bg-gray-50 p-3 rounded-lg">
-                <p className="text-xs text-gray-500 mb-1">Caixas Concluídos</p>
-                <p className="text-lg font-semibold text-gray-900">{selectedParticipante.caixasConcluidos || 0}</p>
+              <div className="grid grid-cols-1 gap-3 mt-3">
+                <div className="flex items-center gap-3">
+                  <Mail className="w-4 h-4 text-gray-400" />
+                  <div>
+                    <p className="text-xs text-gray-500">Email</p>
+                    <p className="text-sm font-medium text-gray-900">{selectedParticipante.email}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Phone className="w-4 h-4 text-gray-400" />
+                  <div>
+                    <p className="text-xs text-gray-500">Telefone</p>
+                    <p className="text-sm font-medium text-gray-900">{maskPhone(selectedParticipante.telefone)}</p>
+                  </div>
+                </div>
+                {selectedParticipante.cpf && (
+                  <div className="flex items-center gap-3">
+                    <User className="w-4 h-4 text-gray-400" />
+                    <div>
+                      <p className="text-xs text-gray-500">CPF</p>
+                      <p className="text-sm font-medium text-gray-900">{maskCPF(selectedParticipante.cpf)}</p>
+                    </div>
+                  </div>
+                )}
+                {selectedParticipante.chavePix && (
+                  <div className="flex items-center gap-3">
+                    <CreditCard className="w-4 h-4 text-gray-400" />
+                    <div>
+                      <p className="text-xs text-gray-500">Chave PIX</p>
+                      <p className="text-sm font-medium text-gray-900">{selectedParticipante.chavePix}</p>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {selectedParticipante.caixaNome && (
-                <div className="bg-green-50 p-3 rounded-lg">
+                <div className="bg-green-50 p-3 rounded-lg mt-3">
                   <p className="text-xs text-green-600 mb-1">Caixa Atual</p>
                   <p className="text-sm font-semibold text-green-900">{selectedParticipante.caixaNome}</p>
                 </div>
               )}
-
-              <div className="flex items-center gap-3">
-                <Mail className="w-5 h-5 text-gray-400" />
-                <div>
-                  <p className="text-xs text-gray-500">Email</p>
-                  <p className="text-sm font-medium text-gray-900">{selectedParticipante.email}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <Phone className="w-5 h-5 text-gray-400" />
-                <div>
-                  <p className="text-xs text-gray-500">Telefone</p>
-                  <p className="text-sm font-medium text-gray-900">{maskPhone(selectedParticipante.telefone)}</p>
-                </div>
-              </div>
-              {selectedParticipante.cpf && (
-                <div className="flex items-center gap-3">
-                  <User className="w-5 h-5 text-gray-400" />
-                  <div>
-                    <p className="text-xs text-gray-500">CPF</p>
-                    <p className="text-sm font-medium text-gray-900">{maskCPF(selectedParticipante.cpf)}</p>
-                  </div>
-                </div>
-              )}
-              {selectedParticipante.chavePix && (
-                <div className="flex items-center gap-3">
-                  <CreditCard className="w-5 h-5 text-gray-400" />
-                  <div>
-                    <p className="text-xs text-gray-500">Chave PIX</p>
-                    <p className="text-sm font-medium text-gray-900">{selectedParticipante.chavePix}</p>
-                  </div>
-                </div>
-              )}
-
-              {/* Address Section */}
-              {(selectedParticipante.address?.street || selectedParticipante.address?.zip) && (
-                <div className="border-t border-gray-200 pt-4 mt-4">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Home className="w-5 h-5 text-gray-600" />
-                    <h4 className="text-sm font-semibold text-gray-700">Endereço</h4>
-                  </div>
-                  <div className="space-y-2 text-sm text-gray-600">
-                    {selectedParticipante.address?.street && (
-                      <p>
-                        <span className="font-medium">Rua:</span> {selectedParticipante.address.street}
-                        {selectedParticipante.address?.number && `, ${selectedParticipante.address.number}`}
-                      </p>
-                    )}
-                    {selectedParticipante.address?.complement && (
-                      <p><span className="font-medium">Complemento:</span> {selectedParticipante.address.complement}</p>
-                    )}
-                    {selectedParticipante.address?.zone && (
-                      <p><span className="font-medium">Bairro:</span> {selectedParticipante.address.zone}</p>
-                    )}
-                    {(selectedParticipante.address?.city || selectedParticipante.address?.state) && (
-                      <p>
-                        <span className="font-medium">Cidade/UF:</span>{' '}
-                        {selectedParticipante.address.city}, {selectedParticipante.address.state}
-                      </p>
-                    )}
-                    {selectedParticipante.address?.zip && (
-                      <p><span className="font-medium">CEP:</span> {formatCEP(selectedParticipante.address.zip)}</p>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {selectedParticipante.lytexClientId && (
-                <div className="flex items-center gap-3 bg-blue-50 p-3 rounded-lg mt-4">
-                  <div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
-                    <span className="text-white text-xs font-bold">L</span>
-                  </div>
-                  <div>
-                    <p className="text-xs text-blue-600">ID Lytex</p>
-                    <p className="text-sm font-mono text-blue-900">{selectedParticipante.lytexClientId}</p>
-                  </div>
-                </div>
-              )}
             </div>
 
+            {/* Endereço */}
+            {(selectedParticipante.address?.street || selectedParticipante.address?.zip) && (
+              <div>
+                <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                  <Home className="w-4 h-4" />
+                  Endereço
+                </h4>
+                <div className="bg-gray-50 p-3 rounded-lg space-y-2 text-sm text-gray-600">
+                  {selectedParticipante.address?.street && (
+                    <p>
+                      <span className="font-medium">Rua:</span> {selectedParticipante.address.street}
+                      {selectedParticipante.address?.number && `, ${selectedParticipante.address.number}`}
+                    </p>
+                  )}
+                  {selectedParticipante.address?.complement && (
+                    <p><span className="font-medium">Complemento:</span> {selectedParticipante.address.complement}</p>
+                  )}
+                  {selectedParticipante.address?.zone && (
+                    <p><span className="font-medium">Bairro:</span> {selectedParticipante.address.zone}</p>
+                  )}
+                  {(selectedParticipante.address?.city || selectedParticipante.address?.state) && (
+                    <p>
+                      <span className="font-medium">Cidade/UF:</span>{' '}
+                      {selectedParticipante.address.city}, {selectedParticipante.address.state}
+                    </p>
+                  )}
+                  {selectedParticipante.address?.zip && (
+                    <p><span className="font-medium">CEP:</span> {formatCEP(selectedParticipante.address.zip)}</p>
+                  )}
+                </div>
+              </div>
+            )}
 
+            {/* Detalhes da Subconta */}
+            {loadingSubconta ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div>
+              </div>
+            ) : subcontaDetails ? (
+              <div>
+                <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                  <CreditCard className="w-4 h-4 text-green-600" />
+                  Detalhes da Subconta Lytex
+                </h4>
+                <div className="bg-green-50 p-4 rounded-lg space-y-3">
+                  {/* Type and Name */}
+                  <div className="grid grid-cols-2 gap-3">
+                    {subcontaDetails.type && (
+                      <div>
+                        <p className="text-xs text-green-600 mb-1">Tipo</p>
+                        <Badge variant={subcontaDetails.type === 'pf' ? 'info' : 'warning'} size="sm">
+                          {subcontaDetails.type === 'pf' ? 'Pessoa Física' : 'Pessoa Jurídica'}
+                        </Badge>
+                      </div>
+                    )}
+                    {subcontaDetails.nomeCaixa && (
+                      <div>
+                        <p className="text-xs text-green-600 mb-1">Nome do Caixa</p>
+                        <p className="text-sm font-medium text-gray-900">{subcontaDetails.nomeCaixa}</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Lytex Credentials */}
+                  <div className="border-t border-green-200 pt-3">
+                    <p className="text-xs text-green-600 mb-2 font-semibold">Credenciais Lytex</p>
+                    <div className="space-y-2">
+                      {subcontaDetails.lytexId && (
+                        <div>
+                          <p className="text-xs text-gray-500">Lytex ID</p>
+                          <p className="text-sm font-mono text-gray-900 bg-white px-2 py-1 rounded border border-green-200">
+                            {subcontaDetails.lytexId}
+                          </p>
+                        </div>
+                      )}
+                      {subcontaDetails.clientId && (
+                        <div>
+                          <p className="text-xs text-gray-500">Client ID</p>
+                          <p className="text-sm font-mono text-gray-900 bg-white px-2 py-1 rounded border border-green-200">
+                            {subcontaDetails.clientId}
+                          </p>
+                        </div>
+                      )}
+                      {subcontaDetails.clientSecret && (
+                        <div>
+                          <p className="text-xs text-gray-500">Client Secret</p>
+                          <p className="text-sm font-mono text-gray-900 bg-white px-2 py-1 rounded border border-green-200">
+                            {'•'.repeat(20)}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
+            {/* Dados Bancários */}
+            {loadingBankAccounts ? (
+              <div>
+                <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                  <CreditCard className="w-4 h-4 text-blue-600" />
+                  Dados Bancários
+                </h4>
+                <div className="flex items-center justify-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                </div>
+              </div>
+            ) : bankAccounts.length > 0 ? (
+              <div>
+                <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                  <CreditCard className="w-4 h-4 text-blue-600" />
+                  Dados Bancários
+                </h4>
+                <div className="space-y-3">
+                  {bankAccounts.map((account, index) => (
+                    <div key={account._id || index} className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                      {/* Bank Info */}
+                      <div className="mb-3 pb-3 border-b border-blue-200">
+                        <p className="text-xs text-blue-600 mb-1">Banco</p>
+                        <p className="text-sm font-semibold text-gray-900">
+                          {account.bank?.name} ({account.bank?.code})
+                        </p>
+                        {account.bank?.ispb && (
+                          <p className="text-xs text-gray-500">ISPB: {account.bank.ispb}</p>
+                        )}
+                      </div>
+
+                      {/* Account Details */}
+                      <div className="grid grid-cols-2 gap-3 mb-3">
+                        <div>
+                          <p className="text-xs text-blue-600 mb-1">Agência</p>
+                          <p className="text-sm font-mono text-gray-900">
+                            {account.agency?.number}{account.agency?.dv ? `-${account.agency.dv}` : ''}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-blue-600 mb-1">Conta</p>
+                          <p className="text-sm font-mono text-gray-900">
+                            {account.account?.number}{account.account?.dv ? `-${account.account.dv}` : ''}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <p className="text-xs text-blue-600 mb-1">Tipo de Conta</p>
+                          <Badge variant="info" size="sm">
+                            {account.account?.type === 'corrente' ? 'Corrente' : 'Poupança'}
+                          </Badge>
+                        </div>
+                        <div>
+                          <p className="text-xs text-blue-600 mb-1">Status</p>
+                          <Badge
+                            variant={account.status === 'approved' ? 'success' : 'warning'}
+                            size="sm"
+                          >
+                            {account.status === 'approved' ? 'Aprovada' : account.status}
+                          </Badge>
+                        </div>
+                      </div>
+
+                      {/* Additional Info */}
+                      {account.createdAt && (
+                        <div className="mt-3 pt-3 border-t border-blue-200">
+                          <p className="text-xs text-gray-500">
+                            Criada em: {new Date(account.createdAt).toLocaleDateString('pt-BR')}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : subcontaDetails ? (
+              <div>
+                <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                  <CreditCard className="w-4 h-4 text-blue-600" />
+                  Dados Bancários
+                </h4>
+                <div className="bg-gray-50 p-4 rounded-lg text-center text-gray-500 text-sm">
+                  Nenhuma conta bancária cadastrada
+                </div>
+              </div>
+            ) : null}
           </div>
         )}
       </Modal>
