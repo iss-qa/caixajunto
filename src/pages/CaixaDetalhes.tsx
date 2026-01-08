@@ -1369,7 +1369,13 @@ _Junte seus amigos e realize seus sonhos_`;
     );
   }
 
-  const recebedorAtual = participantes.find((p) => p.posicao === caixa.mesAtual);
+  // Find the contemplated participant for the current month
+  const recebedorAtual = participantes.find((p) => {
+    // Handle both number and string comparisons
+    const posicao = Number(p.posicao);
+    const mesAtual = Number(caixa?.mesAtual || 1);
+    return posicao === mesAtual;
+  });
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-6">
@@ -1819,39 +1825,125 @@ _Junte seus amigos e realize seus sonhos_`;
         </Card>
       </motion.div>
 
-      {/* Recebedor do Mês */}
-      {recebedorAtual && participantes.length > 0 && (
+
+
+
+      {/* Contemplated Participant Info Section */}
+      {participantes.length > 0 && caixaIniciado && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
+          transition={{ delay: 0.15 }}
+          className="mb-6"
         >
-          <Card className="mb-6 bg-gradient-to-r from-amber-50 to-amber-100/50 border-amber-200/50">
-            <div className="flex items-center gap-4">
-              <Avatar
-                name={recebedorAtual.usuarioId.nome}
-                src={recebedorAtual.usuarioId.fotoUrl}
-                size="lg"
-              />
-              <div className="flex-1">
-                <p className="text-xs text-amber-700 font-medium">Recebe este mês</p>
-                <p className="font-bold text-gray-900">{recebedorAtual.usuarioId.nome}</p>
-                <p className="text-sm text-amber-600">
-                  Valor: {formatCurrency(caixa.valorTotal)} • Vencimento: {getVencimentoAtual()}
-                </p>
+          <Card className="bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 border-2 border-green-200/60 shadow-lg">
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-600 rounded-full flex items-center justify-center flex-shrink-0 shadow-md">
+                <TrendingUp className="w-6 h-6 text-white" />
               </div>
-              <Button
-                variant="primary"
-                size="sm"
-                className="bg-amber-500 hover:bg-amber-600 shadow-lg shadow-amber-500/30"
-              >
-                Pagar
-              </Button>
+              <div className="flex-1">
+                {recebedorAtual ? (
+                  <>
+                    <h3 className="font-bold text-gray-900 text-lg mb-2 flex items-center gap-2">
+                      <span>Participante Contemplado em {(() => {
+                        const meses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+                          'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+                        if (!caixa?.dataInicio) return 'este mês';
+                        const dataInicioStr = caixa.dataInicio;
+                        const parts = dataInicioStr.split('T')[0].split('-');
+                        const year = parseInt(parts[0]);
+                        const month = parseInt(parts[1]) - 1;
+                        const mesAtual = caixa.mesAtual || 1;
+                        const targetMonth = month + (mesAtual - 1);
+                        const mesIndex = targetMonth % 12;
+                        return meses[mesIndex];
+                      })()}</span>
+                      <Badge className="bg-green-600 text-white text-xs">
+                        <CheckCircle2 className="w-3 h-3 mr-1" />
+                        Mês {caixa?.mesAtual || 1}
+                      </Badge>
+                    </h3>
+
+                    <div className="bg-white/70 backdrop-blur-sm rounded-xl p-4 border border-green-200/50 shadow-sm">
+                      {/* Recebe este mês */}
+                      <div className="mb-4 pb-4 border-b border-green-200">
+                        <p className="text-xs text-green-600 font-semibold mb-2">Recebe este mês</p>
+                        <div className="flex items-center gap-3 mb-2">
+                          <Avatar
+                            name={recebedorAtual.usuarioId.nome}
+                            src={recebedorAtual.usuarioId.fotoUrl}
+                            size="md"
+                          />
+                          <div className="flex-1">
+                            <p className="font-bold text-gray-900 text-lg">{recebedorAtual.usuarioId.nome}</p>
+                            <p className="text-sm text-amber-600 font-medium">
+                              Valor: {formatCurrency(caixa.valorTotal)} • Vencimento: {getVencimentoAtual()}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2 text-sm">
+                        <div className="flex items-start gap-2">
+                          <Calendar className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
+                          <p className="text-gray-700">
+                            A transferência será realizada <span className="font-semibold text-green-700">automaticamente no dia {getVencimentoAtual()}</span>
+                          </p>
+                        </div>
+
+                        <div className="flex items-start gap-2">
+                          <Mail className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
+                          <p className="text-gray-700">
+                            Comprovante e notificações serão enviados para <span className="font-semibold text-green-700">todos os participantes</span>
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <h3 className="font-bold text-gray-900 text-lg mb-2 flex items-center gap-2">
+                      <span>Informações de Contemplação</span>
+                      <Badge className="bg-amber-500 text-white text-xs">
+                        <AlertTriangle className="w-3 h-3 mr-1" />
+                        Aguardando Sorteio
+                      </Badge>
+                    </h3>
+
+                    <div className="bg-white/70 backdrop-blur-sm rounded-xl p-4 border border-green-200/50 shadow-sm">
+                      <div className="space-y-3 text-sm">
+                        <div className="flex items-start gap-2">
+                          <Shuffle className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
+                          <p className="text-gray-700">
+                            As posições dos participantes ainda não foram sorteadas.
+                            {(usuario?.tipo === 'master' || caixa?.adminId?._id === usuario?._id) && (
+                              <span className="font-semibold text-amber-700"> Clique em "Sortear Posições" para definir a ordem de contemplação.</span>
+                            )}
+                          </p>
+                        </div>
+
+                        <div className="flex items-start gap-2">
+                          <Calendar className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
+                          <p className="text-gray-700">
+                            Após o sorteio, o participante contemplado do mês será exibido aqui com a <span className="font-semibold text-green-700">data de transferência automática</span>
+                          </p>
+                        </div>
+
+                        <div className="flex items-start gap-2">
+                          <Mail className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
+                          <p className="text-gray-700">
+                            Comprovantes e notificações serão enviados para <span className="font-semibold text-green-700">todos os participantes</span> quando houver contemplação
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           </Card>
         </motion.div>
       )}
-
 
       {/* Tabs posicionadas acima do Cronograma */}
 
@@ -2824,11 +2916,12 @@ _Junte seus amigos e realize seus sonhos_`;
           <Input
             label="Valor Total (R$)"
             type="number"
-            min={500}
+            min={50}
             value={editForm.valorTotal}
-            onChange={(e) => setEditForm({ ...editForm, valorTotal: parseInt(e.target.value) || 500 })}
+            onChange={(e) => setEditForm({ ...editForm, valorTotal: parseInt(e.target.value) || 50 })}
             leftIcon={<span className="text-gray-400">R$</span>}
           />
+          {/* TODO: Voltar para min={500} após testes em produção */}
 
           {/* Participantes - Com opção personalizada */}
           <div>

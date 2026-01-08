@@ -330,6 +330,12 @@ export const carteiraService = {
     const response = await api.get('/usuarios/me/contas-bancarias');
     return response.data;
   },
+  getBankAccountsWithAdminToken: async (subrecipientId: string) => {
+    const response = await api.get('/usuarios/bank-accounts-admin', {
+      params: { subrecipientId },
+    });
+    return response.data;
+  },
   saveBankAccount: async (data: any) => {
     const response = await api.post('/usuarios/me/contas-bancarias', data);
     return response.data;

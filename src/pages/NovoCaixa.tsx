@@ -115,7 +115,8 @@ export function NovoCaixa() {
   const handleValorCustomChange = (value: string) => {
     const numValue = parseInt(value.replace(/\D/g, '')) || 0;
     setValorCustom(value);
-    if (numValue >= 500) {
+    // TODO: Voltar para 500 após testes em produção
+    if (numValue >= 50) {
       setForm({ ...form, valorTotal: numValue });
     }
   };
@@ -168,7 +169,8 @@ export function NovoCaixa() {
   };
 
   const isStep1Valid = form.nome.length >= 3;
-  const isStep2Valid = form.valorTotal >= 500 && form.qtdParticipantes >= 2;
+  // TODO: Voltar para 500 após testes em produção
+  const isStep2Valid = form.valorTotal >= 50 && form.qtdParticipantes >= 2;
   const isStep3Valid = form.duracaoMeses >= 2 && isDataVencimentoValida();
 
   // Tela de sucesso
@@ -443,9 +445,9 @@ export function NovoCaixa() {
                             onChange={(e) => handleValorCustomChange(e.target.value)}
                             leftIcon={<DollarSign className="w-4 h-4" />}
                             type="number"
-                            min={500}
+                            min={50}
                           />
-                          <p className="text-xs text-gray-500 mt-1">Mínimo: R$ 500,00</p>
+                          <p className="text-xs text-gray-500 mt-1">Mínimo: R$ 50,00 {/* TODO: Voltar para R$ 500,00 após testes */}</p>
                         </div>
                       )}
                     </div>
