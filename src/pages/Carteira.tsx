@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Wallet, TrendingUp, Download, Plus, Eye, EyeOff, Building2, Check, X } from 'lucide-react';
+import { Wallet, TrendingUp, Download, Plus, Eye, EyeOff, Building2, Check, X, Calendar, Mail, Clock } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { carteiraService, cobrancasService, caixasService, pagamentosService, subcontasService, bancosService, contaBancariaService } from '../lib/api';
+import { carteiraService, cobrancasService, caixasService, pagamentosService, subcontasService, bancosService, contaBancariaService, recebimentosService } from '../lib/api';
 import { formatCurrency, formatDate } from '../lib/utils';
 import { TransacoesDetalhadas } from './Carteira/components/TransacoesDetalhadas';
 
@@ -111,6 +111,7 @@ const WalletDashboard = () => {
     balance: 0,
     pendingBalance: 0,
     blockedBalance: 0,
+    paidBalance: 0, // Total de saques recebidos
     futureTaxes: 0,
     status: 'Ativa',
     createdAt: '',
@@ -682,6 +683,31 @@ const WalletDashboard = () => {
     }
   };
 
+  // Buscar saldo pago (total de saques recebidos)
+  const fetchPaidBalance = async () => {
+    if (!usuario?._id) return;
+
+    try {
+      console.log('💰 Buscando saldo pago do usuário...');
+      const data = await recebimentosService.getMyRecebimentos();
+      const recebimentos = data.recebimentos || data || [];
+
+      // Calcular total de saques concluídos
+      const totalPago = recebimentos
+        .filter((r: any) => r.status === 'concluido')
+        .reduce((acc: number, r: any) => acc + (r.valorTotal || 0), 0);
+
+      console.log(`✅ Total pago encontrado: R$ ${totalPago.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`);
+
+      setAccountData((prev) => ({
+        ...prev,
+        paidBalance: totalPago,
+      }));
+    } catch (error) {
+      console.error('❌ Erro ao buscar saldo pago:', error);
+    }
+  };
+
   const handleCreateSubAccount = async () => {
     try {
       if (!usuario) {
@@ -1118,6 +1144,13 @@ const WalletDashboard = () => {
     }
   }, [usuario?._id, hasSubAccount, subcontaData?._id]);
 
+  // Fetch paid balance (total de saques recebidos)
+  useEffect(() => {
+    if (usuario?._id) {
+      fetchPaidBalance();
+    }
+  }, [usuario?._id]);
+
   const OverviewTab = () => {
     // Calcular a próxima data de recebimento baseado nos caixas gerenciados
     const proximoRecebimento = caixasGerenciados
@@ -1127,7 +1160,62 @@ const WalletDashboard = () => {
 
     return (
       <div className="space-y-6">
-        {/* Card principal com os 3 saldos */}
+        {/* Banner do Participante Contemplado */}
+        <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-2xl p-6 shadow-sm">
+          <div className="flex items-start gap-4">
+            {/* Ícone de crescimento */}
+            <div className="bg-green-100 rounded-2xl p-3">
+              <TrendingUp className="w-8 h-8 text-green-600" />
+            </div>
+
+            <div className="flex-1">
+              {/* Título com badge do mês */}
+              <div className="flex items-center gap-3 mb-4">
+                <h2 className="text-xl font-bold text-gray-800">
+                  Participante Contemplado em Janeiro
+                </h2>
+                <span className="bg-green-500 text-white text-xs font-semibold px-3 py-1 rounded-full flex items-center gap-1">
+                  <Clock className="w-3 h-3" />
+                  Mês 1
+                </span>
+              </div>
+
+              {/* Card do participante */}
+              <div className="bg-white/50 rounded-xl p-4 mb-4">
+                <p className="text-green-600 text-sm font-medium mb-2">Recebe este mês</p>
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-gray-600 rounded-full flex items-center justify-center text-white font-bold text-sm">
+                    MM
+                  </div>
+                  <div>
+                    <p className="font-semibold text-gray-800">Maria Madalena</p>
+                    <p className="text-green-600 text-sm">
+                      Valor: R$ 5.000,00 • Vencimento: 13/01/2026
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Informações de transferência */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-gray-600">
+                  <Calendar className="w-4 h-4 text-gray-500" />
+                  <span className="text-sm">
+                    A transferência será realizada <strong className="text-green-600">automaticamente no dia 13/01/2026</strong>
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 text-gray-600">
+                  <Mail className="w-4 h-4 text-gray-500" />
+                  <span className="text-sm">
+                    Comprovante e notificações serão enviados para <strong className="text-green-600">todos os participantes</strong>
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Card principal com os 4 saldos */}
         <div className="bg-gradient-to-br from-blue-600 to-blue-800 rounded-2xl p-6 text-white">
           <div className="flex justify-between items-start mb-4">
             <div>
@@ -1144,8 +1232,8 @@ const WalletDashboard = () => {
             <Wallet size={40} className="text-blue-300" />
           </div>
 
-          {/* 3 Cards de Saldo */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+          {/* 4 Cards de Saldo */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
             {/* Saldo Disponível */}
             <div className="bg-white/10 backdrop-blur rounded-xl p-4">
               <p className="text-blue-100 text-xs mb-1">Saldo Disponível</p>
@@ -1172,6 +1260,15 @@ const WalletDashboard = () => {
               <p className="text-blue-200 text-xs mt-1">
                 Taxas futuras: {showBalance ? formatCurrency(accountData.futureTaxes) : 'R$ •••'}
               </p>
+            </div>
+
+            {/* Saldo Pago - NOVO */}
+            <div className="bg-green-500/20 backdrop-blur rounded-xl p-4 border border-green-400/30">
+              <p className="text-green-100 text-xs mb-1">💰 Saldo Pago</p>
+              <p className="text-2xl font-bold text-green-100">
+                {showBalance ? formatCurrency(accountData.paidBalance || 0) : 'R$ ••••••'}
+              </p>
+              <p className="text-green-200 text-xs mt-1">Total de saques recebidos</p>
             </div>
           </div>
 
@@ -1201,252 +1298,6 @@ const WalletDashboard = () => {
               {walletError}
             </div>
           )}
-        </div>
-
-        <div>
-          <h3 className="font-semibold text-gray-800 mb-3">Transações Recentes</h3>
-          {transactionsLoading && (
-            <p className="text-sm text-gray-500">Carregando transações...</p>
-          )}
-          {transactionsError && !transactionsLoading && (
-            <p className="text-sm text-red-600">{transactionsError}</p>
-          )}
-          {!transactionsLoading &&
-            !transactionsError &&
-            recentTransactions.length === 0 && (
-              <p className="text-sm text-gray-500">
-                Nenhuma transação recente encontrada.
-              </p>
-            )}
-          {!transactionsLoading &&
-            !transactionsError &&
-            recentTransactions.length > 0 && (
-              <div className="space-y-4">
-                {Array.from(
-                  recentTransactions.reduce(
-                    (map, t) => {
-                      const key = t.caixaId;
-                      const grupo =
-                        map.get(key) ||
-                        {
-                          caixaId: t.caixaId,
-                          caixaNome: t.caixaNome,
-                          caixaAdminNome: t.caixaAdminNome,
-                          transacoes: [] as TransacaoRecenteCarteira[],
-                        };
-                      grupo.transacoes.push(t);
-                      map.set(key, grupo);
-                      return map;
-                    },
-                    new Map<
-                      string,
-                      {
-                        caixaId: string;
-                        caixaNome: string;
-                        caixaAdminNome: string;
-                        transacoes: TransacaoRecenteCarteira[];
-                      }
-                    >(),
-                  ).values(),
-                )
-                  .sort((a, b) => {
-                    const dataA =
-                      a.transacoes[0]?.dataPagamento ||
-                      new Date(0).toISOString();
-                    const dataB =
-                      b.transacoes[0]?.dataPagamento ||
-                      new Date(0).toISOString();
-                    return (
-                      new Date(dataB).getTime() - new Date(dataA).getTime()
-                    );
-                  })
-                  .map((grupo) => (
-                    <div key={grupo.caixaId} className="space-y-4">
-                      <div className="flex justify-between items-center">
-                        <div>
-                          <p className="text-sm font-semibold text-gray-800">
-                            {grupo.caixaNome}
-                          </p>
-                          {grupo.caixaAdminNome && (
-                            <p className="text-xs text-gray-500">
-                              Organizado por {grupo.caixaAdminNome}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Agrupamento por Participante dentro do Caixa */}
-                      {Array.from(
-                        grupo.transacoes.reduce((mapPart, t) => {
-                          const key = t.participanteNome;
-                          const list = mapPart.get(key) || [];
-                          list.push(t);
-                          mapPart.set(key, list);
-                          return mapPart;
-                        }, new Map<string, TransacaoRecenteCarteira[]>()).entries()
-                      ).map(([participanteNome, transacoesParticipante], idxPart) => {
-                        // Ordenar por semana/mês
-                        const sortedTransacoes = transacoesParticipante.sort((a, b) => {
-                          const mesA = a.mesReferencia || 0;
-                          const mesB = b.mesReferencia || 0;
-                          return mesA - mesB;
-                        });
-
-                        // Cor de fundo alternada por participante
-                        const hash = participanteNome.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-                        const bgColor = hash % 2 === 0 ? 'bg-white' : 'bg-gray-50';
-
-                        return (
-                          <div key={participanteNome} className={`rounded-xl border border-gray-200 overflow-hidden ${bgColor}`}>
-                            <div className="px-4 py-2 bg-opacity-50 border-b border-gray-100 flex justify-between items-center">
-                              <span className="font-medium text-gray-700">{participanteNome}</span>
-                              <span className="text-xs text-gray-500">{sortedTransacoes.length} pagamentos</span>
-                            </div>
-                            <div className="divide-y divide-gray-100">
-                              {sortedTransacoes.map((t) => (
-                                <div
-                                  key={t.id}
-                                  className="p-4 hover:bg-black hover:bg-opacity-5 transition-colors"
-                                >
-                                  <div className="flex justify-between items-start">
-                                    <div className="flex-1">
-                                      <p className="text-xs text-gray-500">
-                                        {formatDate(t.dataPagamento)} •{' '}
-                                        {t.status === 'em_dia'
-                                          ? 'Pago em dia'
-                                          : 'Pago em atraso'}
-                                        {typeof t.mesReferencia === 'number' &&
-                                          t.mesReferencia > 0
-                                          ? ` • ${t.mesReferencia}ª ${t.tipoCaixa === 'semanal'
-                                            ? 'semana'
-                                            : 'mês'
-                                          }`
-                                          : ''}
-                                      </p>
-                                    </div>
-                                    <div className="text-right">
-                                      <p
-                                        className={`font-bold ${t.tipo === 'entrada'
-                                          ? 'text-green-600'
-                                          : 'text-red-600'
-                                          }`}
-                                      >
-                                        {t.tipo === 'entrada' ? '+' : '-'}{' '}
-                                        {formatCurrency(t.valorPago)}
-                                      </p>
-                                    </div>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ))}
-              </div>
-            )}
-        </div>
-        <div className="mt-6">
-          <h3 className="font-semibold text-gray-800 mb-3">
-            Transações da Carteira (Lytex)
-          </h3>
-          {lytexTransactionsLoading && (
-            <p className="text-sm text-gray-500">
-              Carregando transações da carteira...
-            </p>
-          )}
-          {lytexTransactionsError && !lytexTransactionsLoading && (
-            <p className="text-sm text-red-600">{lytexTransactionsError}</p>
-          )}
-          {!lytexTransactionsLoading &&
-            !lytexTransactionsError &&
-            lytexTransactions.length === 0 && (
-              <p className="text-sm text-gray-500">
-                Nenhuma transação de saque ou split encontrada.
-              </p>
-            )}
-          {!lytexTransactionsLoading &&
-            !lytexTransactionsError &&
-            lytexTransactions.length > 0 && (
-              <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-                <table className="min-w-full text-sm">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-4 py-2 text-left text-gray-600 font-medium">
-                        Data
-                      </th>
-                      <th className="px-4 py-2 text-left text-gray-600 font-medium">
-                        Tipo
-                      </th>
-                      <th className="px-4 py-2 text-left text-gray-600 font-medium">
-                        Descrição
-                      </th>
-                      <th className="px-4 py-2 text-right text-gray-600 font-medium">
-                        Valor
-                      </th>
-                      <th className="px-4 py-2 text-right text-gray-600 font-medium">
-                        Status
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {lytexTransactions.map((t) => (
-                      <tr
-                        key={t.id}
-                        className="border-t border-gray-100 hover:bg-gray-50"
-                      >
-                        <td className="px-4 py-2 text-gray-700">
-                          {t.createdAt ? formatDate(t.createdAt) : '-'}
-                        </td>
-                        <td className="px-4 py-2 text-gray-700 capitalize">
-                          {t.type || '-'}
-                        </td>
-                        <td className="px-4 py-2 text-gray-700">
-                          {t.description || '-'}
-                        </td>
-                        <td className="px-4 py-2 text-right font-medium text-gray-800">
-                          {formatCurrency(t.amount || 0)}
-                        </td>
-                        <td className="px-4 py-2 text-right">
-                          <span className="inline-flex px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
-                            {t.status || '-'}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                <div className="flex items-center justify-between px-4 py-2 border-t border-gray-100 bg-gray-50">
-                  <button
-                    disabled={lytexPage <= 1 || lytexTransactionsLoading}
-                    onClick={() =>
-                      lytexPage > 1 && fetchLytexTransactions(lytexPage - 1)
-                    }
-                    className="text-xs text-blue-600 disabled:text-gray-400 disabled:cursor-not-allowed"
-                  >
-                    Anterior
-                  </button>
-                  <span className="text-xs text-gray-500">
-                    Página {lytexPage}
-                  </span>
-                  <button
-                    disabled={!lytexHasMore || lytexTransactionsLoading}
-                    onClick={() =>
-                      lytexHasMore && fetchLytexTransactions(lytexPage + 1)
-                    }
-                    className="text-xs text-blue-600 disabled:text-gray-400 disabled:cursor-not-allowed"
-                  >
-                    Próxima
-                  </button>
-                </div>
-              </div>
-            )}
-        </div>
-
-        {/* Transações Detalhadas */}
-        <div className="mt-6">
-          <TransacoesDetalhadas />
         </div>
       </div>
     );

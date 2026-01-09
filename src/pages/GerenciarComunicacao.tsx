@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { MessageSquare, Calendar, User, FileText, CheckCircle2, XCircle, Clock, Search, Filter } from 'lucide-react';
+import { MessageSquare, Calendar, User, FileText, CheckCircle2, XCircle, Clock, Search, Filter, RefreshCw } from 'lucide-react';
 import { comunicacaoService, type MensagemHistorico } from '../lib/api/comunicacao.service';
 import { caixasService } from '../lib/api';
 import { formatDate } from '../lib/utils';
@@ -14,6 +14,7 @@ const tipoMensagemLabels: Record<string, string> = {
     confirmacao_pagamento: 'Confirmação de Pagamento',
     alerta_atraso: 'Alerta de Atraso',
     manual: 'Manual',
+    cobranca: 'Cobrança',
 };
 
 const tipoMensagemColors: Record<string, string> = {
@@ -22,6 +23,7 @@ const tipoMensagemColors: Record<string, string> = {
     confirmacao_pagamento: 'bg-green-100 text-green-700',
     alerta_atraso: 'bg-red-100 text-red-700',
     manual: 'bg-gray-100 text-gray-700',
+    cobranca: 'bg-orange-100 text-orange-700',
 };
 
 export function GerenciarComunicacao() {
@@ -41,6 +43,8 @@ export function GerenciarComunicacao() {
     // Modal de detalhes
     const [mensagemSelecionada, setMensagemSelecionada] = useState<MensagemHistorico | null>(null);
     const [showModal, setShowModal] = useState(false);
+    // Reenviando mensagem
+    const [resendingId, setResendingId] = useState<string | null>(null);
 
     useEffect(() => {
         loadCaixas();
@@ -120,6 +124,20 @@ export function GerenciarComunicacao() {
         setPage(1);
     };
 
+    const handleResend = async (mensagemId: string) => {
+        try {
+            setResendingId(mensagemId);
+            await comunicacaoService.resendMessage(mensagemId);
+            // Recarregar a lista para ver o novo status
+            await loadHistorico();
+        } catch (err: any) {
+            console.error('Erro ao reenviar mensagem:', err);
+            alert(err.message || 'Erro ao reenviar mensagem');
+        } finally {
+            setResendingId(null);
+        }
+    };
+
     return (
         <div className="max-w-7xl mx-auto px-4 py-6">
             {/* Header */}
@@ -189,6 +207,7 @@ export function GerenciarComunicacao() {
                             <option value="lembrete_pagamento">Lembrete de Pagamento</option>
                             <option value="confirmacao_pagamento">Confirmação de Pagamento</option>
                             <option value="alerta_atraso">Alerta de Atraso</option>
+                            <option value="cobranca">Cobrança</option>
                             <option value="manual">Manual</option>
                         </select>
                     </div>
@@ -333,17 +352,30 @@ export function GerenciarComunicacao() {
                                             )}
                                         </td>
                                         <td className="py-3 px-4">
-                                            <Button
-                                                variant="secondary"
-                                                size="sm"
-                                                leftIcon={<FileText className="w-4 h-4" />}
-                                                onClick={() => {
-                                                    setMensagemSelecionada(mensagem);
-                                                    setShowModal(true);
-                                                }}
-                                            >
-                                                Ver
-                                            </Button>
+                                            <div className="flex items-center gap-2">
+                                                <Button
+                                                    variant="secondary"
+                                                    size="sm"
+                                                    leftIcon={<FileText className="w-4 h-4" />}
+                                                    onClick={() => {
+                                                        setMensagemSelecionada(mensagem);
+                                                        setShowModal(true);
+                                                    }}
+                                                >
+                                                    Ver
+                                                </Button>
+                                                {mensagem.status !== 'enviado' && (
+                                                    <Button
+                                                        variant="primary"
+                                                        size="sm"
+                                                        leftIcon={<RefreshCw className={`w-4 h-4 ${resendingId === mensagem._id ? 'animate-spin' : ''}`} />}
+                                                        onClick={() => handleResend(mensagem._id)}
+                                                        disabled={resendingId === mensagem._id}
+                                                    >
+                                                        {resendingId === mensagem._id ? 'Enviando...' : 'Reenviar'}
+                                                    </Button>
+                                                )}
+                                            </div>
                                         </td>
                                     </tr>
                                 ))}

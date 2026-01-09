@@ -286,10 +286,19 @@ export function DetalhesPagamento({
           valor: Number(c.valor || 0),
           descricao: `Pagamento Mês ${mes}`,
           status: isPago ? 'pago' : 'pendente',
-          dueDate: undefined,
-          paymentUrl: undefined,
-          pix: undefined,
-          boleto: undefined,
+          dueDate: c.dataVencimento || undefined,
+          paymentUrl: c.paymentUrl || undefined,
+          // ✅ Usar dados de PIX e Boleto do backend (persistidos no MongoDB)
+          pix: c.pix ? {
+            qrCode: c.pix.qrCode || '',
+            copiaCola: c.pix.copiaCola || '',
+            geradoEm: c.createdAt || undefined,
+          } : undefined,
+          boleto: c.boleto ? {
+            codigoBarras: c.boleto.codigoBarras || '',
+            linhaDigitavel: c.boleto.linhaDigitavel || '',
+            url: c.boleto.url || undefined,
+          } : undefined,
           ultimaAtualizacao: Date.now(),
         }
 

@@ -57,6 +57,26 @@ class ComunicacaoService {
 
         return response.data;
     }
+
+    /**
+     * Reenvia uma mensagem específica pelo ID
+     */
+    async resendMessage(mensagemId: string): Promise<{
+        success: boolean;
+        message: string;
+        mensagemId: string;
+        participante: string;
+        tipo: string;
+        status: string;
+    }> {
+        const response = await axios.post(
+            `${API_URL}/comunicacao/resend/${mensagemId}`,
+            {},
+            this.getAuthHeader(),
+        );
+
+        return response.data;
+    }
 }
 
 export const comunicacaoService = new ComunicacaoService();

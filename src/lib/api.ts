@@ -501,6 +501,34 @@ export const contaBancariaService = {
   },
 };
 
+// Recebimentos (Saques do participante)
+export const recebimentosService = {
+  // Busca recebimentos do usuário logado
+  getMyRecebimentos: async () => {
+    const token = localStorage.getItem('token');
+    // Decodificar token para pegar usuarioId
+    if (!token) return { recebimentos: [], totalPago: 0 };
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      const usuarioId = payload.sub;
+      const response = await api.get(`/recebimentos/usuario/${usuarioId}`);
+      return response.data;
+    } catch (e) {
+      console.error('Erro ao buscar recebimentos:', e);
+      return { recebimentos: [], totalPago: 0 };
+    }
+  },
+  // Busca total pago ao usuário
+  getTotalPago: async (usuarioId: string) => {
+    const response = await api.get(`/recebimentos/usuario/${usuarioId}`);
+    const data = response.data;
+    const recebimentos = data.recebimentos || data || [];
+    const total = recebimentos
+      .filter((r: any) => r.status === 'concluido')
+      .reduce((acc: number, r: any) => acc + (r.valorTotal || 0), 0);
+    return total;
+  },
+};
+
 // Comunicação (Evolution API - WhatsApp)
 export { comunicacaoService } from './api/comunicacao.service';
-
