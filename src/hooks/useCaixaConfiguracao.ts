@@ -58,7 +58,8 @@ export function useCaixaConfiguracao(
 
             console.log('📡 Fazendo requisição para /api/subcontas...');
 
-            const response = await axios.get('http://localhost:3000/api/subcontas', {
+            const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+            const response = await axios.get(`${API_URL}/subcontas`, {
                 headers: {
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json',
@@ -218,8 +219,10 @@ export function useCaixaConfiguracao(
 
             console.log(`⚙️ Verificando regras de split para caixa ${caixaId}...`);
 
+            const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+
             const response = await axios.get(
-                `http://localhost:3000/api/split-config/${caixaId}`,
+                `${API_URL}/split-config/${caixaId}`,
                 {
                     headers: {
                         'Authorization': `Bearer ${token}`,

@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { MessageSquare, Calendar, User, FileText, CheckCircle2, XCircle, Clock, Search, Filter, RefreshCw } from 'lucide-react';
+import { MessageSquare, Calendar, User, FileText, CheckCircle2, XCircle, Clock, Search, Filter, RefreshCw, Send } from 'lucide-react';
 import { comunicacaoService, type MensagemHistorico } from '../lib/api/comunicacao.service';
-import { caixasService } from '../lib/api';
+import { caixasService, participantesService } from '../lib/api';
 import { formatDate } from '../lib/utils';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
@@ -45,6 +45,16 @@ export function GerenciarComunicacao() {
     const [showModal, setShowModal] = useState(false);
     // Reenviando mensagem
     const [resendingId, setResendingId] = useState<string | null>(null);
+
+    // Modal de mensagem manual
+    const [showManualModal, setShowManualModal] = useState(false);
+    const [manualCaixaId, setManualCaixaId] = useState<string>('');
+    const [manualEscopo, setManualEscopo] = useState<'todos' | 'participante_especifico' | 'apenas_admins'>('todos');
+    const [manualParticipanteId, setManualParticipanteId] = useState<string>('');
+    const [manualMensagem, setManualMensagem] = useState<string>('');
+    const [participantesCaixa, setParticipantesCaixa] = useState<Array<{ _id: string; usuarioId: any }>>([]);
+    const [sendingManual, setSendingManual] = useState(false);
+    const [caixasAtivos, setCaixasAtivos] = useState<Array<{ _id: string; nome: string }>>([]);
 
     useEffect(() => {
         loadCaixas();
@@ -135,6 +145,88 @@ export function GerenciarComunicacao() {
             alert(err.message || 'Erro ao reenviar mensagem');
         } finally {
             setResendingId(null);
+        }
+    };
+
+    // Carregar caixas ativos para o modal de envio manual
+    const loadCaixasAtivos = async () => {
+        try {
+            const response = await caixasService.getAll({ limit: 100 });
+            const caixasList = Array.isArray(response) ? response : response.caixas || [];
+            const ativos = caixasList.filter((c: any) => c.status === 'ativo');
+            setCaixasAtivos(ativos);
+        } catch (err) {
+            console.error('Erro ao carregar caixas ativos:', err);
+        }
+    };
+
+    // Carregar participantes de uma caixa específica
+    const loadParticipantesCaixa = async (caixaId: string) => {
+        try {
+            const participantes = await participantesService.getByCaixa(caixaId);
+            const lista = Array.isArray(participantes) ? participantes : participantes.participantes || [];
+            setParticipantesCaixa(lista);
+        } catch (err) {
+            console.error('Erro ao carregar participantes:', err);
+            setParticipantesCaixa([]);
+        }
+    };
+
+    // Abrir modal de envio manual
+    const handleOpenManualModal = () => {
+        loadCaixasAtivos();
+        setManualCaixaId('');
+        setManualEscopo('todos');
+        setManualParticipanteId('');
+        setManualMensagem('');
+        setParticipantesCaixa([]);
+        setShowManualModal(true);
+    };
+
+    // Quando caixa muda, carregar participantes
+    const handleManualCaixaChange = (caixaId: string) => {
+        setManualCaixaId(caixaId);
+        setManualParticipanteId('');
+        if (caixaId) {
+            loadParticipantesCaixa(caixaId);
+        } else {
+            setParticipantesCaixa([]);
+        }
+    };
+
+    // Enviar mensagem manual
+    const handleSendManualMessage = async () => {
+        if (!manualCaixaId || !manualMensagem.trim()) {
+            alert('Selecione uma caixa e digite uma mensagem');
+            return;
+        }
+
+        if (manualEscopo === 'participante_especifico' && !manualParticipanteId) {
+            alert('Selecione um participante');
+            return;
+        }
+
+        try {
+            setSendingManual(true);
+            const result = await comunicacaoService.enviarMensagemManual({
+                caixaId: manualCaixaId,
+                mensagem: manualMensagem,
+                escopo: manualEscopo,
+                participanteId: manualEscopo === 'participante_especifico' ? manualParticipanteId : undefined,
+            });
+
+            if (result.success) {
+                alert(`✅ ${result.enviados} mensagem(ns) enviada(s) com sucesso!`);
+                setShowManualModal(false);
+                loadHistorico(); // Recarregar lista
+            } else {
+                alert(`❌ Erro: ${result.message}`);
+            }
+        } catch (err: any) {
+            console.error('Erro ao enviar mensagem manual:', err);
+            alert(err.message || 'Erro ao enviar mensagem manual');
+        } finally {
+            setSendingManual(false);
         }
     };
 
@@ -234,9 +326,19 @@ export function GerenciarComunicacao() {
                 </div>
 
                 <div className="flex justify-between items-center">
-                    <Button variant="secondary" size="sm" onClick={limparFiltros}>
-                        Limpar Filtros
-                    </Button>
+                    <div className="flex items-center gap-2">
+                        <Button variant="secondary" size="sm" onClick={limparFiltros}>
+                            Limpar Filtros
+                        </Button>
+                        <Button
+                            variant="primary"
+                            size="sm"
+                            leftIcon={<Send className="w-4 h-4" />}
+                            onClick={handleOpenManualModal}
+                        >
+                            Enviar Mensagem Manual
+                        </Button>
+                    </div>
                     <p className="text-sm text-gray-500">
                         {total} {total === 1 ? 'mensagem encontrada' : 'mensagens encontradas'}
                     </p>
@@ -334,11 +436,28 @@ export function GerenciarComunicacao() {
                                             </div>
                                         </td>
                                         <td className="py-3 px-4">
-                                            <span
-                                                className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${tipoMensagemColors[mensagem.tipo] || 'bg-gray-100 text-gray-700'}`}
-                                            >
-                                                {tipoMensagemLabels[mensagem.tipo] || mensagem.tipo}
-                                            </span>
+                                            <div className="flex flex-col gap-1">
+                                                <span
+                                                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${tipoMensagemColors[mensagem.tipo] || 'bg-gray-100 text-gray-700'}`}
+                                                >
+                                                    {tipoMensagemLabels[mensagem.tipo] || mensagem.tipo}
+                                                </span>
+                                                {/* Identificação de escopo para mensagens manuais */}
+                                                {mensagem.tipo === 'manual' && (mensagem as any).metadata?.escopo && (
+                                                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${(mensagem as any).metadata.escopo === 'participante_especifico'
+                                                        ? 'bg-blue-50 text-blue-600 border border-blue-200'
+                                                        : (mensagem as any).metadata.escopo === 'apenas_admins'
+                                                            ? 'bg-amber-50 text-amber-600 border border-amber-200'
+                                                            : 'bg-green-50 text-green-600 border border-green-200'
+                                                        }`}>
+                                                        {(mensagem as any).metadata.escopo === 'participante_especifico'
+                                                            ? '👤 Individual'
+                                                            : (mensagem as any).metadata.escopo === 'apenas_admins'
+                                                                ? '👥 Admins'
+                                                                : '📢 Todos'}
+                                                    </span>
+                                                )}
+                                            </div>
                                         </td>
                                         <td className="py-3 px-4">
                                             <div className="flex items-center gap-2">
@@ -448,6 +567,27 @@ export function GerenciarComunicacao() {
                                     </p>
                                 </div>
 
+                                {/* Identificador de Escopo para Mensagens Manuais */}
+                                {mensagemSelecionada.tipo === 'manual' && mensagemSelecionada.metadata?.escopo && (
+                                    <div>
+                                        <label className="text-sm font-medium text-gray-500">Destinatário</label>
+                                        <div className="mt-1">
+                                            <span className={`inline-flex items-center px-3 py-1.5 rounded-lg text-sm font-medium ${mensagemSelecionada.metadata.escopo === 'participante_especifico'
+                                                    ? 'bg-blue-100 text-blue-700 border border-blue-200'
+                                                    : mensagemSelecionada.metadata.escopo === 'apenas_admins'
+                                                        ? 'bg-amber-100 text-amber-700 border border-amber-200'
+                                                        : 'bg-green-100 text-green-700 border border-green-200'
+                                                }`}>
+                                                {mensagemSelecionada.metadata.escopo === 'participante_especifico'
+                                                    ? '👤 Mensagem Individual'
+                                                    : mensagemSelecionada.metadata.escopo === 'apenas_admins'
+                                                        ? '👥 Apenas Administradores'
+                                                        : '📢 Todos os Participantes'}
+                                            </span>
+                                        </div>
+                                    </div>
+                                )}
+
                                 <div>
                                     <label className="text-sm font-medium text-gray-500">Status</label>
                                     <div className="mt-1">{renderStatusBadge(mensagemSelecionada.status)}</div>
@@ -490,6 +630,152 @@ export function GerenciarComunicacao() {
 
                             <div className="mt-6 flex justify-end">
                                 <Button onClick={() => setShowModal(false)}>Fechar</Button>
+                            </div>
+                        </div>
+                    </motion.div>
+                </div>
+            )}
+
+            {/* Modal de Envio Manual */}
+            {showManualModal && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="bg-white rounded-2xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto"
+                    >
+                        <div className="p-6">
+                            <div className="flex items-center justify-between mb-6">
+                                <h3 className="text-xl font-bold text-gray-900">Enviar Mensagem Manual</h3>
+                                <button
+                                    onClick={() => setShowManualModal(false)}
+                                    className="text-gray-400 hover:text-gray-600 transition-colors"
+                                >
+                                    <XCircle className="w-6 h-6" />
+                                </button>
+                            </div>
+
+                            <div className="space-y-4">
+                                {/* Seleção de Caixa */}
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Caixa *
+                                    </label>
+                                    <select
+                                        value={manualCaixaId}
+                                        onChange={(e) => handleManualCaixaChange(e.target.value)}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                    >
+                                        <option value="">Selecione uma caixa ativa</option>
+                                        {caixasAtivos.map((caixa) => (
+                                            <option key={caixa._id} value={caixa._id}>
+                                                {caixa.nome}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                {/* Escopo de Envio */}
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Enviar para
+                                    </label>
+                                    <div className="space-y-2">
+                                        <label className="flex items-center gap-2 cursor-pointer">
+                                            <input
+                                                type="radio"
+                                                name="escopo"
+                                                value="todos"
+                                                checked={manualEscopo === 'todos'}
+                                                onChange={() => setManualEscopo('todos')}
+                                                className="text-purple-600"
+                                            />
+                                            <span className="text-sm text-gray-700">Todos os participantes</span>
+                                        </label>
+                                        <label className="flex items-center gap-2 cursor-pointer">
+                                            <input
+                                                type="radio"
+                                                name="escopo"
+                                                value="participante_especifico"
+                                                checked={manualEscopo === 'participante_especifico'}
+                                                onChange={() => setManualEscopo('participante_especifico')}
+                                                className="text-purple-600"
+                                            />
+                                            <span className="text-sm text-gray-700">Participante específico</span>
+                                        </label>
+                                        <label className="flex items-center gap-2 cursor-pointer">
+                                            <input
+                                                type="radio"
+                                                name="escopo"
+                                                value="apenas_admins"
+                                                checked={manualEscopo === 'apenas_admins'}
+                                                onChange={() => setManualEscopo('apenas_admins')}
+                                                className="text-purple-600"
+                                            />
+                                            <span className="text-sm text-gray-700">Apenas administradores</span>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                {/* Seleção de Participante (se escopo específico) */}
+                                {manualEscopo === 'participante_especifico' && (
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            Participante *
+                                        </label>
+                                        <select
+                                            value={manualParticipanteId}
+                                            onChange={(e) => setManualParticipanteId(e.target.value)}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                            disabled={!manualCaixaId}
+                                        >
+                                            <option value="">
+                                                {manualCaixaId ? 'Selecione um participante' : 'Selecione uma caixa primeiro'}
+                                            </option>
+                                            {participantesCaixa.map((p: any) => (
+                                                <option key={p._id} value={p._id}>
+                                                    {p.usuarioId?.nome || 'Participante'}
+                                                    {p.usuarioId?.tipo === 'admin' || p.usuarioId?.tipo === 'master' ? ' (Admin)' : ''}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                )}
+
+                                {/* Mensagem */}
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Mensagem *
+                                    </label>
+                                    <textarea
+                                        value={manualMensagem}
+                                        onChange={(e) => setManualMensagem(e.target.value)}
+                                        placeholder="Digite sua mensagem aqui..."
+                                        rows={5}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
+                                    />
+                                    <p className="text-xs text-gray-500 mt-1">
+                                        {manualMensagem.length} caracteres
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="mt-6 flex justify-end gap-3">
+                                <Button
+                                    variant="secondary"
+                                    onClick={() => setShowManualModal(false)}
+                                    disabled={sendingManual}
+                                >
+                                    Cancelar
+                                </Button>
+                                <Button
+                                    variant="primary"
+                                    onClick={handleSendManualMessage}
+                                    disabled={sendingManual || !manualCaixaId || !manualMensagem.trim()}
+                                    leftIcon={sendingManual ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                                >
+                                    {sendingManual ? 'Enviando...' : 'Enviar Mensagem'}
+                                </Button>
                             </div>
                         </div>
                     </motion.div>

@@ -9,11 +9,16 @@ export interface MensagemHistorico {
     participanteId: string;
     participanteNome: string;
     participanteTelefone: string;
-    tipo: 'boas_vindas' | 'lembrete_pagamento' | 'confirmacao_pagamento' | 'alerta_atraso' | 'manual';
+    tipo: 'boas_vindas' | 'lembrete_pagamento' | 'confirmacao_pagamento' | 'alerta_atraso' | 'manual' | 'cobranca';
     conteudo: string;
     status: 'pendente' | 'enviado' | 'falha';
     dataEnvio?: string;
     errorMessage?: string;
+    metadata?: {
+        escopo?: 'todos' | 'participante_especifico' | 'apenas_admins';
+        manual?: boolean;
+        [key: string]: any;
+    };
     createdAt: string;
     updatedAt: string;
 }
@@ -72,6 +77,29 @@ class ComunicacaoService {
         const response = await axios.post(
             `${API_URL}/comunicacao/resend/${mensagemId}`,
             {},
+            this.getAuthHeader(),
+        );
+
+        return response.data;
+    }
+
+    /**
+     * Envia mensagem manual para participantes de uma caixa
+     */
+    async enviarMensagemManual(data: {
+        caixaId: string;
+        mensagem: string;
+        escopo: 'todos' | 'participante_especifico' | 'apenas_admins';
+        participanteId?: string;
+    }): Promise<{
+        success: boolean;
+        message: string;
+        enviados?: number;
+        participantes?: string[];
+    }> {
+        const response = await axios.post(
+            `${API_URL}/comunicacao/enviar-manual`,
+            data,
             this.getAuthHeader(),
         );
 
