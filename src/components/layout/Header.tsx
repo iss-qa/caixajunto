@@ -49,7 +49,7 @@ export function Header() {
 
   useEffect(() => {
     if (usuario?._id) {
-      notificacoesService.contarNaoLidas(usuario._id).then(setNotificacoes).catch(() => {});
+      notificacoesService.contarNaoLidas(usuario._id).then(setNotificacoes).catch(() => { });
     }
   }, [usuario]);
 
@@ -83,7 +83,7 @@ export function Header() {
               <div className="w-9 h-9 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm">
                 <Users className="w-5 h-5 text-white" />
               </div>
-              <span className="font-bold text-lg hidden sm:block">CaixaJunto</span>
+              <span className="font-bold text-lg hidden sm:block">Juntix</span>
             </Link>
 
             {/* Desktop Navigation */}

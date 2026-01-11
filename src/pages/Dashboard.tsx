@@ -88,7 +88,7 @@ const gerarComparativoCredito = (valor: number) => {
       economia: ((jurosBanco - taxaCaixa) / (valor + jurosBanco) * 100).toFixed(0),
     },
     {
-      nome: 'CaixaJunto',
+      nome: 'Juntix',
       valor: valorCaixa,
       juros: '2%',
       color: 'text-green-500',
@@ -210,7 +210,7 @@ export function Dashboard() {
           </h1>
           <p className="text-sm text-gray-500">Score: {usuario?.score ?? 0}</p>
           <p className="text-sm text-gray-600 mt-2">
-            O CaixaJunto é um grupo de contribuição coletiva onde todos pagam parcelas
+            O Juntix é um grupo de contribuição coletiva onde todos pagam parcelas
             e cada participante recebe o valor completo em sua vez, com taxa reduzida.
           </p>
         </div>
@@ -233,7 +233,7 @@ export function Dashboard() {
             </div>
           </div>
           <p className="text-xs md:text-sm text-gray-700 mb-3">
-            Compare o custo total das modalidades para o valor escolhido. No CaixaJunto a taxa é
+            Compare o custo total das modalidades para o valor escolhido. No Juntix a taxa é
             de <span className="font-semibold text-green-700">2%</span>, geralmente a melhor opção.
           </p>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
@@ -241,10 +241,10 @@ export function Dashboard() {
               <Card key={c.nome} className="text-center">
                 <p className="text-sm text-gray-500">{c.nome}</p>
                 <p className="text-lg font-bold text-gray-900">{formatCurrency(c.valor)}</p>
-                <Badge variant={c.nome === 'CaixaJunto' ? 'success' : 'gray'} size="sm">
+                <Badge variant={c.nome === 'Juntix' ? 'success' : 'gray'} size="sm">
                   {c.juros}%
                 </Badge>
-                {c.nome === 'CaixaJunto' && (
+                {c.nome === 'Juntix' && (
                   <p className="mt-1 text-[11px] text-green-700 font-medium">Melhor opção</p>
                 )}
               </Card>
@@ -521,7 +521,7 @@ export function Dashboard() {
           </div>
 
           <p className="text-xs text-gray-500 mt-3 text-center bg-green-50 p-2 rounded-lg">
-            💡 Com CaixaJunto você economiza até <strong className="text-green-600">
+            💡 Com Juntix você economiza até <strong className="text-green-600">
               {formatCurrency(economiaMaxima)}
             </strong> (<strong className="text-green-600">32%</strong>) comparado ao agiota!
           </p>

@@ -82,7 +82,7 @@ export function Registro() {
           >
             <Users className="w-10 h-10 text-white" />
           </motion.div>
-          <h1 className="text-3xl font-bold text-white mb-2">CaixaJunto</h1>
+          <h1 className="text-3xl font-bold text-white mb-2">Juntix</h1>
           <p className="text-white/80">Crie sua conta gratuita</p>
         </div>
 

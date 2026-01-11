@@ -67,8 +67,8 @@ export function Login() {
           >
             <Users className="w-10 h-10 text-white" />
           </motion.div>
-          <h1 className="text-3xl font-bold text-white mb-2">CaixaJunto</h1>
-          <p className="text-white/80">Sua caixinha digital</p>
+          <h1 className="text-3xl font-bold text-white mb-2">Juntix</h1>
+          <p className="text-white/80">Junte seus amigos e realize seus sonhos</p>
         </div>
 
         {/* Login Form */}
@@ -174,33 +174,6 @@ export function Login() {
           </div>
         </Card>
 
-        {/* Demo Access */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.3 }}
-          className="mt-6 text-center"
-        >
-          <p className="text-white/60 text-sm mb-2">Acesso para demonstração:</p>
-          <div className="flex gap-2 justify-center">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-white/80 hover:text-white hover:bg-white/10"
-              onClick={() => setForm({ email: 'admin@teste.com', senha: '123456' })}
-            >
-              Admin Demo
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-white/80 hover:text-white hover:bg-white/10"
-              onClick={() => setForm({ email: 'usuario@teste.com', senha: '123456' })}
-            >
-              Usuário Demo
-            </Button>
-          </div>
-        </motion.div>
       </motion.div>
     </div>
   );

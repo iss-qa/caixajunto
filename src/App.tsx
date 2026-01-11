@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { Layout } from './components/layout/Layout';
 import { Login } from './pages/Login';
 import { Registro } from './pages/Registro';
+import { EsqueciSenha } from './pages/EsqueciSenha';
 import { Dashboard } from './pages/Dashboard';
 import { Caixas } from './pages/Caixas';
 import { CaixaDetalhes } from './pages/CaixaDetalhes';
@@ -80,6 +81,10 @@ function AppRoutes() {
             <Registro />
           </PublicRoute>
         }
+      />
+      <Route
+        path="/esqueci-senha"
+        element={<EsqueciSenha />}
       />
 
       {/* Protected Routes */}
