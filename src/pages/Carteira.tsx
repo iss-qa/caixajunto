@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Wallet, TrendingUp, Download, Plus, Eye, EyeOff, Building2, Check, X, Calendar, Mail, Clock } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { carteiraService, cobrancasService, caixasService, pagamentosService, subcontasService, bancosService, contaBancariaService, recebimentosService } from '../lib/api';
+import { carteiraService, cobrancasService, caixasService, pagamentosService, participantesService, subcontasService, bancosService, contaBancariaService, recebimentosService } from '../lib/api';
 import { formatCurrency, formatDate } from '../lib/utils';
 import { TransacoesDetalhadas } from './Carteira/components/TransacoesDetalhadas';
 
@@ -102,6 +102,17 @@ const WalletDashboard = () => {
   const [lytexPage, setLytexPage] = useState(1);
   const [lytexHasMore, setLytexHasMore] = useState(false);
 
+  // Estados para participante - caixas e contemplado
+  const [participantCaixas, setParticipantCaixas] = useState<any[]>([]);
+  const [contemplatedInfo, setContemplatedInfo] = useState<{
+    caixaNome: string;
+    participanteNome: string;
+    valor: number;
+    vencimento: string;
+    mesAtual: number;
+    mesNome: string;
+  } | null>(null);
+  const [loadingContemplated, setLoadingContemplated] = useState(false);
 
 
   const [accountData, setAccountData] = useState({
@@ -260,7 +271,18 @@ const WalletDashboard = () => {
             console.log('ℹ️ Usuário não é master, não usando fallback para carteira geral');
 
             if (errorCode === 'CREDENTIALS_NOT_CONFIGURED') {
-              setWalletError('Subconta existe, mas credenciais API (clientId/clientSecret) não configuradas. Solicite ao Administrador a configuração do seu clientID e clientSecret. Veja aba "Dados da Conta".');
+              setWalletError(
+                '⚠️ Configuração Pendente - Ação Necessária:\n\n' +
+                '1️⃣ Entre em contato com o ADMINISTRADOR do seu caixa\n' +
+                '2️⃣ Solicite que ele abra um CHAMADO para configurar suas credenciais (clientID e clientSecret)\n' +
+                '3️⃣ Envie seus DADOS BANCÁRIOS ao administrador:\n' +
+                '   • BANCO (nome e código)\n' +
+                '   • AGÊNCIA (com dígito)\n' +
+                '   • CONTA (com dígito)\n' +
+                '   • NOME COMPLETO (titular da conta)\n\n' +
+                '📌 Estes dados são necessários para configurar sua conta de recebimento quando você for contemplado.\n\n' +
+                'Após a configuração, você poderá visualizar seu saldo na aba "Dados da Conta".'
+              );
             } else if (errorCode === 'SUBCONTA_NOT_FOUND') {
               setWalletError('Subconta não encontrada. Crie sua subconta primeiro.');
             } else if (errorCode === 'LYTEX_AUTH_FAILED') {
@@ -708,6 +730,108 @@ const WalletDashboard = () => {
     }
   };
 
+  // Buscar caixas do participante e determinar contemplado
+  const fetchParticipantCaixas = async () => {
+    if (!usuario?._id || usuario?.tipo !== 'usuario') {
+      setParticipantCaixas([]);
+      setContemplatedInfo(null);
+      return;
+    }
+
+    try {
+      setLoadingContemplated(true);
+
+      console.log('🔍 Buscando caixas do participante...');
+
+      // Buscar participações do usuário
+      const participacoes = await participantesService.getByUsuario(usuario._id);
+      const lista = Array.isArray(participacoes) ? participacoes : participacoes?.participacoes || [];
+
+      console.log(`📦 Participações encontradas: ${lista.length}`);
+
+      if (lista.length === 0) {
+        console.log('⚠️ Participante não está vinculado a nenhum caixa');
+        setParticipantCaixas([]);
+        setContemplatedInfo(null);
+        return;
+      }
+
+      setParticipantCaixas(lista);
+
+      // Buscar o primeiro caixa ativo
+      const activeCaixa = lista.find((p: any) => p.caixaId?.status === 'ativo');
+
+      if (!activeCaixa || !activeCaixa.caixaId) {
+        console.log('⚠️ Nenhum caixa ativo encontrado');
+        setContemplatedInfo(null);
+        return;
+      }
+
+      console.log(`✅ Caixa ativo encontrado: ${activeCaixa.caixaId.nome}`);
+
+      // Buscar detalhes completos do caixa
+      const caixaDetails = await caixasService.getById(activeCaixa.caixaId._id);
+
+      // Obter mês/período atual
+      const mesAtual = caixaDetails.mesAtual || 1;
+
+      console.log(`📅 Mês atual do caixa: ${mesAtual}`);
+
+      // Buscar todos os participantes do caixa
+      const participantes = await participantesService.getByCaixa(caixaDetails._id);
+      const partsList = Array.isArray(participantes) ? participantes : participantes?.participantes || [];
+
+      console.log(`👥 Total de participantes no caixa: ${partsList.length}`);
+
+      // Encontrar quem está contemplado neste mês
+      const contemplado = partsList.find((p: any) => p.posicao === mesAtual);
+
+      if (!contemplado) {
+        console.log('⚠️ Nenhum contemplado encontrado para este mês');
+        setContemplatedInfo(null);
+        return;
+      }
+
+      console.log(`🎯 Contemplado encontrado: ${contemplado.usuarioId?.nome || contemplado.nome}`);
+
+      // Calcular data de vencimento baseado no tipo do caixa
+      const dataInicio = new Date(caixaDetails.dataInicio);
+      let vencimento = new Date(dataInicio);
+
+      if (caixaDetails.tipo === 'semanal') {
+        // Para caixas semanais, adicionar semanas
+        vencimento.setDate(vencimento.getDate() + (mesAtual - 1) * 7);
+      } else {
+        // Para caixas mensais, adicionar meses
+        vencimento.setMonth(vencimento.getMonth() + (mesAtual - 1));
+        // Ajustar para o dia de vencimento configurado
+        const diaVencimento = caixaDetails.diaVencimento || vencimento.getDate();
+        vencimento.setDate(diaVencimento);
+      }
+
+      const meses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+        'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+
+      const infoContemplado = {
+        caixaNome: caixaDetails.nome,
+        participanteNome: contemplado.usuarioId?.nome || contemplado.nome || 'Participante',
+        valor: caixaDetails.valorTotal,
+        vencimento: vencimento.toLocaleDateString('pt-BR'),
+        mesAtual,
+        mesNome: meses[vencimento.getMonth()],
+      };
+
+      console.log('✅ Informações do contemplado:', infoContemplado);
+
+      setContemplatedInfo(infoContemplado);
+    } catch (error) {
+      console.error('❌ Erro ao buscar informações do contemplado:', error);
+      setContemplatedInfo(null);
+    } finally {
+      setLoadingContemplated(false);
+    }
+  };
+
   const handleCreateSubAccount = async () => {
     try {
       if (!usuario) {
@@ -1151,6 +1275,13 @@ const WalletDashboard = () => {
     }
   }, [usuario?._id]);
 
+  // Fetch participant caixas and contemplated info (only for participants)
+  useEffect(() => {
+    if (usuario?.tipo === 'usuario') {
+      fetchParticipantCaixas();
+    }
+  }, [usuario]);
+
   const OverviewTab = () => {
     // Calcular a próxima data de recebimento baseado nos caixas gerenciados
     const proximoRecebimento = caixasGerenciados
@@ -1160,60 +1291,62 @@ const WalletDashboard = () => {
 
     return (
       <div className="space-y-6">
-        {/* Banner do Participante Contemplado */}
-        <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-2xl p-6 shadow-sm">
-          <div className="flex items-start gap-4">
-            {/* Ícone de crescimento */}
-            <div className="bg-green-100 rounded-2xl p-3">
-              <TrendingUp className="w-8 h-8 text-green-600" />
-            </div>
-
-            <div className="flex-1">
-              {/* Título com badge do mês */}
-              <div className="flex items-center gap-3 mb-4">
-                <h2 className="text-xl font-bold text-gray-800">
-                  Participante Contemplado em Janeiro
-                </h2>
-                <span className="bg-green-500 text-white text-xs font-semibold px-3 py-1 rounded-full flex items-center gap-1">
-                  <Clock className="w-3 h-3" />
-                  Mês 1
-                </span>
+        {/* Banner do Participante Contemplado - Only for participants with caixas */}
+        {usuario?.tipo === 'usuario' && contemplatedInfo && (
+          <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-2xl p-6 shadow-sm">
+            <div className="flex items-start gap-4">
+              {/* Ícone de crescimento */}
+              <div className="bg-green-100 rounded-2xl p-3">
+                <TrendingUp className="w-8 h-8 text-green-600" />
               </div>
 
-              {/* Card do participante */}
-              <div className="bg-white/50 rounded-xl p-4 mb-4">
-                <p className="text-green-600 text-sm font-medium mb-2">Recebe este mês</p>
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-gray-600 rounded-full flex items-center justify-center text-white font-bold text-sm">
-                    MM
-                  </div>
-                  <div>
-                    <p className="font-semibold text-gray-800">Maria Madalena</p>
-                    <p className="text-green-600 text-sm">
-                      Valor: R$ 5.000,00 • Vencimento: 13/01/2026
-                    </p>
-                  </div>
+              <div className="flex-1">
+                {/* Título com badge do mês */}
+                <div className="flex items-center gap-3 mb-4">
+                  <h2 className="text-xl font-bold text-gray-800">
+                    Participante Contemplado em {contemplatedInfo.mesNome}
+                  </h2>
+                  <span className="bg-green-500 text-white text-xs font-semibold px-3 py-1 rounded-full flex items-center gap-1">
+                    <Clock className="w-3 h-3" />
+                    Mês {contemplatedInfo.mesAtual}
+                  </span>
                 </div>
-              </div>
 
-              {/* Informações de transferência */}
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 text-gray-600">
-                  <Calendar className="w-4 h-4 text-gray-500" />
-                  <span className="text-sm">
-                    A transferência será realizada <strong className="text-green-600">automaticamente no dia 13/01/2026</strong>
-                  </span>
+                {/* Card do participante */}
+                <div className="bg-white/50 rounded-xl p-4 mb-4">
+                  <p className="text-green-600 text-sm font-medium mb-2">Recebe este mês</p>
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-gray-600 rounded-full flex items-center justify-center text-white font-bold text-sm">
+                      {contemplatedInfo.participanteNome.substring(0, 2).toUpperCase()}
+                    </div>
+                    <div>
+                      <p className="font-semibold text-gray-800">{contemplatedInfo.participanteNome}</p>
+                      <p className="text-green-600 text-sm">
+                        Valor: {formatCurrency(contemplatedInfo.valor)} • Vencimento: {contemplatedInfo.vencimento}
+                      </p>
+                    </div>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2 text-gray-600">
-                  <Mail className="w-4 h-4 text-gray-500" />
-                  <span className="text-sm">
-                    Comprovante e notificações serão enviados para <strong className="text-green-600">todos os participantes</strong>
-                  </span>
+
+                {/* Informações de transferência */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-gray-600">
+                    <Calendar className="w-4 h-4 text-gray-500" />
+                    <span className="text-sm">
+                      A transferência será realizada <strong className="text-green-600">automaticamente no dia {contemplatedInfo.vencimento}</strong>
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 text-gray-600">
+                    <Mail className="w-4 h-4 text-gray-500" />
+                    <span className="text-sm">
+                      Comprovante e notificações serão enviados para <strong className="text-green-600">todos os participantes</strong>
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* Card principal com os 4 saldos */}
         <div className="bg-gradient-to-br from-blue-600 to-blue-800 rounded-2xl p-6 text-white">
@@ -1294,7 +1427,7 @@ const WalletDashboard = () => {
 
           {/* Erro de carteira */}
           {walletError && (
-            <div className="mt-3 text-xs bg-red-50/20 border border-red-200/30 text-red-100 rounded-lg p-2">
+            <div className="mt-3 text-xs bg-red-50/20 border border-red-200/30 text-red-100 rounded-lg p-3 whitespace-pre-line">
               {walletError}
             </div>
           )}

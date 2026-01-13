@@ -604,9 +604,15 @@ export function Caixas() {
         <EmptyState
           icon={Wallet}
           title="Nenhum caixa encontrado"
-          description={search ? 'Tente buscar com outros termos' : 'Crie seu primeiro caixa e comece a organizar!'}
-          actionLabel="Criar Caixa"
-          onAction={() => navigate('/caixas/novo')}
+          description={
+            usuario?.tipo === 'usuario'
+              ? 'Você ainda não participa de nenhum caixa. Aguarde um administrador adicionar você a um grupo.'
+              : search
+                ? 'Tente buscar com outros termos'
+                : 'Crie seu primeiro caixa e comece a organizar!'
+          }
+          actionLabel={usuario?.tipo !== 'usuario' ? 'Criar Caixa' : undefined}
+          onAction={usuario?.tipo !== 'usuario' ? () => navigate('/caixas/novo') : undefined}
         />
       )}
     </div>

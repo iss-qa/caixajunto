@@ -202,33 +202,34 @@ export function Dashboard() {
 
     return (
       <div className="max-w-5xl mx-auto px-4 py-6 space-y-6">
-        <div>
+        {/* Header - Tudo na mesma linha */}
+        <div className="flex flex-wrap items-center gap-2">
           <p className="text-sm text-gray-500">Olá,</p>
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+          <h1 className="text-xl md:text-2xl font-bold text-gray-900">
             {usuario?.nome?.split(' ')[0]}
-            <Badge variant="info" size="sm">Participante</Badge>
           </h1>
-          <p className="text-sm text-gray-500">Score: {usuario?.score ?? 0}</p>
-          <p className="text-sm text-gray-600 mt-2">
-            O Juntix é um grupo de contribuição coletiva onde todos pagam parcelas
-            e cada participante recebe o valor completo em sua vez, com taxa reduzida.
-          </p>
+          <Badge variant="info" size="sm">Participante</Badge>
+          <span className="text-sm text-gray-500">• Score: {usuario?.score ?? 0}</span>
         </div>
 
-        {/* Comparativo de Crédito */}
-        <Card className="bg-gradient-to-br from-blue-50 to-blue-100/60">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-lg font-semibold text-gray-900">Comparativo de Crédito</h2>
-            <div className="flex gap-2">
+        {/* Comparativo de Crédito - Fixed overflow */}
+        <Card className="bg-gradient-to-br from-blue-50 to-blue-100/60 overflow-hidden">
+          <div className="mb-3">
+            <h2 className="text-lg font-semibold text-gray-900 mb-2">Comparativo de Crédito</h2>
+            <div className="flex gap-1.5 flex-wrap">
               {[2000, 5000, 10000].map((v) => (
-                <Button
+                <button
                   key={v}
-                  size="sm"
-                  variant={selectedCreditParticipant === v ? 'primary' : 'secondary'}
                   onClick={() => setSelectedCreditParticipant(v)}
+                  className={cn(
+                    'px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap',
+                    selectedCreditParticipant === v
+                      ? 'bg-green-500 text-white shadow-lg shadow-green-500/25'
+                      : 'bg-white text-gray-600 hover:bg-gray-50'
+                  )}
                 >
                   {formatCurrency(v)}
-                </Button>
+                </button>
               ))}
             </div>
           </div>
@@ -236,23 +237,331 @@ export function Dashboard() {
             Compare o custo total das modalidades para o valor escolhido. No Juntix a taxa é
             de <span className="font-semibold text-green-700">2%</span>, geralmente a melhor opção.
           </p>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-3">
             {comparativo.map((c) => (
-              <Card key={c.nome} className="text-center">
-                <p className="text-sm text-gray-500">{c.nome}</p>
-                <p className="text-lg font-bold text-gray-900">{formatCurrency(c.valor)}</p>
+              <Card key={c.nome} className="text-center p-3">
+                <p className="text-xs text-gray-500 mb-1 truncate">{c.nome}</p>
+                <p className="text-sm md:text-lg font-bold text-gray-900 break-words">
+                  {formatCurrency(c.valor)}
+                </p>
                 <Badge variant={c.nome === 'Juntix' ? 'success' : 'gray'} size="sm">
                   {c.juros}%
                 </Badge>
                 {c.nome === 'Juntix' && (
-                  <p className="mt-1 text-[11px] text-green-700 font-medium">Melhor opção</p>
+                  <p className="mt-1 text-[10px] text-green-700 font-medium">Melhor opção</p>
                 )}
               </Card>
             ))}
           </div>
         </Card>
 
+        {/* Juntix - Contribuição Coletiva Simplificada */}
+        <Card className="bg-gradient-to-br from-green-50 to-emerald-50">
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Juntix</h2>
+          <p className="text-lg text-green-700 font-semibold mb-4">Contribuição Coletiva Simplificada</p>
+          <p className="text-sm text-gray-700 leading-relaxed">
+            O Juntix é uma plataforma digital que moderniza o tradicional "caixa" ou "consórcio informal"
+            que você já conhece. Transformamos uma prática antiga e confiável em uma experiência
+            <span className="font-semibold text-green-700"> 100% digital, segura e transparente</span>.
+          </p>
+        </Card>
 
+        {/* Como funciona? */}
+        <Card>
+          <h3 className="text-xl font-bold text-gray-900 mb-3 flex items-center gap-2">
+            <span className="text-2xl">🔄</span> Como funciona?
+          </h3>
+          <p className="text-sm text-gray-700 leading-relaxed mb-4">
+            É simples: um grupo de pessoas de confiança se reúne e todos contribuem com parcelas mensais iguais.
+            A cada mês, um participante recebe o valor total acumulado, até que todos tenham recebido sua vez.
+            É como uma vaquinha rotativa entre amigos!
+          </p>
+
+          <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+            <p className="text-sm font-semibold text-blue-900 mb-2">📊 Exemplo prático:</p>
+            <ul className="space-y-1.5 text-sm text-gray-700">
+              <li className="flex items-start gap-2">
+                <span className="text-green-600 font-bold">•</span>
+                <span>10 amigos formam um grupo</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-green-600 font-bold">•</span>
+                <span>Cada um paga R$ 1.000 por mês</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-green-600 font-bold">•</span>
+                <span>Todo mês, um participante recebe R$ 10.000</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-green-600 font-bold">•</span>
+                <span>Em 10 meses, todos terão recebido</span>
+              </li>
+            </ul>
+          </div>
+        </Card>
+
+        {/* Principais Vantagens */}
+        <Card>
+          <h3 className="text-xl font-bold text-gray-900 mb-4">✨ Principais Vantagens</h3>
+          <div className="space-y-4">
+            <div className="flex gap-3">
+              <span className="text-2xl">💰</span>
+              <div>
+                <h4 className="font-semibold text-gray-900 mb-1">Custo Ultra Baixo</h4>
+                <p className="text-sm text-gray-700">
+                  Apenas <span className="font-bold text-green-600">R$ 10 de taxa por boleto</span> - muito mais
+                  acessível que empréstimos bancários, financiamentos ou consórcios tradicionais.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <span className="text-2xl">🚀</span>
+              <div>
+                <h4 className="font-semibold text-gray-900 mb-1">Acesso Rápido a Valores Altos</h4>
+                <p className="text-sm text-gray-700">
+                  Receba até <span className="font-bold text-green-600">R$ 10.000</span> (ou mais, dependendo do grupo)
+                  sem burocracia, análise de crédito ou juros abusivos.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <span className="text-2xl">🤝</span>
+              <div>
+                <h4 className="font-semibold text-gray-900 mb-1">Baseado em Confiança</h4>
+                <p className="text-sm text-gray-700">
+                  Forme grupos com pessoas que você conhece: amigos, familiares, colegas de trabalho.
+                  A base é a confiança mútua.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <span className="text-2xl">📱</span>
+              <div>
+                <h4 className="font-semibold text-gray-900 mb-1">100% Digital</h4>
+                <ul className="text-sm text-gray-700 space-y-1">
+                  <li>• Gestão completa pelo app ou site</li>
+                  <li>• Pagamentos via boleto ou PIX </li>
+                  <li>• Notificações automáticas</li>
+                  <li>• Histórico transparente de todas as transações</li>
+                </ul>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <span className="text-2xl">🔒</span>
+              <div>
+                <h4 className="font-semibold text-gray-900 mb-1">Segurança e Transparência</h4>
+                <ul className="text-sm text-gray-700 space-y-1">
+                  <li>• Todos veem quem pagou e quem recebeu</li>
+                  <li>• Contratos digitais claros</li>
+                  <li>• Sistema de lembretes automáticos</li>
+                  <li>• Rastreabilidade completa</li>
+                </ul>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <span className="text-2xl">📊</span>
+              <div>
+                <h4 className="font-semibold text-gray-900 mb-1">Organização Garantida</h4>
+                <p className="text-sm text-gray-700">
+                  Esqueça planilhas, grupos de WhatsApp confusos e cobranças manuais.
+                  O Juntix cuida de toda a gestão para você.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <span className="text-2xl">⚡</span>
+              <div>
+                <h4 className="font-semibold text-gray-900 mb-1">Sem Burocracia</h4>
+                <ul className="text-sm text-gray-700 space-y-1">
+                  <li>• Não precisa de análise de crédito</li>
+                  <li>• Sem consulta ao SPC/Serasa</li>
+                  <li>• Sem garantias ou avalistas</li>
+                  <li>• Cadastro rápido e simples</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </Card>
+
+        {/* Para quem é ideal? */}
+        <Card className="bg-gradient-to-br from-purple-50 to-pink-50">
+          <h3 className="text-xl font-bold text-gray-900 mb-3">🎯 Para quem é ideal?</h3>
+          <div className="space-y-2 text-sm text-gray-700">
+            <p className="flex items-start gap-2">
+              <span className="text-green-600 font-bold">✅</span>
+              <span>Quem precisa de dinheiro para realizar sonhos (viagem, reforma, casamento)</span>
+            </p>
+            <p className="flex items-start gap-2">
+              <span className="text-green-600 font-bold">✅</span>
+              <span>Empreendedores que precisam de capital de giro</span>
+            </p>
+            <p className="flex items-start gap-2">
+              <span className="text-green-600 font-bold">✅</span>
+              <span>Quem quer comprar algo parcelado sem juros bancários</span>
+            </p>
+            <p className="flex items-start gap-2">
+              <span className="text-green-600 font-bold">✅</span>
+              <span>Grupos que já fazem "caixinha" e querem profissionalizar</span>
+            </p>
+            <p className="flex items-start gap-2">
+              <span className="text-green-600 font-bold">✅</span>
+              <span>Quem busca alternativa aos juros altos dos bancos</span>
+            </p>
+          </div>
+        </Card>
+
+        {/* Fundo de Reserva */}
+        <Card>
+          <h3 className="text-xl font-bold text-gray-900 mb-3">🛡️ Como funciona o Fundo de Reserva?</h3>
+          <p className="text-sm text-gray-700 leading-relaxed mb-4">
+            No primeiro mês, é formado um <span className="font-semibold text-blue-600">Fundo de Reserva</span> para
+            garantir a segurança de todos os participantes.
+          </p>
+
+          <div className="bg-blue-50 rounded-lg p-4 border border-blue-200 mb-4">
+            <p className="text-sm font-semibold text-blue-900 mb-2">📊 Exemplo prático:</p>
+            <ul className="space-y-1.5 text-sm text-gray-700">
+              <li>• Valor da parcela: R$ 1.000</li>
+              <li>• Grupo de 10 pessoas</li>
+              <li>• <span className="font-bold text-green-600">Cada um contribui com apenas R$ 100 extras no 1º mês</span></li>
+              <li>• Total do Fundo de Reserva: R$ 1.000</li>
+            </ul>
+          </div>
+
+          <div className="bg-green-50 rounded-lg p-4 border border-green-200">
+            <h4 className="font-semibold text-green-900 mb-2 flex items-center gap-2">
+              <span className="text-xl">🎁</span> O melhor: o Fundo é devolvido!
+            </h4>
+            <p className="text-sm text-gray-700 mb-3">
+              Ao final de <span className="font-bold text-blue-600">10 meses</span> (duração do grupo de 10 participantes),
+              o Fundo de Reserva é <span className="font-bold text-green-600">devolvido para todos</span>!
+            </p>
+            <p className="text-sm text-gray-700 bg-white rounded p-3 border border-green-300">
+              💡 <span className="font-semibold">Importante:</span> O fundo é dividido por <span className="font-bold text-blue-600">11 partes</span>
+              (10 participantes + Juntix como participante). Essa é a <span className="font-bold text-green-600">única forma de lucro da plataforma</span>,
+              o que é totalmente justo! Uma ferramenta fantástica que protege o grupo e ainda permite que a plataforma se sustente.
+            </p>
+          </div>
+        </Card>
+
+        {/* Papel do Administrador */}
+        <Card>
+          <h3 className="text-xl font-bold text-gray-900 mb-3">👨‍💼 O Papel do Administrador/Gestor</h3>
+          <p className="text-sm text-gray-700 leading-relaxed mb-4">
+            Cada grupo tem um <span className="font-semibold text-blue-600">Administrador</span> responsável por:
+          </p>
+
+          <div className="space-y-2 text-sm text-gray-700 mb-4">
+            <p className="flex items-start gap-2">
+              <span className="text-green-600 font-bold">✅</span>
+              <span><span className="font-semibold">Recrutar</span> pessoas de confiança para o grupo</span>
+            </p>
+            <p className="flex items-start gap-2">
+              <span className="text-green-600 font-bold">✅</span>
+              <span><span className="font-semibold">Organizar</span> os pagamentos e o calendário</span>
+            </p>
+            <p className="flex items-start gap-2">
+              <span className="text-green-600 font-bold">✅</span>
+              <span><span className="font-semibold">Cobrar a adimplência</span> e garantir que todos paguem em dia</span>
+            </p>
+            <p className="flex items-start gap-2">
+              <span className="text-green-600 font-bold">✅</span>
+              <span><span className="font-semibold">Engajar</span> o grupo e manter a comunicação ativa</span>
+            </p>
+            <p className="flex items-start gap-2">
+              <span className="text-green-600 font-bold">✅</span>
+              <span><span className="font-semibold">Policiar</span> e mediar conflitos se necessário</span>
+            </p>
+          </div>
+
+          <div className="bg-amber-50 rounded-lg p-4 border border-amber-200">
+            <h4 className="font-semibold text-amber-900 mb-2 flex items-center gap-2">
+              <span className="text-xl">💼</span> Recompensa justa pelo trabalho
+            </h4>
+            <p className="text-sm text-gray-700 mb-2">
+              O administrador recebe <span className="font-bold text-green-600">10% do valor total do caixa</span>,
+              mas com uma condição importante:
+            </p>
+            <p className="text-sm text-gray-700 bg-white rounded p-3 border border-amber-300">
+              ⚠️ <span className="font-bold">Só recebe ao final se tudo der certo mês a mês!</span>
+            </p>
+            <p className="text-sm text-gray-700 mt-3">
+              Isso significa que o administrador tem um <span className="font-semibold">baita trabalho</span> e uma
+              <span className="font-semibold"> grande responsabilidade</span>: garantir que todos paguem, que o grupo
+              permaneça unido e que tudo funcione perfeitamente até o fim.
+            </p>
+            <p className="text-sm text-green-700 font-semibold mt-2">
+              É um incentivo perfeito: quanto melhor o trabalho do administrador, maior a recompensa!
+            </p>
+          </div>
+        </Card>
+
+        {/* Tabela Comparativa */}
+        <Card>
+          <h3 className="text-xl font-bold text-gray-900 mb-4">📊 Diferenciais do Juntix</h3>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b-2 border-gray-200">
+                  <th className="text-left py-3 px-2 font-semibold text-gray-700">Critério</th>
+                  <th className="text-center py-3 px-2 font-semibold text-green-700 bg-green-50">Juntix</th>
+                  <th className="text-center py-3 px-2 font-semibold text-gray-700">Empréstimo Bancário</th>
+                  <th className="text-center py-3 px-2 font-semibold text-gray-700">Consórcio</th>
+                </tr>
+              </thead>
+              <tbody className="text-xs md:text-sm">
+                <tr className="border-b border-gray-100">
+                  <td className="py-3 px-2 text-gray-700">Taxa/Juros</td>
+                  <td className="py-3 px-2 text-center bg-green-50 font-semibold text-green-700">R$ 10</td>
+                  <td className="py-3 px-2 text-center text-red-600">5-15% ao mês</td>
+                  <td className="py-3 px-2 text-center text-amber-600">Taxas altas</td>
+                </tr>
+                <tr className="border-b border-gray-100">
+                  <td className="py-3 px-2 text-gray-700">Análise de crédito</td>
+                  <td className="py-3 px-2 text-center bg-green-50 font-semibold text-green-700">Não precisa</td>
+                  <td className="py-3 px-2 text-center text-red-600">Score alto exigido</td>
+                  <td className="py-3 px-2 text-center text-amber-600">Documentação extensa</td>
+                </tr>
+                <tr className="border-b border-gray-100">
+                  <td className="py-3 px-2 text-gray-700">Tempo para receber</td>
+                  <td className="py-3 px-2 text-center bg-green-50 font-semibold text-green-700">Até 10 meses</td>
+                  <td className="py-3 px-2 text-center text-amber-600">Parcelas com juros</td>
+                  <td className="py-3 px-2 text-center text-red-600">Sorteio/lance</td>
+                </tr>
+                <tr className="border-b border-gray-100">
+                  <td className="py-3 px-2 text-gray-700">Processo</td>
+                  <td className="py-3 px-2 text-center bg-green-50 font-semibold text-green-700">Digital e rápido</td>
+                  <td className="py-3 px-2 text-center text-red-600">Burocrático</td>
+                  <td className="py-3 px-2 text-center text-red-600">Demorado</td>
+                </tr>
+                <tr>
+                  <td className="py-3 px-2 text-gray-700">Proteção</td>
+                  <td className="py-3 px-2 text-center bg-green-50 font-semibold text-green-700">Fundo devolvido</td>
+                  <td className="py-3 px-2 text-center text-red-600">Sem proteção</td>
+                  <td className="py-3 px-2 text-center text-red-600">Sem fundo</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </Card>
+
+        {/* Call to Action Final */}
+        <Card className="bg-gradient-to-br from-green-500 to-emerald-600 text-white text-center">
+          <h3 className="text-2xl font-bold mb-3">🚀 O Juntix é a evolução do caixa tradicional</h3>
+          <p className="text-sm leading-relaxed mb-4 text-green-50">
+            Mantemos o que sempre funcionou (a força da união e da confiança) e eliminamos o que era
+            complicado (desorganização, falta de controle, cobranças manuais).
+          </p>
+          <p className="text-lg font-semibold">
+            Junte-se ao Juntix e realize seus objetivos com a ajuda de quem você confia! 💚
+          </p>
+        </Card>
       </div>
     );
   }
