@@ -41,16 +41,21 @@ export function Registro() {
       };
       await register(formData);
 
-      // Administradores vão para login (precisam de aprovação)
-      // Participantes vão direto para dashboard
+      // Ambos (admin e participante) vão para login com email preenchido
       if (form.tipo === 'administrador') {
         navigate('/login', {
           state: {
+            email: form.email,
             message: 'Conta criada com sucesso! Aguarde a aprovação do administrador master para fazer login.'
           }
         });
       } else {
-        navigate('/dashboard');
+        navigate('/login', {
+          state: {
+            email: form.email,
+            message: 'Conta criada com sucesso! Faça login para continuar.'
+          }
+        });
       }
     } catch (err: any) {
       setError(err.response?.data?.message || 'Erro ao criar conta');
@@ -141,6 +146,8 @@ export function Registro() {
               value={form.nome}
               onChange={(e) => setForm({ ...form, nome: e.target.value })}
               leftIcon={<User className="w-4 h-4" />}
+              autoComplete="name"
+              disabled={loading}
             />
 
             <Input
@@ -150,6 +157,8 @@ export function Registro() {
               value={form.email}
               onChange={(e) => setForm({ ...form, email: e.target.value })}
               leftIcon={<Mail className="w-4 h-4" />}
+              autoComplete="email"
+              disabled={loading}
             />
 
             <Input
@@ -158,6 +167,8 @@ export function Registro() {
               value={form.telefone}
               onChange={(e) => setForm({ ...form, telefone: formatPhone(e.target.value) })}
               leftIcon={<Phone className="w-4 h-4" />}
+              autoComplete="tel"
+              disabled={loading}
               maxLength={15}
             />
 
@@ -168,13 +179,17 @@ export function Registro() {
               value={form.senha}
               onChange={(e) => setForm({ ...form, senha: e.target.value })}
               leftIcon={<Lock className="w-4 h-4" />}
+              autoComplete="new-password"
+              disabled={loading}
               rightIcon={
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="hover:text-gray-600"
+                  className="p-2 -m-2 hover:bg-gray-100 active:bg-gray-200 rounded-lg transition-colors touch-manipulation"
+                  aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
+                  tabIndex={-1}
                 >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
               }
             />

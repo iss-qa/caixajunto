@@ -21,6 +21,11 @@ export function Login() {
   });
 
   useEffect(() => {
+    // Preencher email se vier do registro
+    if (location.state?.email) {
+      setForm(prev => ({ ...prev, email: location.state.email }));
+    }
+
     // Mostrar mensagem de sucesso se vier do registro
     if (location.state?.message) {
       setSuccessMessage(location.state.message);
@@ -84,6 +89,8 @@ export function Login() {
               value={form.email}
               onChange={(e) => setForm({ ...form, email: e.target.value })}
               leftIcon={<Mail className="w-4 h-4" />}
+              autoComplete="email"
+              disabled={loading}
               error={error && !form.email ? 'Email é obrigatório' : undefined}
             />
 
@@ -94,13 +101,17 @@ export function Login() {
               value={form.senha}
               onChange={(e) => setForm({ ...form, senha: e.target.value })}
               leftIcon={<Lock className="w-4 h-4" />}
+              autoComplete="current-password"
+              disabled={loading}
               rightIcon={
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="hover:text-gray-600"
+                  className="p-2 -m-2 hover:bg-gray-100 active:bg-gray-200 rounded-lg transition-colors touch-manipulation"
+                  aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
+                  tabIndex={-1}
                 >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
               }
               error={error && !form.senha ? 'Senha é obrigatória' : undefined}

@@ -1,16 +1,17 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Users, Mail, ArrowLeft, CheckCircle, AlertCircle } from 'lucide-react';
+import { Users, Phone, ArrowLeft, CheckCircle, AlertCircle } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Card } from '../components/ui/Card';
 import axios from 'axios';
+import { formatPhone, unformatPhone } from '../lib/phoneMask';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 
 export function EsqueciSenha() {
-    const [email, setEmail] = useState('');
+    const [telefone, setTelefone] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState(false);
@@ -19,14 +20,17 @@ export function EsqueciSenha() {
         e.preventDefault();
         setError('');
 
-        if (!email) {
-            setError('Por favor, informe seu email');
+        if (!telefone) {
+            setError('Por favor, informe seu telefone');
             return;
         }
 
         try {
             setLoading(true);
-            await axios.post(`${API_URL}/auth/esqueci-senha`, { email });
+            // Enviar telefone sem formatação
+            await axios.post(`${API_URL}/auth/esqueci-senha`, {
+                telefone: unformatPhone(telefone)
+            });
             setSuccess(true);
         } catch (err: any) {
             setError(err.response?.data?.message || 'Erro ao processar solicitação');
@@ -73,10 +77,10 @@ export function EsqueciSenha() {
                             <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
                                 <CheckCircle className="w-8 h-8 text-green-600" />
                             </div>
-                            <h2 className="text-xl font-bold text-gray-900 mb-2">Email Enviado!</h2>
+                            <h2 className="text-xl font-bold text-gray-900 mb-2">WhatsApp Enviado!</h2>
                             <p className="text-gray-600 mb-6">
-                                Uma nova senha foi enviada para <strong>{email}</strong>.
-                                Verifique sua caixa de entrada e spam.
+                                Uma nova senha foi enviada para o WhatsApp <strong>{telefone}</strong>.
+                                Verifique suas mensagens.
                             </p>
                             <Link to="/login">
                                 <Button variant="primary" className="w-full">
@@ -93,18 +97,19 @@ export function EsqueciSenha() {
                                 <h2 className="text-2xl font-bold text-gray-900">Esqueci minha senha</h2>
                             </div>
                             <p className="text-gray-500 mb-6">
-                                Informe seu email cadastrado e enviaremos uma nova senha para você.
+                                Informe seu telefone cadastrado e enviaremos uma nova senha via WhatsApp.
                             </p>
 
                             <form onSubmit={handleSubmit} className="space-y-4">
                                 <Input
-                                    label="Email"
-                                    type="email"
-                                    placeholder="seu@email.com"
-                                    value={email}
-                                    onChange={(e) => setEmail(e.target.value)}
-                                    leftIcon={<Mail className="w-4 h-4" />}
-                                    error={error && !email ? 'Email é obrigatório' : undefined}
+                                    label="Telefone (WhatsApp)"
+                                    type="tel"
+                                    placeholder="(11) 99999-9999"
+                                    value={telefone}
+                                    onChange={(e) => setTelefone(formatPhone(e.target.value))}
+                                    leftIcon={<Phone className="w-4 h-4" />}
+                                    maxLength={15}
+                                    error={error && !telefone ? 'Telefone é obrigatório' : undefined}
                                 />
 
                                 {error && (
