@@ -682,7 +682,7 @@ export function Dashboard() {
         <h1 className="text-xl md:text-2xl font-bold text-gray-900">
           {usuario?.nome?.split(' ')[0]}
         </h1>
-        <Badge variant="primary" size="sm">Administrador</Badge>
+        <Badge variant="info" size="sm">Administrador</Badge>
         <span className="text-sm text-gray-500">• Score: {usuario?.score ?? 70}</span>
       </div>
 
