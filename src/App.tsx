@@ -20,6 +20,8 @@ import SplitConfig from './pages/SplitConfig';
 import GerenciarSplit from './pages/GerenciarSplit';
 import { GerenciarComunicacao } from './pages/GerenciarComunicacao';
 import { GerenciarAdministradores } from './pages/GerenciarAdministradores';
+import { GerenciarComissoes } from './pages/GerenciarComissoes';
+import { Seguranca } from './pages/Seguranca';
 
 // Protected Route Component
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -131,7 +133,13 @@ function AppRoutes() {
             <GerenciarAdministradores />
           </RoleRoute>
         } />
+        <Route path="/painel-master/comissoes" element={
+          <RoleRoute allow={["master"]}>
+            <GerenciarComissoes />
+          </RoleRoute>
+        } />
         <Route path="/perfil" element={<Perfil />} />
+        <Route path="/seguranca" element={<Seguranca />} />
         <Route path="/notificacoes" element={<Notificacoes />} />
         <Route path="/pagamentos" element={
           <RoleRoute allow={["administrador", "master"]}>

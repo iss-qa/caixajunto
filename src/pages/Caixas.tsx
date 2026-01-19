@@ -347,12 +347,12 @@ export function Caixas() {
   });
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-6">
+    <div className="max-w-7xl mx-auto px-4 py-6" data-testid="page-caixas">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Meus Caixas</h1>
-          <p className="text-sm text-gray-500">
+          <h1 className="text-2xl font-bold text-gray-900" data-testid="caixas-title">Meus Caixas</h1>
+          <p className="text-sm text-gray-500" data-testid="caixas-count">
             {caixas.length} caixas no total
           </p>
         </div>
@@ -360,6 +360,7 @@ export function Caixas() {
           <Button
             onClick={() => navigate('/caixas/novo')}
             leftIcon={<Plus className="w-4 h-4" />}
+            data-testid="btn-novo-caixa"
           >
             Novo Caixa
           </Button>
@@ -374,9 +375,10 @@ export function Caixas() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             leftIcon={<Search className="w-4 h-4" />}
+            data-testid="input-search"
           />
         </div>
-        <div className="flex gap-2 overflow-x-auto pb-2 sm:pb-0">
+        <div className="flex gap-2 overflow-x-auto pb-2 sm:pb-0" data-testid="filter-container">
           {statusFilters.map((filter) => (
             <button
               key={filter.value}
@@ -388,6 +390,7 @@ export function Caixas() {
                   : 'bg-white text-gray-600 border border-gray-200 hover:border-green-300'
               )}
               style={statusFilter === filter.value ? { boxShadow: '0 4px 14px rgba(34, 197, 94, 0.3)' } : {}}
+              data-testid={`filter-${filter.value || 'todos'}`}
             >
               {filter.label}
             </button>
@@ -440,6 +443,7 @@ export function Caixas() {
                     isIncompleto && 'ring-2 ring-amber-300 bg-gradient-to-br from-amber-50 to-white',
                     !semParticipantes && !isIncompleto && caixa.status === 'ativo' && 'ring-2 ring-green-300 bg-gradient-to-br from-green-50 to-white'
                   )}
+                  data-testid={`caixa-card-${caixa._id}`}
                 >
                   {/* Badge de status no topo */}
                   {semParticipantes && usuario?.tipo !== 'usuario' && (
@@ -471,22 +475,22 @@ export function Caixas() {
 
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex-1">
-                      <h3 className="font-semibold text-gray-900 mb-1">{caixa.nome}</h3>
+                      <h3 className="font-semibold text-gray-900 mb-1" data-testid={`caixa-nome-${caixa._id}`}>{caixa.nome}</h3>
                       <div className="space-y-1">
-                        <p className="text-lg font-bold text-green-600">
+                        <p className="text-lg font-bold text-green-600" data-testid={`caixa-valor-${caixa._id}`}>
                           {formatCurrency(caixa.valorTotal)}
                         </p>
-                        <p className="text-xs text-gray-600">
+                        <p className="text-xs text-gray-600" data-testid={`caixa-parcela-info-${caixa._id}`}>
                           {caixa.duracaoMeses}x de {formatCurrency(caixa.valorParcela)}
                         </p>
                       </div>
                       {caixa.adminNome && (
-                        <p className="text-xs text-gray-500 mt-1">
+                        <p className="text-xs text-gray-500 mt-1" data-testid={`caixa-organizador-${caixa._id}`}>
                           Organizado por: {caixa.adminNome}
                         </p>
                       )}
                     </div>
-                    <div className="flex flex-col gap-1 items-end">
+                    <div className="flex flex-col gap-1 items-end" data-testid={`caixa-status-${caixa._id}`}>
                       {caixa.status === 'ativo' ? (
                         <Badge variant="success" size="sm">
                           {caixa.tipo === 'semanal' ? 'Semana' : 'Mês'} {periodoAtual}/{caixa.duracaoMeses}
@@ -506,7 +510,7 @@ export function Caixas() {
                     <div className={cn(
                       "rounded-lg p-2 text-center",
                       semParticipantes ? "bg-red-50" : isIncompleto ? "bg-amber-50" : "bg-gray-50"
-                    )}>
+                    )} data-testid={`caixa-participantes-${caixa._id}`}>
                       <Users className={cn(
                         "w-4 h-4 mx-auto mb-1",
                         semParticipantes ? "text-red-400" : isIncompleto ? "text-amber-400" : "text-gray-400"
@@ -519,12 +523,12 @@ export function Caixas() {
                         {participantesAtivos}/{caixa.qtdParticipantes}
                       </p>
                     </div>
-                    <div className="bg-gray-50 rounded-lg p-2 text-center">
+                    <div className="bg-gray-50 rounded-lg p-2 text-center" data-testid={`caixa-parcela-${caixa._id}`}>
                       <Wallet className="w-4 h-4 mx-auto text-gray-400 mb-1" />
                       <p className="text-xs text-gray-500">Parcela</p>
                       <p className="font-semibold text-gray-900">{formatCurrency(caixa.valorParcela)}</p>
                     </div>
-                    <div className="bg-gray-50 rounded-lg p-2 text-center">
+                    <div className="bg-gray-50 rounded-lg p-2 text-center" data-testid={`caixa-duracao-${caixa._id}`}>
                       <Calendar className="w-4 h-4 mx-auto text-gray-400 mb-1" />
                       <p className="text-xs text-gray-500">Duração</p>
                       <p className="font-semibold text-gray-900">{caixa.duracaoMeses} {caixa.tipo === 'semanal' ? 'semanas' : 'meses'}</p>
@@ -569,11 +573,11 @@ export function Caixas() {
                   <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100">
                     {caixa.status === 'ativo' ? (
                       <div className="flex items-center gap-3 text-sm">
-                        <span className="flex items-center gap-1 text-green-600">
+                        <span className="flex items-center gap-1 text-green-600" data-testid={`caixa-pagos-${caixa._id}`}>
                           <CheckCircle2 className="w-4 h-4" />
                           {pagos} pagos
                         </span>
-                        <span className="flex items-center gap-1 text-amber-600">
+                        <span className="flex items-center gap-1 text-amber-600" data-testid={`caixa-pendentes-${caixa._id}`}>
                           <Clock className="w-4 h-4" />
                           {pendentes} pendentes
                         </span>

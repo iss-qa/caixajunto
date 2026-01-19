@@ -36,7 +36,7 @@ const valorOptions = [
 const TAXA_SERVICO = 10; // R$ 10,00 - taxa de serviço fixa
 const TAXA_ADMINISTRATIVA = 50; // R$ 50,00 - lucro da aplicação (cobrado no primeiro ponto)
 
-type TipoCaixa = 'mensal' | 'semanal';
+type TipoCaixa = 'mensal' | 'semanal' | 'diario';
 
 export function NovoCaixa() {
   const { usuario } = useAuth();
@@ -50,6 +50,7 @@ export function NovoCaixa() {
   const [customDuracao, setCustomDuracao] = useState(false);
   const [showErrorModal, setShowErrorModal] = useState(false);
   const [errorModalMessage, setErrorModalMessage] = useState('');
+  const [valorError, setValorError] = useState('');
   const [form, setForm] = useState({
     nome: '',
     descricao: '',
@@ -91,12 +92,16 @@ export function NovoCaixa() {
   // Opções de participantes baseado no tipo
   const participantesOptions = form.tipo === 'semanal'
     ? [4, 6, 8, 10, 12, 16, 20, 24]
-    : [4, 5, 6, 7, 8, 9, 10, 11, 12];
+    : form.tipo === 'diario'
+      ? [4, 5, 6, 7, 10, 14, 20, 30]
+      : [4, 5, 6, 7, 8, 9, 10, 11, 12];
 
   // Opções de duração baseado no tipo (independente de participantes)
   const duracaoOptions = form.tipo === 'semanal'
     ? [4, 6, 8, 10, 12, 16, 20, 24]
-    : [4, 5, 6, 7, 8, 9, 10, 11, 12];
+    : form.tipo === 'diario'
+      ? [4, 5, 6, 7, 10, 14, 20, 30]
+      : [4, 5, 6, 7, 8, 9, 10, 11, 12];
 
   // REGRA: Parcela = valorTotal / qtdParticipantes
   const valorParcela = form.valorTotal / form.qtdParticipantes;
@@ -112,11 +117,52 @@ export function NovoCaixa() {
     return dataVenc >= minData;
   };
 
+  // Função para obter valor mínimo baseado no tipo
+  const getValorMinimo = () => {
+    if (form.tipo === 'diario') return 0; // Sem mínimo para diário
+    return 500; // R$ 500 para semanal e mensal
+  };
+
+  // Função para calcular data da última parcela
+  const getDataUltimaParcela = () => {
+    if (!form.dataVencimento) return null;
+    const data = new Date(form.dataVencimento + 'T00:00:00');
+
+    switch (form.tipo) {
+      case 'mensal':
+        data.setMonth(data.getMonth() + (form.qtdParticipantes - 1));
+        break;
+      case 'semanal':
+        data.setDate(data.getDate() + (form.qtdParticipantes - 1) * 7);
+        break;
+      case 'diario':
+        data.setDate(data.getDate() + (form.qtdParticipantes - 1));
+        break;
+    }
+
+    return data.toLocaleDateString('pt-BR');
+  };
+
+  // Função para calcular data de contemplação (+1 dia)
+  const getDataContemplacao = () => {
+    if (!form.dataVencimento) return null;
+    const data = new Date(form.dataVencimento + 'T00:00:00');
+    data.setDate(data.getDate() + 1); // +1 dia
+    return data.toLocaleDateString('pt-BR');
+  };
+
   const handleValorCustomChange = (value: string) => {
     const numValue = parseInt(value.replace(/\D/g, '')) || 0;
     setValorCustom(value);
-    // TODO: Voltar para 500 após testes em produção
-    if (numValue >= 50) {
+
+    const minimo = getValorMinimo();
+    if (numValue > 0 && numValue < minimo) {
+      setValorError(`Valor mínimo para caixa ${form.tipo}: R$ ${minimo.toFixed(2)}`);
+    } else {
+      setValorError('');
+    }
+
+    if (numValue >= minimo || (minimo === 0 && numValue > 0)) {
       setForm({ ...form, valorTotal: numValue });
     }
   };
@@ -169,8 +215,7 @@ export function NovoCaixa() {
   };
 
   const isStep1Valid = form.nome.length >= 3;
-  // TODO: Voltar para 500 após testes em produção
-  const isStep2Valid = form.valorTotal >= 50 && form.qtdParticipantes >= 2;
+  const isStep2Valid = form.valorTotal >= getValorMinimo() && form.qtdParticipantes >= 2;
   const isStep3Valid = form.duracaoMeses >= 2 && isDataVencimentoValida();
 
   // Tela de sucesso
@@ -259,11 +304,12 @@ export function NovoCaixa() {
         </div>
       </Modal>
 
-      <div className="max-w-2xl mx-auto px-4 py-6">
+      <div className="max-w-2xl mx-auto px-4 py-6" data-testid="page-novo-caixa">
         {/* Back Button */}
         <button
           onClick={() => step > 1 ? setStep(step - 1) : navigate('/caixas')}
           className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4 transition-colors"
+          data-testid="btn-cancelar"
         >
           <ArrowLeft className="w-5 h-5" />
           <span>{step > 1 ? 'Voltar' : 'Cancelar'}</span>
@@ -276,7 +322,7 @@ export function NovoCaixa() {
         </div>
 
         {/* Progress Steps */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center justify-between mb-8" data-testid="step-indicator">
           {[1, 2, 3].map((s) => (
             <div key={s} className="flex items-center">
               <motion.div
@@ -290,6 +336,7 @@ export function NovoCaixa() {
                   step >= s ? 'text-white' : 'text-gray-400'
                 )}
                 style={step === s ? { boxShadow: '0 4px 14px rgba(34, 197, 94, 0.4)' } : {}}
+                data-testid={`step-${s}`}
               >
                 {step > s ? <CheckCircle className="w-5 h-5" /> : s}
               </motion.div>
@@ -315,7 +362,7 @@ export function NovoCaixa() {
             transition={{ duration: 0.2 }}
           >
             {step === 1 && (
-              <Card>
+              <Card data-testid="step1-card">
                 <h2 className="text-lg font-semibold text-gray-900 mb-4">
                   Informações Básicas
                 </h2>
@@ -326,6 +373,7 @@ export function NovoCaixa() {
                     value={form.nome}
                     onChange={(e) => setForm({ ...form, nome: e.target.value })}
                     leftIcon={<Wallet className="w-4 h-4" />}
+                    data-testid="input-nome"
                   />
                   <div>
                     <label className="label">Descrição (opcional)</label>
@@ -334,6 +382,7 @@ export function NovoCaixa() {
                       placeholder="Descreva o objetivo deste caixa..."
                       value={form.descricao}
                       onChange={(e) => setForm({ ...form, descricao: e.target.value })}
+                      data-testid="input-descricao"
                     />
                   </div>
 
@@ -343,7 +392,7 @@ export function NovoCaixa() {
                       <Clock className="w-4 h-4 text-green-500" />
                       Tipo do Caixa
                     </label>
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-3 gap-3">
                       <button
                         type="button"
                         onClick={() => setForm({ ...form, tipo: 'mensal', qtdParticipantes: 10, duracaoMeses: 10 })}
@@ -353,6 +402,7 @@ export function NovoCaixa() {
                             ? 'border-green-500 bg-green-50'
                             : 'border-gray-200 hover:border-green-200'
                         )}
+                        data-testid="tipo-mensal"
                       >
                         <div className="flex items-center gap-2 mb-2">
                           <Calendar className={cn('w-5 h-5', form.tipo === 'mensal' ? 'text-green-600' : 'text-gray-400')} />
@@ -373,6 +423,7 @@ export function NovoCaixa() {
                             ? 'border-green-500 bg-green-50'
                             : 'border-gray-200 hover:border-green-200'
                         )}
+                        data-testid="tipo-semanal"
                       >
                         <div className="flex items-center gap-2 mb-2">
                           <Clock className={cn('w-5 h-5', form.tipo === 'semanal' ? 'text-green-600' : 'text-gray-400')} />
@@ -382,6 +433,27 @@ export function NovoCaixa() {
                         </div>
                         <p className="text-xs text-gray-500">
                           Pagamentos semanais, até 24 participantes/semanas
+                        </p>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setForm({ ...form, tipo: 'diario', qtdParticipantes: 4, duracaoMeses: 4 })}
+                        className={cn(
+                          'p-4 rounded-xl border-2 text-left transition-all',
+                          form.tipo === 'diario'
+                            ? 'border-green-500 bg-green-50'
+                            : 'border-gray-200 hover:border-green-200'
+                        )}
+                        data-testid="tipo-diario"
+                      >
+                        <div className="flex items-center gap-2 mb-2">
+                          <Clock className={cn('w-5 h-5', form.tipo === 'diario' ? 'text-green-600' : 'text-gray-400')} />
+                          <span className={cn('font-semibold', form.tipo === 'diario' ? 'text-green-700' : 'text-gray-700')}>
+                            Diário
+                          </span>
+                        </div>
+                        <p className="text-xs text-gray-500">
+                          Pagamentos diários, até 30 participantes/dias
                         </p>
                       </button>
                     </div>
@@ -445,9 +517,15 @@ export function NovoCaixa() {
                             onChange={(e) => handleValorCustomChange(e.target.value)}
                             leftIcon={<DollarSign className="w-4 h-4" />}
                             type="number"
-                            min={50}
+                            min={form.tipo === 'diario' ? 1 : 500}
                           />
-                          <p className="text-xs text-gray-500 mt-1">Mínimo: R$ 50,00 {/* TODO: Voltar para R$ 500,00 após testes */}</p>
+                          {valorError ? (
+                            <p className="text-xs text-red-600 mt-1">{valorError}</p>
+                          ) : (
+                            <p className="text-xs text-gray-500 mt-1">
+                              {form.tipo === 'diario' ? 'Sem valor mínimo' : 'Mínimo: R$ 500,00'}
+                            </p>
+                          )}
                         </div>
                       )}
                     </div>
@@ -553,27 +631,44 @@ export function NovoCaixa() {
                     Data de Vencimento
                   </h2>
                   <div className="space-y-4">
-                    {/* Data de Vencimento da Primeira Parcela */}
-                    <div>
-                      <label className="label flex items-center gap-2">
-                        <Calendar className="w-4 h-4 text-green-500" />
-                        Data de Vencimento da 1ª Parcela
-                      </label>
-                      <Input
-                        type="date"
-                        min={getMinDataVencimento()}
-                        value={form.dataVencimento}
-                        onChange={(e) => setForm({ ...form, dataVencimento: e.target.value })}
-                        leftIcon={<Calendar className="w-4 h-4" />}
-                      />
-                      <p className="text-xs text-gray-500 mt-1">
-                        A data deve ser no mínimo 5 dias a partir de hoje
-                      </p>
-                      {form.dataVencimento && !isDataVencimentoValida() && (
-                        <p className="text-xs text-red-600 mt-1">
-                          ⚠️ Data inválida! Selecione uma data pelo menos 5 dias no futuro.
+                    {/* Data de Vencimento da Primeira Parcela + Data de Contemplação */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="label flex items-center gap-2">
+                          <Calendar className="w-4 h-4 text-green-500" />
+                          Data de Vencimento da 1ª Parcela
+                        </label>
+                        <Input
+                          type="date"
+                          min={getMinDataVencimento()}
+                          value={form.dataVencimento}
+                          onChange={(e) => setForm({ ...form, dataVencimento: e.target.value })}
+                          leftIcon={<Calendar className="w-4 h-4" />}
+                        />
+                        <p className="text-xs text-gray-500 mt-1">
+                          A data deve ser no mínimo 5 dias a partir de hoje
                         </p>
-                      )}
+                        {form.dataVencimento && !isDataVencimentoValida() && (
+                          <p className="text-xs text-red-600 mt-1">
+                            ⚠️ Data inválida! Selecione uma data pelo menos 5 dias no futuro.
+                          </p>
+                        )}
+                      </div>
+                      <div>
+                        <label className="label flex items-center gap-2">
+                          <CheckCircle className="w-4 h-4 text-green-500" />
+                          Data Prevista de Contemplação
+                        </label>
+                        <Input
+                          type="text"
+                          value={getDataContemplacao() || '-'}
+                          disabled
+                          className="bg-gray-50 text-gray-700"
+                        />
+                        <p className="text-xs text-green-600 mt-1">
+                          ✨ Pagar antes é bem melhor
+                        </p>
+                      </div>
                     </div>
                   </div>
                 </Card>
@@ -608,6 +703,12 @@ export function NovoCaixa() {
                         {form.dataVencimento ? new Date(form.dataVencimento + 'T00:00:00').toLocaleDateString('pt-BR') : '-'}
                       </span>
                     </div>
+                    <div className="flex justify-between py-2 border-b border-green-200/50">
+                      <span className="text-gray-600">Última Parcela</span>
+                      <span className="font-semibold text-gray-900">
+                        {getDataUltimaParcela() || '-'}
+                      </span>
+                    </div>
                   </div>
 
                   {/* Composição das Parcelas */}
@@ -640,6 +741,7 @@ export function NovoCaixa() {
               variant="secondary"
               onClick={() => setStep(step - 1)}
               className="flex-1"
+              data-testid="btn-voltar"
             >
               Voltar
             </Button>
@@ -650,6 +752,7 @@ export function NovoCaixa() {
               onClick={() => setStep(step + 1)}
               disabled={step === 1 ? !isStep1Valid : !isStep2Valid}
               className="flex-1"
+              data-testid="btn-proximo"
             >
               Próximo
             </Button>
@@ -660,6 +763,7 @@ export function NovoCaixa() {
               isLoading={loading}
               disabled={!isStep3Valid}
               className="flex-1"
+              data-testid="btn-criar-caixa"
             >
               Criar Caixa
             </Button>

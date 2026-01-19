@@ -342,6 +342,20 @@ export function PainelMaster() {
             <Button onClick={() => (window.location.href = '/painel-master/administradores')}>Abrir</Button>
           </div>
         </Card>
+
+        {/* Regras de Comissão */}
+        <Card className="bg-gradient-to-br from-orange-50 to-orange-100/50 border-orange-200/50">
+          <div className="flex items-center justify-between mb-2">
+            <div className="w-10 h-10 bg-orange-500 rounded-xl flex items-center justify-center">
+              <TrendingUp className="w-5 h-5 text-white" />
+            </div>
+          </div>
+          <p className="text-base font-semibold text-gray-900 mb-1">Regras de Comissão</p>
+          <p className="text-xs text-gray-500">Configurar taxas dinâmicas por performance</p>
+          <div className="mt-3">
+            <Button onClick={() => (window.location.href = '/painel-master/comissoes')}>Abrir</Button>
+          </div>
+        </Card>
       </motion.div>
 
       {/* Second Row - Charts and Stats */}
