@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Users, Mail, Lock, Eye, EyeOff, Phone, User, ArrowRight, CheckCircle, AlertCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -11,16 +11,24 @@ import { formatPhone, unformatPhone } from '../lib/phoneMask';
 
 export function Registro() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { register } = useAuth();
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+
+  // Capture invite params
+  const codigoConvite = searchParams.get('codigo');
+  const caixaId = searchParams.get('caixa');
+
   const [form, setForm] = useState({
     nome: '',
     email: '',
     telefone: '',
     senha: '',
     tipo: 'usuario' as 'usuario' | 'administrador',
+    codigoConvite: codigoConvite || '',
+    caixaId: caixaId || '',
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -90,6 +98,20 @@ export function Registro() {
           <h1 className="text-3xl font-bold text-white mb-2">Juntix</h1>
           <p className="text-white/80">Crie sua conta gratuita</p>
         </div>
+
+        {/* Invite Banner */}
+        {form.codigoConvite && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white/10 backdrop-blur-md rounded-xl p-4 mb-6 border border-white/20 text-white text-center"
+          >
+            <p className="font-medium">🎉 Você foi convidado!</p>
+            <p className="text-sm text-white/80 mt-1">
+              Complete seu cadastro para entrar automaticamente no caixa.
+            </p>
+          </motion.div>
+        )}
 
         {/* Register Form */}
         <Card className="p-6 md:p-8">

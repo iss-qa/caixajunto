@@ -20,6 +20,7 @@ import {
   MoreVertical,
   CheckCircle,
   XCircle,
+  ArrowRightLeft,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { fetchAddressByCEP, formatCEP } from '../utils/cep';
@@ -151,6 +152,12 @@ export function Participantes() {
   const [loadingSubconta, setLoadingSubconta] = useState(false);
   const [bankAccounts, setBankAccounts] = useState<any[]>([]);
   const [loadingBankAccounts, setLoadingBankAccounts] = useState(false);
+
+  // Transfer Participants State
+  const [showTransferModal, setShowTransferModal] = useState(false);
+  const [administrators, setAdministrators] = useState<Usuario[]>([]);
+  const [selectedAdminId, setSelectedAdminId] = useState('');
+  const [transferLoading, setTransferLoading] = useState(false);
 
   const [formData, setFormData] = useState({
     nome: '',
@@ -791,6 +798,58 @@ export function Participantes() {
     setSelectedCaixaId('');
   };
 
+  const loadAdministrators = async () => {
+    try {
+      // Fetch administrators for the transfer modal
+      const response = await usuariosService.getAll({ tipo: 'administrador', ativo: true });
+      const admins = Array.isArray(response) ? response : response.usuarios || [];
+      setAdministrators(admins);
+    } catch (error) {
+      console.error('Erro ao carregar administradores:', error);
+    }
+  };
+
+  const openTransferModal = (participante: Usuario) => {
+    setSelectedParticipante(participante);
+    setSelectedAdminId(''); // Reset selection
+    loadAdministrators();
+    setShowTransferModal(true);
+  };
+
+  const handleTransfer = async () => {
+    if (!selectedParticipante || !selectedAdminId) return;
+
+    try {
+      setTransferLoading(true);
+
+      // Find selected admin to get their name
+      const selectedAdmin = administrators.find(a => a._id === selectedAdminId);
+      const adminName = selectedAdmin?.nome || 'Novo Administrador';
+
+      await usuariosService.update(selectedParticipante._id, {
+        criadoPorId: selectedAdminId,
+        criadoPorNome: adminName,
+        // Optional: clear caixa association when transferring? 
+        // User request says: "once transferred... admin can add to their caixa".
+        // This implies preserving current state but changing ownership.
+      });
+
+      await loadParticipantes();
+      setShowTransferModal(false);
+      setSelectedParticipante(null);
+      setSelectedAdminId('');
+      setSuccessMessage('Participante transferido com sucesso!');
+      setShowSuccessModal(true);
+    } catch (error: any) {
+      console.error('Erro ao transferir participante:', error);
+      const msg = error.response?.data?.message || 'Erro ao transferir participante. Tente novamente.';
+      setErrorMessage(msg);
+      setShowErrorModal(true);
+    } finally {
+      setTransferLoading(false);
+    }
+  };
+
   const filteredParticipantes = participantes.filter((p) =>
     p.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
     p.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -967,6 +1026,18 @@ export function Participantes() {
                                 <Edit className="w-4 h-4" />
                                 Editar Participante
                               </button>
+                              {usuarioLogado?.tipo === 'master' && (
+                                <button
+                                  onClick={() => {
+                                    openTransferModal(participante);
+                                    setOpenDropdownId(null);
+                                  }}
+                                  className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                >
+                                  <ArrowRightLeft className="w-4 h-4" />
+                                  Transferir Participante
+                                </button>
+                              )}
                               <button
                                 onClick={() => {
                                   openDeleteModal(participante);
@@ -1279,6 +1350,73 @@ export function Participantes() {
               disabled={!formData.nome || !formData.email || !formData.telefone || !!cpfError}
             >
               Adicionar
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Modal Transferir Participante */}
+      <Modal
+        isOpen={showTransferModal}
+        onClose={() => {
+          setShowTransferModal(false);
+          setSelectedParticipante(null);
+          setSelectedAdminId('');
+        }}
+        title="Transferir Participante"
+        size="md"
+      >
+        <div className="space-y-6">
+          <div className="bg-blue-50 p-4 rounded-lg flex items-start gap-3">
+            <ArrowRightLeft className="w-5 h-5 text-blue-600 mt-0.5" />
+            <div>
+              <p className="text-sm text-blue-800 font-medium">
+                Transferindo: {selectedParticipante?.nome}
+              </p>
+              <p className="text-sm text-blue-600 mt-1">
+                Selecione o novo administrador que será responsável por gerenciar este participante.
+              </p>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Novo Administrador
+            </label>
+            <select
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 bg-white"
+              value={selectedAdminId}
+              onChange={(e) => setSelectedAdminId(e.target.value)}
+            >
+              <option value="">Selecione um administrador...</option>
+              {administrators.map((admin) => (
+                <option key={admin._id} value={admin._id}>
+                  {admin.nome} {admin.email ? `(${admin.email})` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex gap-3 pt-4 border-t border-gray-100">
+            <Button
+              variant="secondary"
+              className="flex-1"
+              onClick={() => {
+                setShowTransferModal(false);
+                setSelectedParticipante(null);
+                setSelectedAdminId('');
+              }}
+              disabled={transferLoading}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="primary"
+              className="flex-1"
+              onClick={handleTransfer}
+              disabled={!selectedAdminId || transferLoading}
+            >
+              {transferLoading ? 'Transferindo...' : 'Confirmar Transferência'}
             </Button>
           </div>
         </div>

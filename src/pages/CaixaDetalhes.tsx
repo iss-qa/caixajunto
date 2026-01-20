@@ -563,41 +563,51 @@ export function CaixaDetalhes() {
     }
   };
 
-  const handleCopyCode = () => {
-    if (caixa?.codigoConvite) {
-      navigator.clipboard.writeText(caixa.codigoConvite);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
+  const getConviteLink = () => {
+    if (!caixa || !id) return '';
+    const baseUrl = window.location.origin;
+    return `${baseUrl}/registro?codigo=${caixa.codigoConvite}&caixa=${id}`;
   };
 
-  const handleShareWhatsApp = () => {
-    if (!caixa) return;
-
+  const getConviteMessage = () => {
+    if (!caixa) return '';
     const adminNome = caixa.adminId?.nome || 'Administrador';
     const caixaNome = caixa.nome;
     const valorTotal = formatCurrency(caixa.valorTotal);
     const valorParcela = formatCurrency(caixa.valorTotal / caixa.qtdParticipantes);
     const dataInicio = getPrimeiraParcelaData();
     const tipoParcela = caixa.tipo === 'semanal' ? 'semanais' : 'mensais';
+    const link = getConviteLink();
 
-    const mensagem = `🎉 *Convite para Caixa Juntix*
+    return `🎉 *Convite para Caixa Juntix*
 
-Você foi convidado por *${adminNome}* para participar do caixa *${caixaNome}*!
+Olá! Você foi convidado para participar do caixa *${caixaNome}*.
 
 💰 *Valor total:* ${valorTotal}
 📅 *Parcelas:* ${caixa.qtdParticipantes}x de ${valorParcela} (${tipoParcela})
 🗓️ *Início previsto:* ${dataInicio}
 
-🔑 *Código de convite:* ${caixa.codigoConvite}
+Clique no link para se cadastrar e começar:
+${link}`;
+  };
 
-Quer saber mais? Acesse: https://juntix.com.br/
-Ou fale diretamente com o administrador!
+  const handleCopyCode = async () => {
+    if (caixa?.codigoConvite) {
+      try {
+        const message = getConviteMessage();
+        await navigator.clipboard.writeText(message);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      } catch (err) {
+        console.error('Failed to copy class: ', err);
+      }
+    }
+  };
 
-✨ *Bem-vindo ao Juntix!*
-_Junte seus amigos e realize seus sonhos_`;
-
-    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(mensagem)}`;
+  const handleShareWhatsApp = () => {
+    if (!caixa) return;
+    const message = getConviteMessage();
+    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
     window.open(whatsappUrl, '_blank');
   };
 
