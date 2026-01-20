@@ -81,7 +81,7 @@ interface Caixa {
   _id: string;
   nome: string;
   descricao?: string;
-  tipo?: 'mensal' | 'semanal';
+  tipo?: 'mensal' | 'semanal' | 'diario';
   valorTotal: number;
   valorParcela: number;
   taxaApp: number;
