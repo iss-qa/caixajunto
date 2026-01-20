@@ -31,7 +31,7 @@ export function formatDateRelative(date: string | Date): string {
   if (days === -1) return 'Ontem';
   if (days > 0 && days <= 7) return `${days} dias`;
   if (days < 0 && days >= -7) return `${Math.abs(days)} dias atrás`;
-  
+
   return formatDate(date);
 }
 
@@ -77,7 +77,7 @@ export function calculateProgress(current: number, total: number): number {
 }
 
 export function calculateCurrentPeriod(
-  tipo: 'mensal' | 'semanal' | undefined,
+  tipo: 'mensal' | 'semanal' | 'diario' | undefined,
   dataInicio: string | Date | undefined,
   duracaoMeses: number,
   mesAtual: number
@@ -95,7 +95,10 @@ export function calculateCurrentPeriod(
 
   let diff = 0;
 
-  if (tipo === 'semanal') {
+  if (tipo === 'diario') {
+    const msDiff = agora.getTime() - inicio.getTime();
+    diff = Math.floor(msDiff / (1000 * 60 * 60 * 24));
+  } else if (tipo === 'semanal') {
     const msDiff = agora.getTime() - inicio.getTime();
     diff = Math.floor(msDiff / (1000 * 60 * 60 * 24 * 7));
   } else {

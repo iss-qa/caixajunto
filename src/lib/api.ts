@@ -530,5 +530,17 @@ export const recebimentosService = {
   },
 };
 
+// Regras de Comissão
+export const regrasComissaoService = {
+  getComissaoCaixa: async (adminId: string, valorCaixa: number) => {
+    const response = await api.get(`/regras-comissao/admin/${adminId}/caixa/${valorCaixa}/comissao`);
+    return response.data;
+  },
+  getInfoTaxaAdmin: async (adminId: string) => {
+    const response = await api.get(`/regras-comissao/admin/${adminId}/taxa`);
+    return response.data;
+  },
+};
+
 // Comunicação (Evolution API - WhatsApp)
 export { comunicacaoService } from './api/comunicacao.service';

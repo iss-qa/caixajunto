@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Wallet, TrendingUp, Download, Plus, Eye, EyeOff, Building2, Check, X, Calendar, Mail, Clock } from 'lucide-react';
+import { Wallet, TrendingUp, Download, Plus, Eye, EyeOff, Building2, Check, X, Calendar, Mail, Clock, AlertCircle, FileText } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { carteiraService, cobrancasService, caixasService, pagamentosService, participantesService, subcontasService, bancosService, contaBancariaService, recebimentosService } from '../lib/api';
 import { formatCurrency, formatDate } from '../lib/utils';
@@ -275,12 +275,12 @@ const WalletDashboard = () => {
                 '⚠️ Configuração Pendente - Ação Necessária:\n\n' +
                 '1️⃣ Entre em contato com o ADMINISTRADOR do seu caixa\n' +
                 '2️⃣ Solicite que ele abra um CHAMADO para configurar suas credenciais (clientID e clientSecret)\n' +
-                '3️⃣ Envie seus DADOS BANCÁRIOS ao administrador:\n' +
-                '   • BANCO (nome e código)\n' +
-                '   • AGÊNCIA (com dígito)\n' +
-                '   • CONTA (com dígito)\n' +
-                '   • NOME COMPLETO (titular da conta)\n\n' +
-                '📌 Estes dados são necessários para configurar sua conta de recebimento quando você for contemplado.\n\n' +
+                //   '3️⃣ Envie seus DADOS BANCÁRIOS ao administrador:\n' +
+                //   '   • BANCO (nome e código)\n' +
+                //   '   • AGÊNCIA (com dígito)\n' +
+                //   '   • CONTA (com dígito)\n' +
+                //   '   • NOME COMPLETO (titular da conta)\n\n' +
+                //   '📌 Estes dados são necessários para configurar sua conta de recebimento quando você for contemplado.\n\n' +
                 'Após a configuração, você poderá visualizar seu saldo na aba "Dados da Conta".'
               );
             } else if (errorCode === 'SUBCONTA_NOT_FOUND') {
@@ -1722,6 +1722,63 @@ const WalletDashboard = () => {
   );
 
 
+  // BLOCK: Users must sign contract before accessing wallet
+  if (usuario?.tipo === 'usuario' && !usuario?.contratoAssinado) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <div className="bg-white border-b border-gray-200">
+          <div className="max-w-6xl mx-auto px-6 py-4">
+            <div className="flex items-center justify-between">
+              <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+                <Wallet className="text-blue-600" />
+                Minha Carteira
+              </h1>
+            </div>
+          </div>
+        </div>
+
+        <div className="max-w-2xl mx-auto px-6 py-16">
+          <div className="bg-white border border-gray-200 rounded-2xl p-8 shadow-sm text-center">
+            <div className="w-20 h-20 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-6">
+              <AlertCircle className="w-10 h-10 text-amber-600" />
+            </div>
+
+            <h2 className="text-2xl font-bold text-gray-900 mb-4">
+              Contrato de Adesão Pendente
+            </h2>
+
+            <p className="text-gray-600 mb-8 max-w-md mx-auto">
+              Para acessar a carteira e utilizar todas as funcionalidades do Juntix, você precisa ler e aceitar o Contrato de Adesão.
+            </p>
+
+            <div className="space-y-4">
+              <button
+                onClick={() => navigate('/contrato')}
+                className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white px-6 py-4 rounded-xl font-semibold transition-all shadow-lg hover:shadow-xl"
+              >
+                <FileText className="w-5 h-5" />
+                <span>Li e aceito os termos de uso e Contrato de Adesão ao Juntix</span>
+              </button>
+
+              <button
+                onClick={() => navigate('/dashboard')}
+                className="w-full text-gray-600 hover:text-gray-800 px-6 py-3 rounded-xl font-medium transition-colors border border-gray-200 hover:border-gray-300"
+              >
+                Voltar para Home
+              </button>
+            </div>
+
+            <div className="mt-8 pt-6 border-t border-gray-100">
+              <p className="text-sm text-gray-500">
+                O contrato garante sua segurança e define os termos de uso da plataforma.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (!hasSubAccount) {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -2284,5 +2341,6 @@ const WalletDashboard = () => {
     </div>
   );
 };
+
 
 export default WalletDashboard;

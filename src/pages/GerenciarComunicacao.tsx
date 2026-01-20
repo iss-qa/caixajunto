@@ -15,6 +15,7 @@ const tipoMensagemLabels: Record<string, string> = {
     alerta_atraso: 'Alerta de Atraso',
     manual: 'Manual',
     cobranca: 'Cobrança',
+    caixa_iniciado: 'Caixa Iniciado',
 };
 
 const tipoMensagemColors: Record<string, string> = {
@@ -24,6 +25,7 @@ const tipoMensagemColors: Record<string, string> = {
     alerta_atraso: 'bg-red-100 text-red-700',
     manual: 'bg-gray-100 text-gray-700',
     cobranca: 'bg-orange-100 text-orange-700',
+    caixa_iniciado: 'bg-emerald-100 text-emerald-700',
 };
 
 export function GerenciarComunicacao() {
@@ -296,6 +298,7 @@ export function GerenciarComunicacao() {
                         >
                             <option value="">Todos os tipos</option>
                             <option value="boas_vindas">Boas-vindas</option>
+                            <option value="caixa_iniciado">Caixa Iniciado</option>
                             <option value="lembrete_pagamento">Lembrete de Pagamento</option>
                             <option value="confirmacao_pagamento">Confirmação de Pagamento</option>
                             <option value="alerta_atraso">Alerta de Atraso</option>
@@ -573,10 +576,10 @@ export function GerenciarComunicacao() {
                                         <label className="text-sm font-medium text-gray-500">Destinatário</label>
                                         <div className="mt-1">
                                             <span className={`inline-flex items-center px-3 py-1.5 rounded-lg text-sm font-medium ${mensagemSelecionada.metadata.escopo === 'participante_especifico'
-                                                    ? 'bg-blue-100 text-blue-700 border border-blue-200'
-                                                    : mensagemSelecionada.metadata.escopo === 'apenas_admins'
-                                                        ? 'bg-amber-100 text-amber-700 border border-amber-200'
-                                                        : 'bg-green-100 text-green-700 border border-green-200'
+                                                ? 'bg-blue-100 text-blue-700 border border-blue-200'
+                                                : mensagemSelecionada.metadata.escopo === 'apenas_admins'
+                                                    ? 'bg-amber-100 text-amber-700 border border-amber-200'
+                                                    : 'bg-green-100 text-green-700 border border-green-200'
                                                 }`}>
                                                 {mensagemSelecionada.metadata.escopo === 'participante_especifico'
                                                     ? '👤 Mensagem Individual'

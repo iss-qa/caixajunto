@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   User,
@@ -54,6 +55,7 @@ const menuItems = [
 
 export function Perfil() {
   const { usuario, logout, updateUsuario } = useAuth();
+  const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [ganhosPrevistos, setGanhosPrevistos] = useState(0);
@@ -76,23 +78,23 @@ export function Perfil() {
 
   const loadDados = async () => {
     if (!usuario?._id) return;
-    
+
     try {
       const caixasResponse = await caixasService.getByAdmin(usuario._id);
       const caixas = Array.isArray(caixasResponse) ? caixasResponse : caixasResponse.caixas || [];
-      
+
       // Calcular ganhos previstos: 10% do valor total de cada caixa
       const previstos = caixas.reduce((total: number, caixa: any) => {
         return total + (caixa.valorTotal * 0.10);
       }, 0);
-      
+
       // Calcular ganhos acumulados (apenas de caixas finalizados)
       const acumulados = caixas
         .filter((c: any) => c.status === 'finalizado')
         .reduce((total: number, caixa: any) => {
           return total + (caixa.valorTotal * 0.10);
         }, 0);
-      
+
       setGanhosPrevistos(previstos);
       setGanhosAcumulados(acumulados);
       setTotalCaixas(caixas.length);
@@ -212,18 +214,18 @@ export function Perfil() {
 
     try {
       setUploading(true);
-      
+
       // Converter para base64 para preview
       const reader = new FileReader();
       reader.onloadend = () => {
         const base64 = reader.result as string;
         setFotoUrl(base64);
-        
+
         // Aqui você faria o upload real para o backend
         // await usuariosService.uploadFoto(usuario._id, file);
       };
       reader.readAsDataURL(file);
-      
+
     } catch (error) {
       console.error('Erro ao fazer upload:', error);
     } finally {
@@ -257,7 +259,7 @@ export function Perfil() {
                 onChange={handleFileChange}
                 className="hidden"
               />
-              <button 
+              <button
                 onClick={() => fileInputRef.current?.click()}
                 disabled={uploading}
                 className="absolute bottom-0 right-0 w-8 h-8 bg-white rounded-full shadow-lg flex items-center justify-center hover:bg-gray-50 transition-colors"
@@ -421,6 +423,7 @@ export function Perfil() {
           {menuItems.map((item) => (
             <button
               key={item.path}
+              onClick={() => navigate(item.path)}
               className="w-full flex items-center gap-3 p-4 hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-0"
             >
               <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
@@ -467,7 +470,7 @@ export function Perfil() {
               ) : (
                 <Avatar name={usuario?.nome || 'U'} size="xl" />
               )}
-              <button 
+              <button
                 onClick={() => fileInputRef.current?.click()}
                 className="absolute bottom-0 right-0 w-8 h-8 bg-green-500 text-white rounded-full shadow-lg flex items-center justify-center hover:bg-green-600 transition-colors"
               >
@@ -475,7 +478,7 @@ export function Perfil() {
               </button>
             </div>
           </div>
-          
+
           <Input
             label="Nome Completo"
             value={editForm.nome}

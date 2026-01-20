@@ -34,7 +34,7 @@ const getDenominacao = (tipo: string): string => {
 };
 
 export default function ContratoViewer() {
-  const { usuario } = useAuth();
+  const { usuario, updateUsuario } = useAuth();
   const [aceito, setAceito] = useState(false);
   const [aceitando, setAceitando] = useState(false);
   const [userData, setUserData] = useState<UserData | null>(null);
@@ -168,6 +168,14 @@ export default function ContratoViewer() {
       });
 
       setAceito(true);
+
+      // Update AuthContext to reflect signed contract immediately
+      updateUsuario({ contratoAssinado: true });
+
+      // Navigate to wallet after a short delay to show success state
+      setTimeout(() => {
+        window.location.href = '/carteira';
+      }, 1500);
     } catch (err: any) {
       console.error('Erro ao aceitar contrato:', err);
       setError(err.response?.data?.message || 'Erro ao aceitar contrato. Tente novamente.');

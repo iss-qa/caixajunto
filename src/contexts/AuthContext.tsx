@@ -15,6 +15,7 @@ interface Usuario {
   fotoUrl?: string;
   cpf?: string;
   lytexSubAccountId?: string;
+  contratoAssinado?: boolean;
 }
 
 interface AuthContextType {

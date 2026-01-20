@@ -15,7 +15,7 @@ import {
   Play,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { caixasService, participantesService, pagamentosService } from '../lib/api';
+import { caixasService, participantesService, pagamentosService, regrasComissaoService } from '../lib/api';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
@@ -35,12 +35,16 @@ interface Caixa {
   duracaoMeses: number;
   status: string;
   mesAtual: number;
-  tipo?: 'mensal' | 'semanal';
+  tipo?: 'mensal' | 'semanal' | 'diario';
   dataInicio?: string;
   codigoConvite: string;
   participantesAtivos?: number;
   stats?: { pagos: number; pendentes: number };
   adminNome?: string;
+  comissaoInfo?: {
+    taxaPercentual: string;
+    valorComissao: number;
+  };
 }
 
 const statusFilters = [
@@ -179,7 +183,35 @@ export function Caixas() {
           return { ...cx, stats: { pagos: s?.pagos || 0, pendentes: s?.pendentes || cx.qtdParticipantes } };
         });
 
-        setCaixas(merged);
+        // Fetch commission data for admin/master users
+        if (usuario.tipo === 'administrador' || usuario.tipo === 'master') {
+          const comissaoData = await Promise.all(
+            merged.map(async (cx: Caixa) => {
+              try {
+                const info = await regrasComissaoService.getComissaoCaixa(usuario._id, cx.valorTotal);
+                return {
+                  id: cx._id,
+                  comissaoInfo: {
+                    taxaPercentual: info.taxaPercentual,
+                    valorComissao: info.valorComissao,
+                  }
+                };
+              } catch (error) {
+                console.error(`Erro ao buscar comissão para caixa ${cx._id}:`, error);
+                return { id: cx._id, comissaoInfo: null };
+              }
+            })
+          );
+
+          const mergedWithComissao = merged.map((cx: Caixa) => {
+            const comissao = comissaoData.find((d) => d.id === cx._id);
+            return comissao?.comissaoInfo ? { ...cx, comissaoInfo: comissao.comissaoInfo } : cx;
+          });
+
+          setCaixas(mergedWithComissao);
+        } else {
+          setCaixas(merged);
+        }
       }
     } catch (error) {
       console.error('Erro ao carregar caixas:', error);
@@ -417,6 +449,7 @@ export function Caixas() {
             const semParticipantes = participantesAtivos === 0;
             const isIncompleto = participantesFaltando > 0 && !semParticipantes;
             const isCompleto = participantesFaltando === 0;
+
             const periodoAtual = calculateCurrentPeriod(
               caixa.tipo,
               caixa.dataInicio,
@@ -426,6 +459,10 @@ export function Caixas() {
             const totalPagamentos = (caixa.qtdParticipantes || 0) * (caixa.duracaoMeses || 0);
             const pagos = caixa.stats?.pagos || 0;
             const pendentes = Math.max(0, totalPagamentos - pagos);
+
+            // Dynamic Labels
+            const duracaoLabel = caixa.tipo === 'diario' ? 'dias' : caixa.tipo === 'semanal' ? 'semanas' : 'meses';
+            const periodoLabel = caixa.tipo === 'diario' ? 'Dia' : caixa.tipo === 'semanal' ? 'Semana' : 'Mês';
 
             return (
               <motion.div
@@ -493,7 +530,7 @@ export function Caixas() {
                     <div className="flex flex-col gap-1 items-end" data-testid={`caixa-status-${caixa._id}`}>
                       {caixa.status === 'ativo' ? (
                         <Badge variant="success" size="sm">
-                          {caixa.tipo === 'semanal' ? 'Semana' : 'Mês'} {periodoAtual}/{caixa.duracaoMeses}
+                          {periodoLabel} {periodoAtual}/{caixa.duracaoMeses}
                         </Badge>
                       ) : (
                         <Badge variant={getStatusBadge(caixa.status)} size="sm">
@@ -531,7 +568,7 @@ export function Caixas() {
                     <div className="bg-gray-50 rounded-lg p-2 text-center" data-testid={`caixa-duracao-${caixa._id}`}>
                       <Calendar className="w-4 h-4 mx-auto text-gray-400 mb-1" />
                       <p className="text-xs text-gray-500">Duração</p>
-                      <p className="font-semibold text-gray-900">{caixa.duracaoMeses} {caixa.tipo === 'semanal' ? 'semanas' : 'meses'}</p>
+                      <p className="font-semibold text-gray-900">{caixa.duracaoMeses} {duracaoLabel}</p>
                     </div>
                   </div>
 
@@ -599,6 +636,18 @@ export function Caixas() {
                     )}
                     <ChevronRight className="w-5 h-5 text-gray-400" />
                   </div>
+
+                  {/* Admin Commission Info */}
+                  {(usuario?.tipo === 'administrador' || usuario?.tipo === 'master') && caixa.comissaoInfo && (
+                    <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-50 text-xs bg-gray-50/50 -mx-4 -mb-4 px-4 py-2 rounded-b-xl">
+                      <span className="text-gray-500 font-medium">
+                        Sua comissão ({caixa.comissaoInfo.taxaPercentual})
+                      </span>
+                      <span className="font-bold text-green-600">
+                        +{formatCurrency(caixa.comissaoInfo.valorComissao)}
+                      </span>
+                    </div>
+                  )}
                 </Card>
               </motion.div>
             );

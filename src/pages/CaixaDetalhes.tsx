@@ -1845,10 +1845,30 @@ _Junte seus amigos e realize seus sonhos_`;
                 {recebedorAtual ? (
                   <>
                     <h3 className="font-bold text-gray-900 text-lg mb-2 flex items-center gap-2">
-                      <span>Participante Contemplado em {(() => {
+                      <span>{(() => {
+                        // Lógica para Label Dinâmica
+                        if (caixa?.tipo === 'diario') {
+                          // Se tiver data de vencimento (parcela atual), usa ela + 2 dias
+                          if (caixa.dataVencimento) {
+                            const vencimento = new Date(caixa.dataVencimento);
+                            // Adiciona 2 dias (1 dia folga + 1 dia contemplação)
+                            vencimento.setDate(vencimento.getDate() + 2);
+                            return `Participante Contemplado no dia ${vencimento.toLocaleDateString('pt-BR')}`;
+                          }
+                          // Fallback se não tiver vencimento
+                          return 'Participante Contemplado neste dia';
+                        }
+
+                        if (caixa?.tipo === 'semanal') {
+                          return `Participante Contemplado na Semana ${caixa.mesAtual || 1}`;
+                        }
+
+                        // Lógica Padrão (Mensal)
                         const meses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
                           'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
-                        if (!caixa?.dataInicio) return 'este mês';
+
+                        if (!caixa?.dataInicio) return 'Participante Contemplado este mês';
+
                         const dataInicioStr = caixa.dataInicio;
                         const parts = dataInicioStr.split('T')[0].split('-');
                         const year = parseInt(parts[0]);
@@ -1856,11 +1876,12 @@ _Junte seus amigos e realize seus sonhos_`;
                         const mesAtual = caixa.mesAtual || 1;
                         const targetMonth = month + (mesAtual - 1);
                         const mesIndex = targetMonth % 12;
-                        return meses[mesIndex];
+
+                        return `Participante Contemplado em ${meses[mesIndex]}`;
                       })()}</span>
                       <Badge className="bg-green-600 text-white text-xs">
                         <CheckCircle2 className="w-3 h-3 mr-1" />
-                        Mês {caixa?.mesAtual || 1}
+                        {caixa?.tipo === 'diario' ? 'Dia' : caixa?.tipo === 'semanal' ? 'Semana' : 'Mês'} {caixa?.mesAtual || 1}
                       </Badge>
                     </h3>
 

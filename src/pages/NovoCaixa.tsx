@@ -61,10 +61,12 @@ export function NovoCaixa() {
     dataVencimento: '', // Data completa de vencimento da 1ª parcela
   });
 
-  // Calcular data mínima de vencimento (hoje + 5 dias)
+  // Calcular data mínima de vencimento baseado no tipo
   const getMinDataVencimento = () => {
     const data = new Date();
-    data.setDate(data.getDate() + 5);
+    // Diário: 2 dias (bloqueia amanhã) | Semanal/Mensal: 5 dias
+    const diasMinimos = form.tipo === 'diario' ? 2 : 5;
+    data.setDate(data.getDate() + diasMinimos);
     return data.toISOString().split('T')[0];
   };
 
@@ -108,13 +110,17 @@ export function NovoCaixa() {
   // REGRA: Ganho admin = 10% do valor total
   const ganhoAdmin = form.valorTotal * 0.10;
 
-  // Validar se a data de vencimento é válida (mínimo 5 dias no futuro)
+
+  // Validar se a data de vencimento é válida (mínimo baseado no tipo)
   const isDataVencimentoValida = () => {
     if (!form.dataVencimento) return false;
     const dataVenc = new Date(form.dataVencimento);
     const minData = new Date();
-    minData.setDate(minData.getDate() + 5);
-    return dataVenc >= minData;
+    // Diário: bloqueia apenas amanhã (dia 21), permite depois de amanhã (dia 22+)
+    // Semanal/Mensal: 5 dias
+    const diasMinimos = form.tipo === 'diario' ? 1 : 5;
+    minData.setDate(minData.getDate() + diasMinimos);
+    return dataVenc > minData;
   };
 
   // Função para obter valor mínimo baseado no tipo
@@ -317,7 +323,9 @@ export function NovoCaixa() {
 
         {/* Header */}
         <div className="mb-6">
-          <h1 className="text-2xl font-bold text-gray-900 mb-1">Criar Novo Caixa</h1>
+          <h1 className="text-2xl font-bold text-gray-900 mb-1">
+            Criar Novo Caixa{form.tipo && ` - ${form.tipo.charAt(0).toUpperCase() + form.tipo.slice(1)}`}
+          </h1>
           <p className="text-gray-500">Configure seu caixa em poucos passos</p>
         </div>
 
@@ -395,23 +403,23 @@ export function NovoCaixa() {
                     <div className="grid grid-cols-3 gap-3">
                       <button
                         type="button"
-                        onClick={() => setForm({ ...form, tipo: 'mensal', qtdParticipantes: 10, duracaoMeses: 10 })}
+                        onClick={() => setForm({ ...form, tipo: 'diario', qtdParticipantes: 4, duracaoMeses: 4 })}
                         className={cn(
                           'p-4 rounded-xl border-2 text-left transition-all',
-                          form.tipo === 'mensal'
+                          form.tipo === 'diario'
                             ? 'border-green-500 bg-green-50'
                             : 'border-gray-200 hover:border-green-200'
                         )}
-                        data-testid="tipo-mensal"
+                        data-testid="tipo-diario"
                       >
                         <div className="flex items-center gap-2 mb-2">
-                          <Calendar className={cn('w-5 h-5', form.tipo === 'mensal' ? 'text-green-600' : 'text-gray-400')} />
-                          <span className={cn('font-semibold', form.tipo === 'mensal' ? 'text-green-700' : 'text-gray-700')}>
-                            Mensal
+                          <Clock className={cn('w-5 h-5', form.tipo === 'diario' ? 'text-green-600' : 'text-gray-400')} />
+                          <span className={cn('font-semibold', form.tipo === 'diario' ? 'text-green-700' : 'text-gray-700')}>
+                            Diário
                           </span>
                         </div>
                         <p className="text-xs text-gray-500">
-                          Pagamentos mensais, até 12 participantes/meses
+                          Pagamentos diários, até 30 participantes/dias
                         </p>
                       </button>
                       <button
@@ -437,23 +445,23 @@ export function NovoCaixa() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => setForm({ ...form, tipo: 'diario', qtdParticipantes: 4, duracaoMeses: 4 })}
+                        onClick={() => setForm({ ...form, tipo: 'mensal', qtdParticipantes: 10, duracaoMeses: 10 })}
                         className={cn(
                           'p-4 rounded-xl border-2 text-left transition-all',
-                          form.tipo === 'diario'
+                          form.tipo === 'mensal'
                             ? 'border-green-500 bg-green-50'
                             : 'border-gray-200 hover:border-green-200'
                         )}
-                        data-testid="tipo-diario"
+                        data-testid="tipo-mensal"
                       >
                         <div className="flex items-center gap-2 mb-2">
-                          <Clock className={cn('w-5 h-5', form.tipo === 'diario' ? 'text-green-600' : 'text-gray-400')} />
-                          <span className={cn('font-semibold', form.tipo === 'diario' ? 'text-green-700' : 'text-gray-700')}>
-                            Diário
+                          <Calendar className={cn('w-5 h-5', form.tipo === 'mensal' ? 'text-green-600' : 'text-gray-400')} />
+                          <span className={cn('font-semibold', form.tipo === 'mensal' ? 'text-green-700' : 'text-gray-700')}>
+                            Mensal
                           </span>
                         </div>
                         <p className="text-xs text-gray-500">
-                          Pagamentos diários, até 30 participantes/dias
+                          Pagamentos mensais, até 12 participantes/meses
                         </p>
                       </button>
                     </div>
@@ -615,7 +623,7 @@ export function NovoCaixa() {
                       <div className="flex justify-between">
                         <span className="text-gray-600">Total de parcelas</span>
                         <span className="font-semibold text-gray-900">
-                          {form.qtdParticipantes} {form.tipo === 'semanal' ? 'semanas' : 'meses'}
+                          {form.qtdParticipantes}{form.tipo === 'diario' ? '' : form.tipo === 'semanal' ? ' semanas' : ' meses'}
                         </span>
                       </div>
                     </div>
@@ -646,11 +654,14 @@ export function NovoCaixa() {
                           leftIcon={<Calendar className="w-4 h-4" />}
                         />
                         <p className="text-xs text-gray-500 mt-1">
-                          A data deve ser no mínimo 5 dias a partir de hoje
+                          {form.tipo === 'diario'
+                            ? 'A data deve ser depois de amanhã (bloqueia apenas amanhã)'
+                            : 'A data deve ser no mínimo 5 dias a partir de hoje'
+                          }
                         </p>
                         {form.dataVencimento && !isDataVencimentoValida() && (
                           <p className="text-xs text-red-600 mt-1">
-                            ⚠️ Data inválida! Selecione uma data pelo menos 5 dias no futuro.
+                            ⚠️ Data inválida! {form.tipo === 'diario' ? 'Selecione depois de amanhã ou uma data futura.' : 'Selecione uma data pelo menos 5 dias no futuro.'}
                           </p>
                         )}
                       </div>
