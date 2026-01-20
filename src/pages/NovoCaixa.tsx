@@ -125,7 +125,7 @@ export function NovoCaixa() {
 
   // Função para obter valor mínimo baseado no tipo
   const getValorMinimo = () => {
-    if (form.tipo === 'diario') return 0; // Sem mínimo para diário
+    if (form.tipo === 'diario') return 10; // R$ 10,00 mínimo para diário
     return 500; // R$ 500 para semanal e mensal
   };
 
@@ -168,7 +168,7 @@ export function NovoCaixa() {
       setValorError('');
     }
 
-    if (numValue >= minimo || (minimo === 0 && numValue > 0)) {
+    if (numValue >= minimo) {
       setForm({ ...form, valorTotal: numValue });
     }
   };
@@ -525,13 +525,13 @@ export function NovoCaixa() {
                             onChange={(e) => handleValorCustomChange(e.target.value)}
                             leftIcon={<DollarSign className="w-4 h-4" />}
                             type="number"
-                            min={form.tipo === 'diario' ? 1 : 500}
+                            min={form.tipo === 'diario' ? 10 : 500}
                           />
                           {valorError ? (
                             <p className="text-xs text-red-600 mt-1">{valorError}</p>
                           ) : (
                             <p className="text-xs text-gray-500 mt-1">
-                              {form.tipo === 'diario' ? 'Sem valor mínimo' : 'Mínimo: R$ 500,00'}
+                              {form.tipo === 'diario' ? 'Mínimo: R$ 10,00' : 'Mínimo: R$ 500,00'}
                             </p>
                           )}
                         </div>
