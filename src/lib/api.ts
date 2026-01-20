@@ -230,7 +230,7 @@ export const cobrancasService = {
     };
     caixa: {
       nome: string;
-      tipo: 'mensal' | 'semanal';
+      tipo: 'mensal' | 'semanal' | 'diario';
       valorParcela: number;
       taxaServico: number;
       taxaAdministrativa?: number;

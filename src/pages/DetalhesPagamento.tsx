@@ -26,7 +26,7 @@ interface Participante {
 interface Caixa {
   _id: string
   nome: string
-  tipo?: 'mensal' | 'semanal'
+  tipo?: 'mensal' | 'semanal' | 'diario'
   qtdParticipantes: number
   valorTotal: number
   valorParcela: number
