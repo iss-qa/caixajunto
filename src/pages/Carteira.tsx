@@ -1281,6 +1281,16 @@ const WalletDashboard = () => {
     }
   }, [hasSubAccount, usuario]);
 
+  // 🧪 TESTE FORCE: Ativar modal se tiver subconta (simulando pendência)
+  useEffect(() => {
+    if (hasSubAccount && !onboardingUrl) {
+      const testUrl = 'https://cadastro.io/9452ec3c2ab24ec84aed7723aae56f3d';
+      console.log('[Carteira] 🧪 FORCE TEST: Abrindo modal com URL de teste');
+      setOnboardingUrl(testUrl);
+      setShowOnboardingModal(true);
+    }
+  }, [hasSubAccount]);
+
   // Fetch bank account data from local MongoDB for logged-in user
   useEffect(() => {
     if (usuario?._id && hasSubAccount) {
