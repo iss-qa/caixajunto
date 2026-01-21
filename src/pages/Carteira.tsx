@@ -93,6 +93,8 @@ const WalletDashboard = () => {
   const [subAccountError, setSubAccountError] = useState<string | null>(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+  const [onboardingUrl, setOnboardingUrl] = useState<string | null>(null);
+  const [showOnboardingModal, setShowOnboardingModal] = useState(false);
   const [recentTransactions, setRecentTransactions] = useState<TransacaoRecenteCarteira[]>([]);
   const [transactionsLoading, setTransactionsLoading] = useState(false);
   const [transactionsError, setTransactionsError] = useState<string | null>(null);
@@ -954,6 +956,18 @@ const WalletDashboard = () => {
           subAccountId,
         );
         setSuccessMessage('Subconta criada com sucesso! ✅');
+
+        // Check for onboarding URL
+        const urlOnboarding = resp?.onboardingUrl || resp?.subconta?.onboardingUrl;
+
+        if (urlOnboarding) {
+          console.log('[Carteira] Onboarding necessário. URL:', urlOnboarding);
+          setOnboardingUrl(urlOnboarding);
+          setShowOnboardingModal(true);
+          // Not reloading here, waiting for user to complete onboarding
+          return;
+        }
+
         setShowSuccessModal(true);
         setTimeout(() => {
           setShowSuccessModal(false);
@@ -2302,6 +2316,128 @@ const WalletDashboard = () => {
               </div>
               <h3 className="text-xl font-bold text-gray-900 mb-2">Sucesso!</h3>
               <p className="text-gray-600">{successMessage}</p>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Onboarding Modal */}
+      {showOnboardingModal && onboardingUrl && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="bg-white rounded-2xl p-8 max-w-lg w-full shadow-2xl border border-gray-100"
+          >
+            <div className="text-center">
+              <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                <svg className="w-10 h-10 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+
+              <h3 className="text-2xl font-bold text-gray-900 mb-4">Verificação de Identidade Necessária</h3>
+
+              <p className="text-gray-600 mb-6 leading-relaxed">
+                Para garantir a segurança das suas transações e liberar o acesso completo à sua carteira, é necessário realizar uma rápida verificação de identidade (envio de documento e reconhecimento facial).
+              </p>
+
+              <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 mb-8 text-left">
+                <h4 className="font-semibold text-blue-800 mb-2 text-sm">Passo a passo:</h4>
+                <ul className="text-sm text-blue-700 space-y-2">
+                  <li className="flex items-start gap-2">
+                    <span className="font-bold">1.</span> Clique no botão abaixo para abrir a página segura de verificação.
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="font-bold">2.</span> Siga as instruções na tela para tirar foto do seu documento e do seu rosto.
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="font-bold">3.</span> Após concluir, retorne aqui e clique em "Já finalizei a verificação".
+                  </li>
+                </ul>
+              </div>
+
+              <div className="space-y-3">
+                <a
+                  href={onboardingUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full block bg-blue-600 text-white font-bold py-4 rounded-xl hover:bg-blue-700 transition-colors shadow-lg hover:shadow-xl"
+                >
+                  Iniciar Verificação Agora
+                </a>
+
+                <button
+                  onClick={() => window.location.reload()}
+                  className="w-full py-3 text-gray-500 font-medium hover:text-gray-800 transition-colors"
+                >
+                  Já finalizei a verificação
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+
+
+
+      {/* Onboarding Modal with Iframe - WebView Style */}
+      {showOnboardingModal && onboardingUrl && (
+        <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 p-2 md:p-4 backdrop-blur-sm">
+          <motion.div
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="bg-white rounded-2xl w-full max-w-4xl h-[90vh] shadow-2xl overflow-hidden flex flex-col"
+          >
+            {/* Header do Modal */}
+            <div className="bg-gray-50 border-b border-gray-200 p-4 flex justify-between items-center flex-shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                  <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="font-bold text-gray-800 text-sm md:text-base">Verificação de Identidade</h3>
+                  <p className="text-xs text-gray-500">Ambiente seguro</p>
+                </div>
+              </div>
+
+              {/* Botão de Fechar / Atualizar (Apenas recarrega a página) */}
+              <button
+                onClick={() => window.location.reload()}
+                className="p-2 hover:bg-gray-200 rounded-lg transition-colors text-gray-500"
+                title="Fechar e verificar status"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            {/* IFRAME Container */}
+            <div className="flex-1 bg-gray-100 relative">
+              <iframe
+                src={onboardingUrl}
+                title="Verificação de Identidade"
+                allow="camera; microphone; geolocation" // Permissões críticas para face match
+                className="w-full h-full border-0"
+              />
+            </div>
+
+            {/* Footer com ação manual */}
+            <div className="p-4 border-t border-gray-200 bg-white flex justify-between items-center flex-shrink-0">
+              <p className="text-xs text-gray-500 hidden md:block">
+                Após concluir a verificação na tela acima, clique em finalizar.
+              </p>
+              <button
+                onClick={() => window.location.reload()}
+                className="w-full md:w-auto px-6 py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-colors shadow-lg flex items-center justify-center gap-2"
+              >
+                <span className="whitespace-nowrap">Já finalizei a verificação</span>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                </svg>
+              </button>
             </div>
           </motion.div>
         </div>
