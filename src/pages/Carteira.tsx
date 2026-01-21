@@ -1369,25 +1369,24 @@ const WalletDashboard = () => {
   }, [usuario]);
 
 
-  // 🔽 UI STATE: Header do Modal de Onboarding
-  const [isHeaderExpanded, setIsHeaderExpanded] = useState(true);
+  // 🔽 UI STATE: Header do Modal de Onboarding (Começa colapsado para maximizar espaço)
+  const [isHeaderExpanded, setIsHeaderExpanded] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
   // 🖱️ DETECTAR INTERAÇÃO NO IFRAME (Blur Event)
-  // Quando o usuário clica no iframe (ex: "Continuar"), o foco sai da janela principal.
-  // Usamos isso para colapsar o header automaticamente.
-  useEffect(() => {
-    const handleWindowBlur = () => {
-      // Verifica se o elemento ativo atual é o nosso iframe
-      if (document.activeElement === iframeRef.current) {
-        console.log('🖱️ Interação detectada no iframe! Colapsando header...');
-        setIsHeaderExpanded(false);
-      }
-    };
-
-    window.addEventListener('blur', handleWindowBlur);
-    return () => window.removeEventListener('blur', handleWindowBlur);
-  }, []);
+  // DESABILITADO: Este listener estava causando o reinício do fluxo de verificação
+  // quando o usuário concedia permissão de câmera (dialogs do browser causam blur/focus).
+  // Mantemos o header sempre visível para evitar remontagens do iframe.
+  // useEffect(() => {
+  //   const handleWindowBlur = () => {
+  //     if (document.activeElement === iframeRef.current) {
+  //       console.log('🖱️ Interação detectada no iframe! Colapsando header...');
+  //       setIsHeaderExpanded(false);
+  //     }
+  //   };
+  //   window.addEventListener('blur', handleWindowBlur);
+  //   return () => window.removeEventListener('blur', handleWindowBlur);
+  // }, []);
 
   const OverviewTab = () => {
     // Calcular a próxima data de recebimento baseado nos caixas gerenciados
