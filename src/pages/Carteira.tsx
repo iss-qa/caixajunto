@@ -1339,13 +1339,14 @@ const WalletDashboard = () => {
         } catch (error) {
           console.error('❌ Erro no polling:', error);
         }
-      }, 5000); // Checar a cada 5 segundos
+      }, 60000); // Checar a cada 1 minuto (60s)
     }
 
     return () => {
       if (intervalId) clearInterval(intervalId);
     };
   }, [showOnboardingModal, onboardingUrl, usuario?.cpf]);
+
 
   useEffect(() => {
     if (usuario?._id && hasSubAccount) {
@@ -2455,7 +2456,7 @@ const WalletDashboard = () => {
 
       {/* Onboarding Modal with Iframe - WebView Style */}
       {showOnboardingModal && onboardingUrl && (
-        <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 p-2 md:p-4 backdrop-blur-sm">
+        <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-[9999] p-2 md:p-4 backdrop-blur-sm">
           <motion.div
             initial={{ scale: 0.95, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
@@ -2521,6 +2522,7 @@ const WalletDashboard = () => {
             {/* IFRAME Container */}
             <div className="flex-1 bg-gray-100 relative">
               <iframe
+                key={onboardingUrl}
                 src={onboardingUrl}
                 title="Verificação de Identidade"
                 allow="camera; microphone; geolocation" // Permissões críticas para face match
