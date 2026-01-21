@@ -1924,7 +1924,9 @@ const WalletDashboard = () => {
               <div className="col-span-3">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Agência *</label>
                 <input
+                  id="bank-agency-input"
                   type="text"
+                  inputMode="numeric"
                   placeholder="0000"
                   value={bankAgency}
                   onChange={(e) => setBankAgency(e.target.value.replace(/\D/g, '').slice(0, 5))}
@@ -1935,7 +1937,9 @@ const WalletDashboard = () => {
               <div className="col-span-1">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Dígito</label>
                 <input
+                  id="bank-agency-dv-input"
                   type="text"
+                  inputMode="numeric"
                   placeholder="0"
                   value={bankAgencyDv}
                   onChange={(e) => setBankAgencyDv(e.target.value.replace(/\D/g, '').slice(0, 1))}
@@ -1946,7 +1950,9 @@ const WalletDashboard = () => {
               <div className="col-span-6">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Conta *</label>
                 <input
+                  id="bank-account-input"
                   type="text"
+                  inputMode="numeric"
                   placeholder="00000000"
                   value={bankAccount}
                   onChange={(e) => setBankAccount(e.target.value.replace(/\D/g, '').slice(0, 12))}
@@ -1957,7 +1963,9 @@ const WalletDashboard = () => {
               <div className="col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Dígito *</label>
                 <input
+                  id="bank-account-dv-input"
                   type="text"
+                  inputMode="numeric"
                   placeholder="0"
                   value={bankAccountDv}
                   onChange={(e) => setBankAccountDv(e.target.value.replace(/\D/g, '').slice(0, 2))}
