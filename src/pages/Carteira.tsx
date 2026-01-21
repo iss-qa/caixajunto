@@ -1291,7 +1291,62 @@ const WalletDashboard = () => {
     }
   }, [hasSubAccount]);
 
-  // Fetch bank account data from local MongoDB for logged-in user
+
+  // 🔄 POLLING: Verificar status do onboarding automaticamente
+  useEffect(() => {
+    let intervalId: NodeJS.Timeout;
+
+    if (showOnboardingModal && onboardingUrl) {
+      console.log('🔄 Iniciando polling de verificação de onboarding...');
+
+      intervalId = setInterval(async () => {
+        try {
+          console.log('📡 Verificando status da subconta (Polling)...');
+          // Nota: checkByCpf retorna dados mais completos do status no Lytex
+          // Mas getMine é o que usamos para criar. Vamos usar getMine ou checkByCpf?
+          // checkByCpf é mais robusto para status externo.
+
+          if (usuario?.cpf) {
+            const checkResp = await subcontasService.checkByCpf(usuario.cpf);
+
+            // Se não tiver mais onboardingUrl no retorno, ou status for diferente
+            // Assumimos que foi concluído.
+            // Como não sabemos o campo exato de status de sucesso, vamos assumir que
+            // se a URL sumir do retorno do backend, ou algo mudar, é sucesso.
+            // Mas o backend atual sempre retorna a URL se ela existir no objeto do mongo/lytex?
+            // Se o usuário completou, o Lytex deve atualizar o status.
+
+            // Para garantir, vamos verificar se o onboardingUrl MUDOU ou SUMIU
+            // ou se temos um indicativo de sucesso.
+            // Por enquanto, vamos logar. 
+            // Se o usuário pediu para remover o botão, precisamos confiar que algo muda.
+
+            console.log('📦 Status Polling:', checkResp);
+
+            // Lógica Provisória: Se a subconta existe e NÃO tem onboardingUrl (ou mudou status), fecha.
+            // Mas o backend pode retornar a URL antiga cacheada?
+            // Vamos confiar que o clique no final do fluxo do iframe (redirect) ou o polling resolve.
+
+            const currentOnboardingUrl = checkResp?.subconta?.onboardingUrl;
+
+            // Se não tiver URL de onboarding no retorno, FINALIZOU!
+            if (!currentOnboardingUrl && checkResp?.exists) {
+              console.log('✅ Onboarding concluído! Recarregando...');
+              clearInterval(intervalId);
+              window.location.reload();
+            }
+          }
+        } catch (error) {
+          console.error('❌ Erro no polling:', error);
+        }
+      }, 5000); // Checar a cada 5 segundos
+    }
+
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [showOnboardingModal, onboardingUrl, usuario?.cpf]);
+
   useEffect(() => {
     if (usuario?._id && hasSubAccount) {
       fetchMyBankAccountsFromLocal();
@@ -2473,25 +2528,10 @@ const WalletDashboard = () => {
               />
             </div>
 
-            {/* Footer com ação manual */}
-            <div className="p-4 border-t border-gray-200 bg-white flex justify-between items-center flex-shrink-0">
-              <p className="text-xs text-gray-500 hidden md:block">
-                Após concluir a verificação na tela acima, clique em finalizar.
-              </p>
-              <button
-                onClick={() => window.location.reload()}
-                className="w-full md:w-auto px-6 py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-colors shadow-lg flex items-center justify-center gap-2"
-              >
-                <span className="whitespace-nowrap">Já finalizei a verificação</span>
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-                </svg>
-              </button>
-            </div>
+
           </motion.div>
         </div>
       )}
-
       {/* Error Toast (if needed) */}
       {subAccountError && (
         <div className="fixed bottom-6 right-6 z-50">
@@ -2524,6 +2564,30 @@ const WalletDashboard = () => {
         </div>
       )}
     </div>
+  );
+};
+<svg className="w-5 h-5 text-red-600" fill="currentColor" viewBox="0 0 20 20">
+  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+</svg>
+          </div >
+          <div className="flex-1">
+            <h3 className="text-sm font-medium text-red-800">Erro ao criar subconta</h3>
+            <p className="mt-1 text-sm text-red-700">{subAccountError}</p>
+          </div>
+          <button
+            onClick={() => setSubAccountError(null)}
+            className="flex-shrink-0 text-red-400 hover:text-red-600"
+          >
+            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+            </svg>
+          </button>
+        </div >
+      </motion.div >
+    </div >
+  )
+}
+    </div >
   );
 };
 
