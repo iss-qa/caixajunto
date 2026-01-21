@@ -2430,6 +2430,39 @@ const WalletDashboard = () => {
               </button>
             </div>
 
+            {/* Texto Explicativo */}
+            <div className="bg-blue-50/50 p-4 border-b border-blue-100 overflow-y-auto max-h-[30vh]">
+              <h4 className="text-red-600 font-bold mb-2 flex items-center gap-2">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                Por que verificar sua identidade?
+              </h4>
+
+              <div className="text-sm text-gray-700 space-y-3 leading-relaxed">
+                <p>
+                  A captura do documento e reconhecimento facial são <strong>obrigatórios por lei</strong> e garantem:
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs md:text-sm">
+                  <ul className="list-disc pl-5 space-y-1">
+                    <li>Proteção contra fraudes e golpes</li>
+                    <li>Segurança nas suas transações financeiras</li>
+                    <li>Conformidade com as normas do Banco Central</li>
+                  </ul>
+                  <ul className="list-disc pl-5 space-y-1">
+                    <li>Garantia de que as transferências sejam feitas para a conta correta</li>
+                    <li>Ambiente seguro para todos os usuários</li>
+                  </ul>
+                </div>
+
+                <p className="text-xs text-gray-500 mt-2 bg-white/50 p-2 rounded border border-gray-100 italic">
+                  No Juntix, trabalhamos com dinheiro real. A verificação garante que você receberá seus recursos na sua própria conta bancária, evitando desvios ou saques não autorizados.
+                  <br />
+                  <span className="font-semibold not-italic text-blue-600 block mt-1">
+                    Seus dados são criptografados e protegidos conforme a LGPD. Este processo leva menos de 2 minutos.
+                  </span>
+                </p>
+              </div>
+            </div>
+
             {/* IFRAME Container */}
             <div className="flex-1 bg-gray-100 relative">
               <iframe
