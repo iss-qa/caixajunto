@@ -709,6 +709,28 @@ const CarteiraDataAccounts = ({
     const [bankAccountDv, setBankAccountDv] = useState('');
     const [bankAccountType, setBankAccountType] = useState<'corrente' | 'poupanca'>('corrente');
 
+    // Estado para Endereço
+    const [addressZip, setAddressZip] = useState('');
+    const [addressStreet, setAddressStreet] = useState('');
+    const [addressNumber, setAddressNumber] = useState('');
+    const [addressComplement, setAddressComplement] = useState('');
+    const [addressZone, setAddressZone] = useState('');
+    const [addressCity, setAddressCity] = useState('');
+    const [addressState, setAddressState] = useState('');
+    const [bankAccountId, setBankAccountId] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (subcontaData?.address) {
+            setAddressZip(subcontaData.address.zip || '');
+            setAddressStreet(subcontaData.address.street || '');
+            setAddressNumber(subcontaData.address.number || '');
+            setAddressComplement(subcontaData.address.complement || '');
+            setAddressZone(subcontaData.address.zone || '');
+            setAddressCity(subcontaData.address.city || '');
+            setAddressState(subcontaData.address.state || '');
+        }
+    }, [subcontaData]);
+
     const fetchMyBankAccountsFromLocal = async () => {
         try {
             setLoadingBankAccount(true);
@@ -720,6 +742,7 @@ const CarteiraDataAccounts = ({
             if (accounts.length > 0) {
                 const firstAccount = accounts[0];
                 setBankAccountData({
+                    _id: firstAccount._id || firstAccount.lytexId,
                     bank: {
                         code: firstAccount.bankCode || '',
                         name: firstAccount.bankName || '',
@@ -734,6 +757,7 @@ const CarteiraDataAccounts = ({
                         dv: firstAccount.accountDv || '',
                     },
                 });
+                setBankAccountId(firstAccount._id || firstAccount.lytexId || null);
             } else {
                 setBankAccountData(null);
             }
@@ -772,24 +796,25 @@ const CarteiraDataAccounts = ({
                 email: subcontaData.email || usuario?.email || '',
                 cpfCnpj: subcontaData.cpfCnpj || usuario?.cpf || '',
                 address: {
-                    street: subcontaData.address?.street || '',
-                    zone: subcontaData.address?.zone || '',
-                    city: subcontaData.address?.city || '',
-                    state: subcontaData.address?.state || '',
-                    number: subcontaData.address?.number || '',
-                    complement: subcontaData.address?.complement || '',
-                    zip: subcontaData.address?.zip || '',
+                    street: addressStreet,
+                    zone: addressZone,
+                    city: addressCity,
+                    state: addressState,
+                    number: addressNumber,
+                    complement: addressComplement,
+                    zip: addressZip,
                 },
                 banksAccounts: [{
+                    _bankAccountId: bankAccountId || undefined,
                     owner: {
                         name: subcontaData.name || usuario?.nome || '',
-                        type: subcontaData.type || 'pf', // Assuming 'pf' properly defaults if undefined
+                        type: (subcontaData.type || 'pf') as 'pf' | 'pj',
                         cpfCnpj: subcontaData.cpfCnpj || usuario?.cpf || '',
                     },
                     bank: {
                         code: selectedBankForSub.code,
                         name: selectedBankForSub.name,
-                        ispb: selectedBankForSub.code === '260' ? '18236120' : undefined, // Example logical check
+                        ispb: selectedBankForSub.code === '260' ? '18236120' : undefined,
                     },
                     agency: {
                         number: bankAgency,
@@ -1170,52 +1195,91 @@ const CarteiraDataAccounts = ({
                     </motion.div>
                 )}
 
-                {/* Card de Endereço */}
-                {subcontaData?.address && (
-                    <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.4 }}
-                        className="bg-white rounded-3xl shadow-lg border border-gray-100 p-8"
-                    >
-                        <h4 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3">
-                            <div className="w-12 h-12 bg-gradient-to-br from-red-500 to-pink-500 rounded-xl flex items-center justify-center">
-                                <MapPin className="text-white" size={24} />
-                            </div>
-                            Endereço
-                        </h4>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="p-4 bg-gray-50 rounded-2xl md:col-span-2">
-                                <p className="text-sm text-gray-600 font-medium mb-1">Logradouro</p>
-                                <p className="text-lg font-bold text-gray-900">
-                                    {subcontaData.address.street}{subcontaData.address.number ? `, ${subcontaData.address.number}` : ''}
-                                </p>
-                            </div>
+                {/* Card de Faturamento e Limites */}
+                {/* ... (existing cards) ... */}
 
-                            {subcontaData.address.complement && (
-                                <div className="p-4 bg-gray-50 rounded-2xl">
-                                    <p className="text-sm text-gray-600 font-medium mb-1">Complemento</p>
-                                    <p className="text-lg font-bold text-gray-900">{subcontaData.address.complement}</p>
-                                </div>
-                            )}
-
-                            <div className="p-4 bg-gray-50 rounded-2xl">
-                                <p className="text-sm text-gray-600 font-medium mb-1">Bairro</p>
-                                <p className="text-lg font-bold text-gray-900">{subcontaData.address.zone}</p>
-                            </div>
-
-                            <div className="p-4 bg-gray-50 rounded-2xl">
-                                <p className="text-sm text-gray-600 font-medium mb-1">Cidade/UF</p>
-                                <p className="text-lg font-bold text-gray-900">{subcontaData.address.city}/{subcontaData.address.state}</p>
-                            </div>
-
-                            <div className="p-4 bg-gray-50 rounded-2xl">
-                                <p className="text-sm text-gray-600 font-medium mb-1">CEP</p>
-                                <p className="text-lg font-bold text-gray-900">{subcontaData.address.zip}</p>
-                            </div>
+                {/* Card de Endereço Editável */}
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.4 }}
+                    className="bg-white rounded-3xl shadow-lg border border-gray-100 p-8"
+                >
+                    <h4 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3">
+                        <div className="w-12 h-12 bg-gradient-to-br from-red-500 to-pink-500 rounded-xl flex items-center justify-center">
+                            <MapPin className="text-white" size={24} />
                         </div>
-                    </motion.div>
-                )}
+                        Endereço de Correspondência
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <ModernInput
+                            label="CEP"
+                            value={addressZip}
+                            onChange={(e: any) => {
+                                const digits = e.target.value.replace(/\D/g, '').slice(0, 8);
+                                setAddressZip(digits);
+                            }}
+                            onBlur={async () => {
+                                const cep = String(addressZip || '').replace(/\D/g, '');
+                                if (cep.length !== 8) return;
+                                try {
+                                    const resp = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+                                    const data = await resp.json();
+                                    if (!data?.erro) {
+                                        setAddressStreet(data.logradouro || addressStreet);
+                                        setAddressZone(data.bairro || addressZone);
+                                        setAddressCity(data.localidade || addressCity);
+                                        setAddressState(data.uf || addressState);
+                                    }
+                                } catch { }
+                            }}
+                            placeholder="00000-000"
+                            icon={Hash}
+                            required
+                        />
+                        <ModernInput
+                            label="Rua"
+                            value={addressStreet}
+                            onChange={(e: any) => setAddressStreet(e.target.value)}
+                            icon={MapPin}
+                            required
+                        />
+                        <ModernInput
+                            label="Número"
+                            value={addressNumber}
+                            onChange={(e: any) => setAddressNumber(e.target.value)}
+                            icon={Hash}
+                            required
+                        />
+                        <ModernInput
+                            label="Complemento"
+                            value={addressComplement}
+                            onChange={(e: any) => setAddressComplement(e.target.value)}
+                        />
+                        <ModernInput
+                            label="Bairro"
+                            value={addressZone}
+                            onChange={(e: any) => setAddressZone(e.target.value)}
+                            icon={MapPin}
+                            required
+                        />
+                        <ModernInput
+                            label="Cidade"
+                            value={addressCity}
+                            onChange={(e: any) => setAddressCity(e.target.value)}
+                            icon={MapPin}
+                            required
+                        />
+                        <ModernInput
+                            label="Estado"
+                            value={addressState}
+                            onChange={(e: any) => setAddressState(e.target.value)}
+                            placeholder="UF"
+                            icon={MapPin}
+                            required
+                        />
+                    </div>
+                </motion.div>
                 {/* Informações Importantes */}
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
