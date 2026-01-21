@@ -220,6 +220,7 @@ const WalletDashboard = () => {
   } | null>(null);
   const [loadingBankAccount, setLoadingBankAccount] = useState(false);
   const [bankAccountError, setBankAccountError] = useState<string | null>(null);
+  const [savingBankAccount, setSavingBankAccount] = useState(false);
 
   const fetchWallet = async () => {
     try {
@@ -704,6 +705,80 @@ const WalletDashboard = () => {
       setBankAccountData(null);
     } finally {
       setLoadingBankAccount(false);
+    }
+  };
+
+  // Salvar dados bancários (PUT para Lytex + MongoDB local)
+  const handleSaveBankAccount = async () => {
+    if (!subcontaData?.lytexId || !selectedBankForSub) {
+      setBankAccountError('Selecione um banco');
+      return;
+    }
+
+    if (!bankAgency || !bankAccount || !bankAccountDv) {
+      setBankAccountError('Preencha todos os campos obrigatórios');
+      return;
+    }
+
+    try {
+      setSavingBankAccount(true);
+      setBankAccountError(null);
+
+      console.log('🏦 Salvando dados bancários...');
+      console.log('📦 Subconta lytexId:', subcontaData.lytexId);
+
+      const payload = {
+        name: subcontaData.name || usuario?.nome || '',
+        email: subcontaData.email || usuario?.email || '',
+        cpfCnpj: subcontaData.cpfCnpj || usuario?.cpf || '',
+        address: {
+          street: subcontaData.address?.street || '',
+          zone: subcontaData.address?.zone || '',
+          city: subcontaData.address?.city || '',
+          state: subcontaData.address?.state || '',
+          number: subcontaData.address?.number || '',
+          complement: subcontaData.address?.complement || '',
+          zip: subcontaData.address?.zip || '',
+        },
+        bankAccount: {
+          bankCode: selectedBankForSub.code,
+          bankName: selectedBankForSub.name,
+          bankIspb: '',
+          accountType: bankAccountType,
+          agency: bankAgency,
+          agencyDv: bankAgencyDv || '',
+          accountNumber: bankAccount,
+          accountDv: bankAccountDv,
+        },
+      };
+
+      console.log('📤 Payload:', JSON.stringify(payload, null, 2));
+
+      const lytexId = subcontaData.lytexId!; // Already validated above
+      const response = await subcontasService.updateBankAccount(lytexId, payload);
+
+      console.log('📥 Resposta:', response);
+
+      if (response.success) {
+        console.log('✅ Dados bancários salvos com sucesso!');
+        // Recarregar dados bancários
+        await fetchMyBankAccountsFromLocal();
+        // Limpar formulário
+        setSelectedBankForSub(null);
+        setBankSearch('');
+        setBankAgency('');
+        setBankAgencyDv('');
+        setBankAccount('');
+        setBankAccountDv('');
+        setBankAccountType('corrente');
+      } else {
+        setBankAccountError(response.message || 'Erro ao salvar dados bancários');
+      }
+    } catch (e: any) {
+      console.error('❌ Erro ao salvar dados bancários:', e);
+      setBankAccountError(e?.response?.data?.message || e?.message || 'Erro ao salvar dados bancários');
+    } finally {
+      setSavingBankAccount(false);
     }
   };
 
@@ -1732,8 +1807,144 @@ const WalletDashboard = () => {
             )}
           </div>
         ) : (
-          <div className="text-sm text-gray-600 py-2">
-            Nenhum dado bancário encontrado
+          <div className="space-y-4">
+            <p className="text-sm text-amber-600 bg-amber-50 p-3 rounded-lg">
+              ⚠️ Nenhum dado bancário cadastrado. Preencha abaixo para receber seus pagamentos.
+            </p>
+
+            {/* Banco (Dropdown) */}
+            <div className="relative">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Banco *</label>
+              <input
+                type="text"
+                placeholder="Digite para buscar..."
+                value={selectedBankForSub ? `${selectedBankForSub.code} - ${selectedBankForSub.name}` : bankSearch}
+                onChange={(e) => {
+                  setBankSearch(e.target.value);
+                  setSelectedBankForSub(null);
+                  if (e.target.value.length >= 2) {
+                    setBankDropdownOpen(true);
+                    // Fetch banks
+                    bancosService.getAll(e.target.value).then((data: any) => {
+                      setBanks(data || []);
+                    }).catch(() => setBanks([]));
+                  } else {
+                    setBankDropdownOpen(false);
+                  }
+                }}
+                onFocus={() => bankSearch.length >= 2 && setBankDropdownOpen(true)}
+                className="w-full p-2 border border-gray-300 rounded-lg text-sm"
+              />
+              {bankDropdownOpen && banks.length > 0 && (
+                <div className="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                  {banks.map((bank) => (
+                    <button
+                      key={bank.code}
+                      type="button"
+                      onClick={() => {
+                        setSelectedBankForSub(bank);
+                        setBankSearch('');
+                        setBankDropdownOpen(false);
+                      }}
+                      className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100"
+                    >
+                      {bank.code} - {bank.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Tipo de Conta */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de Conta *</label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setBankAccountType('corrente')}
+                  className={`p-2 text-sm rounded-lg border ${bankAccountType === 'corrente' ? 'border-green-500 bg-green-50 text-green-700' : 'border-gray-200'}`}
+                >
+                  Corrente
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBankAccountType('poupanca')}
+                  className={`p-2 text-sm rounded-lg border ${bankAccountType === 'poupanca' ? 'border-green-500 bg-green-50 text-green-700' : 'border-gray-200'}`}
+                >
+                  Poupança
+                </button>
+              </div>
+            </div>
+
+            {/* Agência */}
+            <div className="grid grid-cols-3 gap-2">
+              <div className="col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Agência *</label>
+                <input
+                  type="text"
+                  placeholder="0000"
+                  value={bankAgency}
+                  onChange={(e) => setBankAgency(e.target.value.replace(/\D/g, '').slice(0, 5))}
+                  className="w-full p-2 border border-gray-300 rounded-lg text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Dígito</label>
+                <input
+                  type="text"
+                  placeholder="0"
+                  value={bankAgencyDv}
+                  onChange={(e) => setBankAgencyDv(e.target.value.replace(/\D/g, '').slice(0, 1))}
+                  className="w-full p-2 border border-gray-300 rounded-lg text-sm"
+                />
+              </div>
+            </div>
+
+            {/* Conta */}
+            <div className="grid grid-cols-3 gap-2">
+              <div className="col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Conta *</label>
+                <input
+                  type="text"
+                  placeholder="00000000"
+                  value={bankAccount}
+                  onChange={(e) => setBankAccount(e.target.value.replace(/\D/g, '').slice(0, 12))}
+                  className="w-full p-2 border border-gray-300 rounded-lg text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Dígito *</label>
+                <input
+                  type="text"
+                  placeholder="0"
+                  value={bankAccountDv}
+                  onChange={(e) => setBankAccountDv(e.target.value.replace(/\D/g, '').slice(0, 2))}
+                  className="w-full p-2 border border-gray-300 rounded-lg text-sm"
+                />
+              </div>
+            </div>
+
+            {/* Erro */}
+            {bankAccountError && (
+              <p className="text-sm text-red-600">{bankAccountError}</p>
+            )}
+
+            {/* Botão Confirmar */}
+            <button
+              type="button"
+              onClick={handleSaveBankAccount}
+              disabled={savingBankAccount || !selectedBankForSub || !bankAgency || !bankAccount || !bankAccountDv}
+              className="w-full py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              {savingBankAccount ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  Salvando...
+                </>
+              ) : (
+                '✅ Confirmar dados bancários'
+              )}
+            </button>
           </div>
         )}
       </div>

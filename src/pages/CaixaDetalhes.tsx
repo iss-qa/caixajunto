@@ -329,19 +329,21 @@ export function CaixaDetalhes() {
     return { isPago, isAtrasado: atrasado, isVenceHoje: vencHoje };
   }, [caixa, verificarPagamento]);
 
-  // Calcular data mínima de vencimento (hoje + 5 dias)
-  const getMinDataVencimento = () => {
+  // Calcular data mínima de vencimento (diario: +1 dia, outros: +5 dias)
+  const getMinDataVencimento = (tipo?: string) => {
     const data = new Date();
-    data.setDate(data.getDate() + 5);
+    const diasMinimos = tipo === 'diario' ? 1 : 5;
+    data.setDate(data.getDate() + diasMinimos);
     return data.toISOString().split('T')[0];
   };
 
-  // Validar se a data de vencimento é válida (mínimo 5 dias no futuro)
-  const isDataVencimentoValida = (data: string) => {
+  // Validar se a data de vencimento é válida (diario: +1 dia, outros: +5 dias)
+  const isDataVencimentoValida = (data: string, tipo?: string) => {
     if (!data) return false;
     const dataVenc = new Date(data);
     const minData = new Date();
-    minData.setDate(minData.getDate() + 5);
+    const diasMinimos = tipo === 'diario' ? 1 : 5;
+    minData.setDate(minData.getDate() + diasMinimos);
     return dataVenc >= minData;
   };
 
@@ -2913,7 +2915,7 @@ ${link}`;
           {/* Tipo do Caixa */}
           <div>
             <label className="label">Tipo do Caixa</label>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-2">
               <button
                 type="button"
                 onClick={() => setEditForm({ ...editForm, tipo: 'mensal' })}
@@ -2924,8 +2926,8 @@ ${link}`;
                     : 'border-gray-200 hover:border-green-200'
                 )}
               >
-                <span className="font-semibold block">Mensal</span>
-                <span className="text-xs text-gray-500">Até 12 meses/part.</span>
+                <span className="font-semibold block text-sm">Mensal</span>
+                <span className="text-xs text-gray-500">Até 12 meses</span>
               </button>
               <button
                 type="button"
@@ -2937,8 +2939,21 @@ ${link}`;
                     : 'border-gray-200 hover:border-green-200'
                 )}
               >
-                <span className="font-semibold block">Semanal</span>
-                <span className="text-xs text-gray-500">Até 24 sem./part.</span>
+                <span className="font-semibold block text-sm">Semanal</span>
+                <span className="text-xs text-gray-500">Até 24 sem.</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditForm({ ...editForm, tipo: 'diario', qtdParticipantes: 4, duracaoMeses: 4 })}
+                className={cn(
+                  'p-2 rounded-xl border-2 text-center transition-all',
+                  editForm.tipo === 'diario'
+                    ? 'border-orange-500 bg-orange-50 text-orange-700'
+                    : 'border-gray-200 hover:border-orange-200'
+                )}
+              >
+                <span className="font-semibold block text-sm">Diário</span>
+                <span className="text-xs text-gray-500">4 dias</span>
               </button>
             </div>
           </div>
@@ -2954,41 +2969,47 @@ ${link}`;
           />
           {/* TODO: Voltar para min={500} após testes em produção */}
 
-          {/* Participantes - Com opção personalizada */}
+          {/* Participantes - Fixo para diário */}
           <div>
-            <label className="label">Número de Participantes (= número de parcelas)</label>
+            <label className="label">Número de Participantes {editForm.tipo === 'diario' ? '(fixo)' : '(= número de parcelas)'}</label>
             <Input
               type="number"
               min={2}
-              max={editForm.tipo === 'semanal' ? 24 : 12}
+              max={editForm.tipo === 'diario' ? 4 : editForm.tipo === 'semanal' ? 24 : 12}
               value={editForm.qtdParticipantes}
+              disabled={editForm.tipo === 'diario'}
               onChange={(e) => {
-                const val = Math.max(2, Math.min(parseInt(e.target.value) || 2, editForm.tipo === 'semanal' ? 24 : 12));
+                if (editForm.tipo === 'diario') return;
+                const maxVal = editForm.tipo === 'semanal' ? 24 : 12;
+                const val = Math.max(2, Math.min(parseInt(e.target.value) || 2, maxVal));
                 setEditForm({ ...editForm, qtdParticipantes: val });
               }}
               leftIcon={<Users className="w-4 h-4" />}
             />
             <p className="text-xs text-gray-500 mt-1">
-              Máximo: {editForm.tipo === 'semanal' ? '24' : '12'} participantes
+              {editForm.tipo === 'diario' ? '4 participantes (4 por dia)' : `Máximo: ${editForm.tipo === 'semanal' ? '24' : '12'} participantes`}
             </p>
           </div>
 
-          {/* Duração - Independente */}
+          {/* Duração - Fixo para diário */}
           <div>
-            <label className="label">Duração ({editForm.tipo === 'semanal' ? 'semanas' : 'meses'})</label>
+            <label className="label">Duração ({editForm.tipo === 'diario' ? 'dias' : editForm.tipo === 'semanal' ? 'semanas' : 'meses'})</label>
             <Input
               type="number"
               min={2}
-              max={editForm.tipo === 'semanal' ? 24 : 12}
+              max={editForm.tipo === 'diario' ? 4 : editForm.tipo === 'semanal' ? 24 : 12}
               value={editForm.duracaoMeses}
+              disabled={editForm.tipo === 'diario'}
               onChange={(e) => {
-                const val = Math.max(2, Math.min(parseInt(e.target.value) || 2, editForm.tipo === 'semanal' ? 24 : 12));
+                if (editForm.tipo === 'diario') return;
+                const maxVal = editForm.tipo === 'semanal' ? 24 : 12;
+                const val = Math.max(2, Math.min(parseInt(e.target.value) || 2, maxVal));
                 setEditForm({ ...editForm, duracaoMeses: val });
               }}
               leftIcon={<Calendar className="w-4 h-4" />}
             />
             <p className="text-xs text-amber-600 mt-1">
-              ⚠️ Recomendado: duração = número de participantes
+              {editForm.tipo === 'diario' ? '4 dias (16 parcelas = 4/dia x 4 dias)' : '⚠️ Recomendado: duração = número de participantes'}
             </p>
           </div>
 
@@ -2997,31 +3018,33 @@ ${link}`;
             <label className="label">Data de Vencimento da 1ª Parcela</label>
             <Input
               type="date"
-              min={getMinDataVencimento()}
+              min={getMinDataVencimento(editForm.tipo)}
               value={editForm.dataVencimento}
               onChange={(e) => setEditForm({ ...editForm, dataVencimento: e.target.value })}
               leftIcon={<Calendar className="w-4 h-4" />}
             />
             <p className="text-xs text-gray-500 mt-1">
-              Mínimo: 5 dias a partir de hoje
+              Mínimo: {editForm.tipo === 'diario' ? '1 dia' : '5 dias'} a partir de hoje
             </p>
           </div>
 
           {/* Resumo */}
-          <div className="p-3 bg-green-50 rounded-xl">
-            <p className="text-xs text-green-600 font-medium mb-2">Resumo:</p>
+          <div className={`p-3 rounded-xl ${editForm.tipo === 'diario' ? 'bg-orange-50' : 'bg-green-50'}`}>
+            <p className={`text-xs font-medium mb-2 ${editForm.tipo === 'diario' ? 'text-orange-600' : 'text-green-600'}`}>Resumo:</p>
             <div className="grid grid-cols-2 gap-2 text-sm">
               <div className="flex justify-between">
                 <span className="text-gray-600">Parcela:</span>
-                <span className="font-semibold">{formatCurrency(editForm.valorTotal / editForm.qtdParticipantes)}</span>
+                <span className="font-semibold">{formatCurrency(editForm.tipo === 'diario' ? editForm.valorTotal / 16 : editForm.valorTotal / editForm.qtdParticipantes)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-600">Seu ganho (10%):</span>
-                <span className="font-semibold text-green-700">{formatCurrency(editForm.valorTotal * 0.10)}</span>
+                <span className={`font-semibold ${editForm.tipo === 'diario' ? 'text-orange-700' : 'text-green-700'}`}>{formatCurrency(editForm.valorTotal * 0.10)}</span>
               </div>
               <div className="flex justify-between col-span-2">
                 <span className="text-gray-600">Total de parcelas:</span>
-                <span className="font-semibold">{editForm.qtdParticipantes} {editForm.tipo === 'semanal' ? 'semanas' : 'meses'}</span>
+                <span className="font-semibold">
+                  {editForm.tipo === 'diario' ? '16 (4/dia × 4 dias)' : `${editForm.qtdParticipantes} ${editForm.tipo === 'semanal' ? 'semanas' : 'meses'}`}
+                </span>
               </div>
             </div>
           </div>
@@ -3034,7 +3057,7 @@ ${link}`;
               variant="primary"
               className="flex-1"
               onClick={handleUpdateCaixa}
-              disabled={!isDataVencimentoValida(editForm.dataVencimento)}
+              disabled={!isDataVencimentoValida(editForm.dataVencimento, editForm.tipo)}
             >
               Salvar Alterações
             </Button>

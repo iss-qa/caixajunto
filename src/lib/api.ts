@@ -406,6 +406,34 @@ export const subcontasService = {
     const response = await api.get('/subcontas/me/wallet');
     return response.data;
   },
+  // Atualiza subconta com dados bancários (PUT)
+  updateBankAccount: async (lytexId: string, data: {
+    name: string;
+    email: string;
+    cpfCnpj: string;
+    address: {
+      street: string;
+      zone: string;
+      city: string;
+      state: string;
+      number: string;
+      complement?: string;
+      zip: string;
+    };
+    bankAccount: {
+      bankCode: string;
+      bankName: string;
+      bankIspb?: string;
+      accountType: 'corrente' | 'poupanca';
+      agency: string;
+      agencyDv?: string;
+      accountNumber: string;
+      accountDv: string;
+    };
+  }) => {
+    const response = await api.put(`/subcontas/${lytexId}/bank-account`, data);
+    return response.data;
+  },
 };
 
 export const splitService = {
