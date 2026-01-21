@@ -1368,6 +1368,27 @@ const WalletDashboard = () => {
     }
   }, [usuario]);
 
+
+  // 🔽 UI STATE: Header do Modal de Onboarding
+  const [isHeaderExpanded, setIsHeaderExpanded] = useState(true);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+
+  // 🖱️ DETECTAR INTERAÇÃO NO IFRAME (Blur Event)
+  // Quando o usuário clica no iframe (ex: "Continuar"), o foco sai da janela principal.
+  // Usamos isso para colapsar o header automaticamente.
+  useEffect(() => {
+    const handleWindowBlur = () => {
+      // Verifica se o elemento ativo atual é o nosso iframe
+      if (document.activeElement === iframeRef.current) {
+        console.log('🖱️ Interação detectada no iframe! Colapsando header...');
+        setIsHeaderExpanded(false);
+      }
+    };
+
+    window.addEventListener('blur', handleWindowBlur);
+    return () => window.removeEventListener('blur', handleWindowBlur);
+  }, []);
+
   const OverviewTab = () => {
     // Calcular a próxima data de recebimento baseado nos caixas gerenciados
     const proximoRecebimento = caixasGerenciados
@@ -2486,42 +2507,67 @@ const WalletDashboard = () => {
               </button>
             </div>
 
-            {/* Texto Explicativo */}
-            <div className="bg-blue-50/50 p-4 border-b border-blue-100 overflow-y-auto max-h-[30vh]">
-              <h4 className="text-red-600 font-bold mb-2 flex items-center gap-2">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
-                Por que verificar sua identidade?
-              </h4>
-
-              <div className="text-sm text-gray-700 space-y-3 leading-relaxed">
-                <p>
-                  A captura do documento e reconhecimento facial são <strong>obrigatórios por lei</strong> e garantem:
-                </p>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs md:text-sm">
-                  <ul className="list-disc pl-5 space-y-1">
-                    <li>Proteção contra fraudes e golpes</li>
-                    <li>Segurança nas suas transações financeiras</li>
-                    <li>Conformidade com as normas do Banco Central</li>
-                  </ul>
-                  <ul className="list-disc pl-5 space-y-1">
-                    <li>Garantia de que as transferências sejam feitas para a conta correta</li>
-                    <li>Ambiente seguro para todos os usuários</li>
-                  </ul>
+            {/* Texto Explicativo Colapsável */}
+            <motion.div
+              initial={false}
+              animate={{
+                height: isHeaderExpanded ? 'auto' : 0,
+                opacity: isHeaderExpanded ? 1 : 0
+              }}
+              transition={{ duration: 0.4, ease: "easeInOut" }}
+              className="bg-blue-50/50 border-b border-blue-100 overflow-hidden"
+            >
+              <div className="p-4 overflow-y-auto max-h-[30vh]">
+                <div className="flex justify-between items-start mb-2">
+                  <h4 className="text-red-600 font-bold flex items-center gap-2">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                    Por que verificar sua identidade?
+                  </h4>
+                  <button onClick={() => setIsHeaderExpanded(false)} className="text-blue-400 hover:text-blue-600 p-1">
+                    <span className="text-xs font-semibold">Ocultar</span>
+                  </button>
                 </div>
 
-                <p className="text-xs text-gray-500 mt-2 bg-white/50 p-2 rounded border border-gray-100 italic">
-                  No Juntix, trabalhamos com dinheiro real. A verificação garante que você receberá seus recursos na sua própria conta bancária, evitando desvios ou saques não autorizados.
-                  <br />
-                  <span className="font-semibold not-italic text-blue-600 block mt-1">
-                    Seus dados são criptografados e protegidos conforme a LGPD. Este processo leva menos de 2 minutos.
-                  </span>
-                </p>
+                <div className="text-sm text-gray-700 space-y-3 leading-relaxed">
+                  <p>
+                    A captura do documento e reconhecimento facial são <strong>obrigatórios por lei</strong> e garantem:
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs md:text-sm">
+                    <ul className="list-disc pl-5 space-y-1">
+                      <li>Proteção contra fraudes e golpes</li>
+                      <li>Segurança nas suas transações financeiras</li>
+                      <li>Conformidade com as normas do Banco Central</li>
+                    </ul>
+                    <ul className="list-disc pl-5 space-y-1">
+                      <li>Garantia de que as transferências sejam feitas para a conta correta</li>
+                      <li>Ambiente seguro para todos os usuários</li>
+                    </ul>
+                  </div>
+
+                  <p className="text-xs text-gray-500 mt-2 bg-white/50 p-2 rounded border border-gray-100 italic">
+                    No Juntix, trabalhamos com dinheiro real. A verificação garante que você receberá seus recursos na sua própria conta bancária, evitando desvios ou saques não autorizados.
+                    <br />
+                    <span className="font-semibold not-italic text-blue-600 block mt-1">
+                      Seus dados são criptografados e protegidos conforme a LGPD. Este processo leva menos de 2 minutos.
+                    </span>
+                  </p>
+                </div>
               </div>
-            </div>
+            </motion.div>
+
+            {!isHeaderExpanded && (
+              <button
+                onClick={() => setIsHeaderExpanded(true)}
+                className="w-full bg-blue-50 text-blue-600 text-xs py-1 hover:bg-blue-100 transition-colors flex items-center justify-center gap-1"
+              >
+                <span className="font-bold">?</span> Por que preciso verificar?
+              </button>
+            )}
 
             {/* IFRAME Container */}
             <div className="flex-1 bg-gray-100 relative">
               <iframe
+                ref={iframeRef}
                 key={onboardingUrl}
                 src={onboardingUrl}
                 title="Verificação de Identidade"
