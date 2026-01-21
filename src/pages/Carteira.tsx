@@ -1294,7 +1294,7 @@ const WalletDashboard = () => {
 
   // 🔄 POLLING: Verificar status do onboarding automaticamente
   useEffect(() => {
-    let intervalId: NodeJS.Timeout;
+    let intervalId: any;
 
     if (showOnboardingModal && onboardingUrl) {
       console.log('🔄 Iniciando polling de verificação de onboarding...');
