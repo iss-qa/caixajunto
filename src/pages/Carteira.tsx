@@ -1,77 +1,21 @@
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Wallet, TrendingUp, Download, Plus, Eye, EyeOff, Building2, Check, X, Calendar, Mail, Clock, AlertCircle, FileText } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { carteiraService, cobrancasService, caixasService, pagamentosService, participantesService, subcontasService, bancosService, contaBancariaService, recebimentosService } from '../lib/api';
+import { cobrancasService, caixasService, pagamentosService, participantesService, subcontasService, recebimentosService } from '../lib/api';
 import { formatCurrency, formatDate } from '../lib/utils';
 import { TransacoesDetalhadas } from './Carteira/components/TransacoesDetalhadas';
+import CarteiraDataAccounts, { SubAccountCreation } from './CarteiraDataAccounts';
 
-type StatusTransacaoCarteira = 'em_dia' | 'atrasado';
-type TipoTransacaoCarteira = 'entrada' | 'saida';
-
-interface CaixaCarteiraApi {
-  _id: string;
-  nome: string;
-  tipo?: 'mensal' | 'semanal';
-  valorParcela?: number;
-  valorTotal?: number;
-  qtdParticipantes?: number;
-  duracaoMeses?: number;
-  taxaServico?: number;
-  adminId?:
-  | {
-    _id?: string;
-    nome?: string;
-    email?: string;
-  }
-  | string;
-}
-
-interface PagamentoCarteiraApi {
-  _id: string;
-  caixaId?:
-  | string
-  | {
-    _id?: string;
-  };
-  pagadorId?:
-  | {
-    _id?: string;
-    nome?: string;
-  }
-  | string;
-  participanteNome?: string;
-  valorParcela?: number;
-  taxaServico?: number;
-  status: string;
-  dataPagamento?: string;
-  diasAtraso?: number | string;
-  mesReferencia?: number;
-}
-
-interface TransacaoRecenteCarteira {
-  id: string;
-  caixaId: string;
-  caixaNome: string;
-  caixaAdminNome: string;
-  participanteNome: string;
-  dataPagamento: string;
-  valorPago: number;
-  status: StatusTransacaoCarteira;
-  tipo: TipoTransacaoCarteira;
-  mesReferencia?: number;
-  tipoCaixa?: 'mensal' | 'semanal';
-}
-
-interface TransacaoLytexCarteira {
-  id: string;
-  type: string;
-  description: string;
-  status: string;
-  amount: number;
-  createdAt: string;
-}
+import {
+  StatusTransacaoCarteira,
+  TipoTransacaoCarteira,
+  CaixaCarteiraApi,
+  PagamentoCarteiraApi,
+  TransacaoRecenteCarteira,
+  TransacaoLytexCarteira
+} from './Carteira/types';
 
 const WalletDashboard = () => {
   const { usuario, updateUsuario } = useAuth();
@@ -89,8 +33,6 @@ const WalletDashboard = () => {
   const [checkingSubAccount, setCheckingSubAccount] = useState(
     !usuario?.lytexSubAccountId,
   );
-  const [creatingSubAccount, setCreatingSubAccount] = useState(false);
-  const [subAccountError, setSubAccountError] = useState<string | null>(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [onboardingUrl, setOnboardingUrl] = useState<string | null>(null);
@@ -158,173 +100,56 @@ const WalletDashboard = () => {
   // Lista de caixas que o admin gerencia
   const [caixasGerenciados, setCaixasGerenciados] = useState<Array<{ _id: string; nome: string; status?: string; dataFim?: string }>>([]);
 
-  const [subForm, setSubForm] = useState({
-    type: 'pf',
-    cpfCnpj: usuario?.cpf || '',
-    name: usuario?.nome || '',
-    fantasyName: '',
-    cellphone: usuario?.telefone || '',
-    email: usuario?.email || '',
-    aboutBusiness: '',
-    branchOfActivity: '',
-    webhookUrl: '',
-    withdrawValue: 50000,
-    numberOfExpectedMonthlyEmissions: 50,
-    expectedMonthlyBilling: 50000,
-    addressStreet: '',
-    addressZone: '',
-    addressCity: '',
-    addressState: '',
-    addressNumber: '',
-    addressComplement: '',
-    addressZip: '',
-    adminCpf: usuario?.cpf || '',
-    adminFullName: usuario?.nome || '',
-    adminCellphone: usuario?.telefone || '',
-    adminBirthDate: '',
-    adminMotherName: '',
-  });
-
-  // Dados bancários para criação da subconta
-  const [banks, setBanks] = useState<Array<{ code: string; name: string }>>([]);
-  const [banksError, setBanksError] = useState<string | null>(null);
-  const [loadingBanks, setLoadingBanks] = useState(false);
-  const [bankSearch, setBankSearch] = useState('');
-  const [bankDropdownOpen, setBankDropdownOpen] = useState(false);
-  const [selectedBankForSub, setSelectedBankForSub] = useState<{ code: string; name: string } | null>(null);
-  const [bankAgency, setBankAgency] = useState('');
-  const [bankAgencyDv, setBankAgencyDv] = useState('');
-  const [bankAccount, setBankAccount] = useState('');
-  const [bankAccountDv, setBankAccountDv] = useState('');
-  const [bankAccountType, setBankAccountType] = useState<'corrente' | 'poupanca'>('corrente');
-
-  // useCallback handlers to prevent re-creation and maintain focus
-  const handleBankAgencyChange = useCallback((value: string) => {
-    setBankAgency(value);
-  }, []);
-
-  const handleBankAgencyDvChange = useCallback((value: string) => {
-    setBankAgencyDv(value);
-  }, []);
-
-  const handleBankAccountChange = useCallback((value: string) => {
-    setBankAccount(value);
-  }, []);
-
-  const handleBankAccountDvChange = useCallback((value: string) => {
-    setBankAccountDv(value);
-  }, []);
-
-  const [bankAccounts, setBankAccounts] = useState<
-    Array<{
-      _id?: string;
-      bankCode: string;
-      bankName: string;
-      agency: string;
-      agencyDv: string;
-      account: string;
-      accountDv: string;
-      accountType: 'corrente' | 'poupanca';
-      isDefault?: boolean;
-    }>
-  >([]);
-
-  // Bank account data from Lytex (using admin token)
-  const [bankAccountData, setBankAccountData] = useState<{
-    bank?: { code: string; name: string; ispb?: string };
-    agency?: { number: string; dv?: string };
-    account?: { type: string; number: string; dv?: string; operation?: string };
-  } | null>(null);
-  const [loadingBankAccount, setLoadingBankAccount] = useState(false);
-  const [bankAccountError, setBankAccountError] = useState<string | null>(null);
-  const [savingBankAccount, setSavingBankAccount] = useState(false);
-
   const fetchWallet = async () => {
     try {
       setWalletError(null);
 
       // Primeiro tenta buscar a carteira usando credenciais individuais do participante
       console.log('💰 Tentando buscar carteira individual do participante...');
+      const individualResponse = await subcontasService.getMyWallet();
 
+      if (individualResponse && individualResponse.success) {
+        const wallet = individualResponse.wallet;
+        console.log('✅ Carteira individual encontrada:', wallet);
+
+        setAccountData((prev) => ({
+          ...prev,
+          balance: (wallet.balance || 0) / 100,
+          pendingBalance: (wallet.futureBalance || 0) / 100,
+          blockedBalance: (wallet.blockedBalance || 0) / 100,
+          futureTaxes: (wallet.futureTaxes || 0) / 100,
+        }));
+        return;
+      }
+
+      // Se falhar a busca individual
+      console.log('⚠️ Falha ou carteira individual não encontrada:', individualResponse?.message);
+
+      // Tratamento específico de erros
       try {
-        const individualResponse = await subcontasService.getMyWallet();
-        console.log('📦 Resposta da carteira individual:', individualResponse);
-
-        // Se obteve sucesso com carteira individual, usa esses valores
-        if (individualResponse?.success && individualResponse?.wallet) {
-          console.log('✅ Carteira individual obtida com sucesso:', individualResponse.wallet);
-          const wallet = individualResponse.wallet;
-          const availableRaw = typeof wallet?.balance === 'number' ? wallet.balance : 0;
-          const pendingRaw = typeof wallet?.futureBalance === 'number' ? wallet.futureBalance : 0;
-          const blockedRaw = typeof wallet?.blockedBalance === 'number' ? wallet.blockedBalance : 0;
-          const futureTaxesRaw = typeof wallet?.futureTaxes === 'number' ? wallet.futureTaxes : 0;
-          const available = availableRaw / 100;
-          const pending = pendingRaw / 100;
-          const blocked = blockedRaw / 100;
-          const futureTaxes = futureTaxesRaw / 100;
-
-          console.log('💵 Valores da carteira individual:', {
-            balance: available,
-            pendingBalance: pending,
-            blockedBalance: blocked,
-            futureTaxes,
-          });
-
-          setAccountData((prev) => ({
-            ...prev,
-            balance: available,
-            pendingBalance: pending,
-            blockedBalance: blocked,
-            futureTaxes,
-          }));
-          return; // Sucesso, não precisa do fallback
-        }
-
-        // Se sucesso=false, verifica se pode usar fallback
-        if (individualResponse?.success === false) {
+        if (!individualResponse?.success) {
           const errorCode = individualResponse?.error;
-          console.log('⚠️ Erro na carteira individual:', errorCode, individualResponse?.message);
-
-          // CORREÇÃO: Só usa fallback (carteira master) para usuário master
-          // Para admin e participante, mostra saldo zerado e mensagem
-          if (usuario?.tipo !== 'master') {
-            console.log('ℹ️ Usuário não é master, não usando fallback para carteira geral');
-
-            if (errorCode === 'CREDENTIALS_NOT_CONFIGURED') {
-              setWalletError(
-                '⚠️ Configuração Pendente - Ação Necessária:\n\n' +
-                '1️⃣ Entre em contato com o ADMINISTRADOR do seu caixa\n' +
-                '2️⃣ Solicite que ele abra um CHAMADO para configurar suas credenciais (clientID e clientSecret)\n' +
-                //   '3️⃣ Envie seus DADOS BANCÁRIOS ao administrador:\n' +
-                //   '   • BANCO (nome e código)\n' +
-                //   '   • AGÊNCIA (com dígito)\n' +
-                //   '   • CONTA (com dígito)\n' +
-                //   '   • NOME COMPLETO (titular da conta)\n\n' +
-                //   '📌 Estes dados são necessários para configurar sua conta de recebimento quando você for contemplado.\n\n' +
-                'Após a configuração, você poderá visualizar seu saldo na aba "Dados da Conta".'
-              );
-            } else if (errorCode === 'SUBCONTA_NOT_FOUND') {
-              setWalletError('Subconta não encontrada. Crie sua subconta primeiro.');
-            } else if (errorCode === 'LYTEX_AUTH_FAILED') {
-              setWalletError('Falha de autenticação Lytex. Verifique suas credenciais.');
-            } else {
-              setWalletError(individualResponse?.message || 'Erro ao buscar carteira individual.');
-            }
-
-            // Mostra saldo zerado para não exibir valores de outro usuário
-            setAccountData((prev) => ({
-              ...prev,
-              balance: 0,
-              pendingBalance: 0,
-              blockedBalance: 0,
-              futureTaxes: 0,
-            }));
-            return;
+          if (errorCode === 'SUB_ACCOUNT_NOT_FOUND') {
+            setWalletError('Subconta não encontrada. Crie sua subconta primeiro.');
+          } else if (errorCode === 'LYTEX_AUTH_FAILED') {
+            setWalletError('Falha de autenticação Lytex. Verifique suas credenciais.');
+          } else {
+            setWalletError(individualResponse?.message || 'Erro ao buscar carteira individual.');
           }
 
-          // Para usuário master, continua para o fallback
-          console.log('ℹ️ Usuário é master, usando fallback para carteira geral...');
+          // Mostra saldo zerado para não exibir valores de outro usuário
+          setAccountData((prev) => ({
+            ...prev,
+            balance: 0,
+            pendingBalance: 0,
+            blockedBalance: 0,
+            futureTaxes: 0,
+          }));
+          return;
         }
+
+        // Para usuário master, continua para o fallback
+        console.log('ℹ️ Usuário é master, usando fallback para carteira geral...');
       } catch (individualError: any) {
         console.log('❌ Exceção ao buscar carteira individual:', individualError?.message);
 
@@ -554,9 +379,7 @@ const WalletDashboard = () => {
             bonusFinal = caixaInfo.valorTotal * 0.1;
           }
 
-          // CORREÇÃO: O valor pago é apenas o valorBase (que já inclui IPCA se houver)
-          // Não devemos somar fundoReserva, bonusFinal e taxaServico aqui,
-          // pois esses valores já estão incluídos no total da cobrança
+          // O valor pago é apenas o valorBase (que já inclui IPCA se houver)
           const valorPago = valorBase;
 
           const pagador = p.pagadorId;
@@ -639,164 +462,19 @@ const WalletDashboard = () => {
     }
   };
 
+
   const fetchBankAccounts = async () => {
-    try {
-      const response = await carteiraService.getBankAccounts();
-      const list = Array.isArray(response)
-        ? response
-        : Array.isArray(response?.contas)
-          ? response.contas
-          : response?.data && Array.isArray(response.data)
-            ? response.data
-            : [];
-      setBankAccounts(
-        list.map((c: any) => ({
-          _id: String(c._id || ''),
-          bankCode: String(c.bankCode || ''),
-          bankName: String(c.bankName || ''),
-          agency: String(c.agency || ''),
-          agencyDv: String(c.agencyDv || ''),
-          account: String(c.account || ''),
-          accountDv: String(c.accountDv || ''),
-          accountType:
-            c.accountType === 'poupanca' ? 'poupanca' : ('corrente' as const),
-          isDefault: Boolean(c.isDefault),
-        })),
-      );
-    } catch {
-      setBankAccounts([]);
-    }
-  };
-
-  // Função para buscar dados bancários do usuário logado a partir do MongoDB local
-  const fetchMyBankAccountsFromLocal = async () => {
-    try {
-      setLoadingBankAccount(true);
-      setBankAccountError(null);
-
-      console.log('🔍 [Carteira] Iniciando busca de dados bancários do usuário logado...');
-      console.log('👤 [Carteira] Usuario ID:', usuario?._id);
-      console.log('👤 [Carteira] Usuario Nome:', usuario?.nome);
-
-      const response = await contaBancariaService.getMyBankAccounts();
-      console.log('📦 [Carteira] Resposta COMPLETA da API:', JSON.stringify(response, null, 2));
-      console.log('📊 [Carteira] Tipo da resposta:', typeof response);
-      console.log('🔢 [Carteira] É array?:', Array.isArray(response));
-
-      // Extract bank account data from response
-      const accounts = Array.isArray(response) ? response : response?.contas || response?.data || [];
-      console.log('🏦 [Carteira] Contas extraídas:', accounts);
-      console.log('📈 [Carteira] Número de contas:', accounts.length);
-
-      if (accounts.length > 0) {
-        const firstAccount = accounts[0];
-        console.log('✅ [Carteira] Primeira conta encontrada:', JSON.stringify(firstAccount, null, 2));
-
-        const bankData = {
-          bank: {
-            code: firstAccount.bankCode || '',
-            name: firstAccount.bankName || '',
-          },
-          agency: {
-            number: firstAccount.agency || '',
-            dv: firstAccount.agencyDv || '',
-          },
-          account: {
-            type: firstAccount.accountType || 'corrente',
-            number: firstAccount.account || '',
-            dv: firstAccount.accountDv || '',
-          },
-        };
-
-        console.log('💾 [Carteira] Dados formatados para exibição:', JSON.stringify(bankData, null, 2));
-        setBankAccountData(bankData);
-        console.log('✅ [Carteira] Dados bancários carregados do MongoDB local');
-      } else {
-        console.log('⚠️ [Carteira] Nenhuma conta bancária encontrada para este usuário');
-        setBankAccountData(null);
-      }
-    } catch (e: any) {
-      console.error('❌ [Carteira] Erro ao buscar dados bancários:', e);
-      console.error('❌ [Carteira] Erro detalhado:', e?.response?.data || e?.message);
-      setBankAccountError(e?.response?.data?.message || e?.message || 'Erro ao buscar dados bancários');
-      setBankAccountData(null);
-    } finally {
-      setLoadingBankAccount(false);
-    }
-  };
-
-  // Salvar dados bancários (PUT para Lytex + MongoDB local)
-  const handleSaveBankAccount = async () => {
-    if (!subcontaData?.lytexId || !selectedBankForSub) {
-      setBankAccountError('Selecione um banco');
-      return;
-    }
-
-    if (!bankAgency || !bankAccount || !bankAccountDv) {
-      setBankAccountError('Preencha todos os campos obrigatórios');
-      return;
-    }
-
-    try {
-      setSavingBankAccount(true);
-      setBankAccountError(null);
-
-      console.log('🏦 Salvando dados bancários...');
-      console.log('📦 Subconta lytexId:', subcontaData.lytexId);
-
-      const payload = {
-        name: subcontaData.name || usuario?.nome || '',
-        email: subcontaData.email || usuario?.email || '',
-        cpfCnpj: subcontaData.cpfCnpj || usuario?.cpf || '',
-        address: {
-          street: subcontaData.address?.street || '',
-          zone: subcontaData.address?.zone || '',
-          city: subcontaData.address?.city || '',
-          state: subcontaData.address?.state || '',
-          number: subcontaData.address?.number || '',
-          complement: subcontaData.address?.complement || '',
-          zip: subcontaData.address?.zip || '',
-        },
-        bankAccount: {
-          bankCode: selectedBankForSub.code,
-          bankName: selectedBankForSub.name,
-          bankIspb: '',
-          accountType: bankAccountType,
-          agency: bankAgency,
-          agencyDv: bankAgencyDv || '',
-          accountNumber: bankAccount,
-          accountDv: bankAccountDv,
-        },
-      };
-
-      console.log('📤 Payload:', JSON.stringify(payload, null, 2));
-
-      const lytexId = subcontaData.lytexId!; // Already validated above
-      const response = await subcontasService.updateBankAccount(lytexId, payload);
-
-      console.log('📥 Resposta:', response);
-
-      if (response.success) {
-        console.log('✅ Dados bancários salvos com sucesso!');
-        // Recarregar dados bancários
-        await fetchMyBankAccountsFromLocal();
-        // Limpar formulário
-        setSelectedBankForSub(null);
-        setBankSearch('');
-        setBankAgency('');
-        setBankAgencyDv('');
-        setBankAccount('');
-        setBankAccountDv('');
-        setBankAccountType('corrente');
-      } else {
-        setBankAccountError(response.message || 'Erro ao salvar dados bancários');
-      }
-    } catch (e: any) {
-      console.error('❌ Erro ao salvar dados bancários:', e);
-      setBankAccountError(e?.response?.data?.message || e?.message || 'Erro ao salvar dados bancários');
-    } finally {
-      setSavingBankAccount(false);
-    }
+    // Esta função era usada para bankAccounts state, que agora é interno de CarteiraDataAccounts
+    // Porém pode ser que ainda seja usada? 
+    // Na Carteira.tsx original ela populava `bankAccounts` state, que NÃO era usado no overview.
+    // Era usado no render do modal? Não.
+    // De qualquer forma, para compatibilidade vamos manter vazia ou remover se não for usada.
+    // O useEffect chamava. Vamos manter vazia para não quebrar contrato se ela for chamada.
+    // Realmente, bankAccounts array era usado para dropdown de seleção de conta na criação de subconta?
+    // Não, creation usava `banks` service search.
+    // Então podemos remover o job?
+    // O useEffect na linha 1290 chamava fetchBankAccounts.
+    // Vou deixar vazio.
   };
 
   // Buscar saldo pago (total de saques recebidos)
@@ -926,227 +604,6 @@ const WalletDashboard = () => {
     }
   };
 
-  const handleCreateSubAccount = async () => {
-    try {
-      if (!usuario) {
-        throw new Error('Usuário não autenticado');
-      }
-      setCreatingSubAccount(true);
-      setSubAccountError(null);
-      const payload: any = {
-        type: subForm.type,
-        cpfCnpj: subForm.cpfCnpj,
-        name: subForm.name,
-        fantasyName: subForm.type === 'pj' ? subForm.fantasyName : undefined,
-        cellphone: subForm.cellphone,
-        email: subForm.email,
-        aboutBusiness: subForm.aboutBusiness,
-        branchOfActivity: subForm.branchOfActivity,
-        webhookUrl: subForm.webhookUrl || undefined,
-        withdrawValue: subForm.withdrawValue,
-        numberOfExpectedMonthlyEmissions:
-          subForm.numberOfExpectedMonthlyEmissions,
-        expectedMonthlyBilling: subForm.expectedMonthlyBilling,
-        address: subForm.addressStreet
-          ? {
-            street: subForm.addressStreet,
-            zone: subForm.addressZone,
-            city: subForm.addressCity,
-            state: subForm.addressState,
-            number: subForm.addressNumber || '0',
-            complement: subForm.addressComplement || undefined,
-            zip: subForm.addressZip,
-          }
-          : undefined,
-        adminEnterprise: subForm.adminCpf
-          ? {
-            cpf: subForm.adminCpf,
-            fullName: subForm.adminFullName || subForm.name,
-            cellphone: subForm.adminCellphone || subForm.cellphone,
-            birthDate: subForm.adminBirthDate
-              ? new Date(subForm.adminBirthDate).toISOString()
-              : new Date().toISOString(),
-            motherName: subForm.adminMotherName || 'Não informado',
-          }
-          : undefined,
-      };
-
-
-      // Montar banksAccounts se preenchido
-      if (selectedBankForSub && bankAgency && bankAccount) {
-        // Padronizar nome do banco para corresponder ao Postman
-        let bankName = selectedBankForSub.name;
-        if (selectedBankForSub.code === '260') {
-          bankName = 'Nu Pagamentos S.A'; // Padronizado para Nubank
-        }
-
-        payload.banksAccounts = [
-          {
-            owner: {
-              name: subForm.name,
-              type: subForm.type,
-              cpfCnpj: subForm.cpfCnpj,
-            },
-            bank: {
-              code: selectedBankForSub.code,
-              name: bankName,
-              ispb: selectedBankForSub.code === '260' ? '18236120' : undefined, // ISPB do Nubank
-            },
-            agency: { number: bankAgencyDv ? `${bankAgency}${bankAgencyDv}` : bankAgency },
-            creditCard: false,
-            account: { type: bankAccountType, number: bankAccount, dv: bankAccountDv || '0' },
-          },
-        ];
-      }
-
-      // CRÍTICO: Adicionar webhookUrl para gerar seção "Aplicação" no Lytex
-      payload.webhookUrl = 'https://webhook.site/rafaela-notifications';
-
-
-      // 🔍 DEBUG COMPLETO - Início
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
-      const endpoint = `${API_URL}/subcontas/me`;
-      const token = localStorage.getItem('token');
-
-      console.group('🚀 DEBUG - CRIAR SUBCONTA');
-      console.log('⏰ Timestamp:', new Date().toISOString());
-      console.log('📍 Endpoint:', endpoint);
-      console.log('🔑 Token:', token ? `${token.substring(0, 20)}...` : 'Não encontrado');
-      console.log('📦 Payload completo:', JSON.stringify(payload, null, 2));
-
-      // Gera comando curl equivalente
-      const curlCommand = `curl -X POST '${endpoint}' \\
-  -H 'Content-Type: application/json' \\
-  -H 'Authorization: Bearer ${token || 'SEU_TOKEN_AQUI'}' \\
-  -d '${JSON.stringify(payload, null, 2).replace(/'/g, "'\\''")}'`;
-
-      console.log('💻 Comando CURL equivalente:');
-      console.log(curlCommand);
-      console.groupEnd();
-      // 🔍 DEBUG COMPLETO - Fim
-
-      console.log('[Carteira] Enviando payload de criação de subconta', payload);
-
-      const resp = await subcontasService.createMine(payload);
-
-      // 🔍 DEBUG - Resposta
-      console.group('✅ DEBUG - RESPOSTA DA API');
-      console.log('⏰ Timestamp:', new Date().toISOString());
-      console.log('📥 Resposta completa:', JSON.stringify(resp, null, 2));
-      console.log('🎯 Success:', resp?.success);
-      console.log('🆔 Subconta ID:', resp?.subconta?.lytexId || resp?.subconta?._id);
-      console.groupEnd();
-
-      console.log('[Carteira] Resposta da API ao criar subconta', resp);
-      const subAccountId =
-        (resp && resp.subconta && (resp.subconta.lytexId || resp.subconta._id)) || (resp && resp.subAccountId) || (resp && resp.id) || undefined;
-      if (subAccountId) {
-        setHasSubAccount(true);
-        updateUsuario({ lytexSubAccountId: subAccountId });
-        console.log(
-          '[Carteira] Subconta criada com sucesso, id:',
-          subAccountId,
-        );
-        setSuccessMessage('Subconta criada com sucesso! ✅');
-
-        // Check for onboarding URL
-        let urlOnboarding = resp?.onboardingUrl || resp?.subconta?.onboardingUrl;
-
-        // 🧪 TESTE: Se não vier URL (ex: Sandbox), usar a URL de teste fornecida
-        if (!urlOnboarding) {
-          console.log('[Carteira] Modo Teste: Usando URL de onboarding simulada');
-          urlOnboarding = 'https://cadastro.io/9452ec3c2ab24ec84aed7723aae56f3d';
-        }
-
-        if (urlOnboarding) {
-          console.log('[Carteira] Onboarding necessário. URL:', urlOnboarding);
-          setOnboardingUrl(urlOnboarding);
-          setShowOnboardingModal(true);
-          // Not reloading here, waiting for user to complete onboarding
-          return;
-        }
-
-        setShowSuccessModal(true);
-        setTimeout(() => {
-          setShowSuccessModal(false);
-          window.location.reload();
-        }, 2000);
-        return;
-      }
-      console.warn(
-        '[Carteira] Chamada de criação de subconta não retornou ID',
-        resp,
-      );
-      setSubAccountError('Não foi possível obter o ID da subconta criada');
-      setTimeout(() => setSubAccountError(null), 5000);
-    } catch (e: any) {
-      const status = e?.response?.status;
-      const data = e?.response?.data;
-      const message = data?.message || e?.message || 'Falha ao criar subconta';
-
-      // 🔍 DEBUG - Erro detalhado
-      console.group('❌ DEBUG - ERRO AO CRIAR SUBCONTA');
-      console.log('⏰ Timestamp:', new Date().toISOString());
-      console.log('🔴 Status HTTP:', status || 'N/A');
-      console.log('📛 Mensagem:', message);
-      console.log('📦 Response Data completo:', JSON.stringify(data, null, 2));
-      console.log('🔍 Headers da resposta:', e?.response?.headers);
-      console.log('🌐 URL da requisição:', e?.config?.url);
-      console.log('📤 Payload enviado:', e?.config?.data);
-      console.log('⚠️ Erro completo:', e);
-      console.log('📚 Stack trace:', e?.stack);
-      console.groupEnd();
-
-      console.error(
-        '[Carteira] Erro ao criar subconta',
-        'status:',
-        status,
-        'data:',
-        data,
-        'erro:',
-        e,
-      );
-
-      // Tratamento específico para erros de duplicação
-      const errorCode = data?.error;
-
-      if (errorCode === 'DUPLICATE_CPF_LYTEX' || errorCode === 'DUPLICATE_CPF') {
-        setSubAccountError(
-          'Já existe uma subconta cadastrada com este CPF. Redirecionando para sua carteira...',
-        );
-        setHasSubAccount(true);
-
-        // Atualizar contexto se tiver subcontaId
-        if (data?.subcontaId) {
-          updateUsuario({ lytexSubAccountId: data.subcontaId });
-        }
-
-        // Recarregar após 2 segundos
-        setTimeout(() => {
-          window.location.reload();
-        }, 2000);
-        return;
-      }
-
-      if (
-        status === 409 ||
-        typeof message === 'string' &&
-        message.toLowerCase().includes('subconta já criada')
-      ) {
-        setSubAccountError(
-          'Você já possui uma subconta criada. Abrindo sua carteira.',
-        );
-        setHasSubAccount(true);
-        return;
-      }
-
-      setSubAccountError(message);
-      setTimeout(() => setSubAccountError(null), 5000);
-    } finally {
-      setCreatingSubAccount(false);
-    }
-  };
-
   useEffect(() => {
     const verificarSubconta = async () => {
       console.log('\n🔍 ========================================');
@@ -1228,7 +685,6 @@ const WalletDashboard = () => {
 
       try {
         setCheckingSubAccount(true);
-        setSubAccountError(null);
 
         // 1️⃣ Primeiro: Verificar se já existe subconta no MongoDB local
         try {
@@ -1369,62 +825,9 @@ const WalletDashboard = () => {
       fetchWallet();
       fetchRecentTransactions();
       fetchLytexTransactions(1);
-      fetchBankAccounts();
+      // fetchBankAccounts(); // Removido pois era vazio
     }
   }, [hasSubAccount, usuario]);
-
-  // 🧪 TESTE FORCE: Ativar modal se tiver subconta (simulando pendência)
-  // DESABILITADO: Este código era para teste e estava causando loops de estado.
-  // Em produção, o modal deve abrir apenas quando o backend retorna uma onboardingUrl real.
-  // useEffect(() => {
-  //   if (hasSubAccount && !onboardingUrl) {
-  //     const testUrl = 'https://cadastro.io/9452ec3c2ab24ec84aed7723aae56f3d';
-  //     console.log('[Carteira] 🧪 FORCE TEST: Abrindo modal com URL de teste');
-  //     setOnboardingUrl(testUrl);
-  //     setShowOnboardingModal(true);
-  //   }
-  // }, [hasSubAccount]);
-
-
-  // 🔄 POLLING: Verificar status do onboarding automaticamente
-  // DESABILITADO TEMPORARIAMENTE: O polling pode estar causando instabilidade no iframe.
-  // O usuário pode clicar no X para verificar manualmente se o onboarding foi concluído.
-  // useEffect(() => {
-  //   let intervalId: any;
-  //
-  //   if (showOnboardingModal && onboardingUrl) {
-  //     console.log('🔄 Iniciando polling de verificação de onboarding...');
-  //
-  //     intervalId = setInterval(async () => {
-  //       try {
-  //         console.log('📡 Verificando status da subconta (Polling)...');
-  //         if (usuario?.cpf) {
-  //           const checkResp = await subcontasService.checkByCpf(usuario.cpf);
-  //           console.log('📦 Status Polling:', checkResp);
-  //           const currentOnboardingUrl = checkResp?.subconta?.onboardingUrl;
-  //           if (!currentOnboardingUrl && checkResp?.exists) {
-  //             console.log('✅ Onboarding concluído! Recarregando...');
-  //             clearInterval(intervalId);
-  //             window.location.reload();
-  //           }
-  //         }
-  //       } catch (error) {
-  //         console.error('❌ Erro no polling:', error);
-  //       }
-  //     }, 60000);
-  //   }
-  //
-  //   return () => {
-  //     if (intervalId) clearInterval(intervalId);
-  //   };
-  // }, [showOnboardingModal, onboardingUrl, usuario?.cpf]);
-
-
-  useEffect(() => {
-    if (usuario?._id && hasSubAccount) {
-      fetchMyBankAccountsFromLocal();
-    }
-  }, [usuario?._id, hasSubAccount, subcontaData?._id]);
 
   // Fetch paid balance (total de saques recebidos)
   useEffect(() => {
@@ -1444,21 +847,6 @@ const WalletDashboard = () => {
   // 🔽 UI STATE: Header do Modal de Onboarding (Começa colapsado para maximizar espaço)
   const [isHeaderExpanded, setIsHeaderExpanded] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
-
-  // 🖱️ DETECTAR INTERAÇÃO NO IFRAME (Blur Event)
-  // DESABILITADO: Este listener estava causando o reinício do fluxo de verificação
-  // quando o usuário concedia permissão de câmera (dialogs do browser causam blur/focus).
-  // Mantemos o header sempre visível para evitar remontagens do iframe.
-  // useEffect(() => {
-  //   const handleWindowBlur = () => {
-  //     if (document.activeElement === iframeRef.current) {
-  //       console.log('🖱️ Interação detectada no iframe! Colapsando header...');
-  //       setIsHeaderExpanded(false);
-  //     }
-  //   };
-  //   window.addEventListener('blur', handleWindowBlur);
-  //   return () => window.removeEventListener('blur', handleWindowBlur);
-  // }, []);
 
   const OverviewTab = () => {
     // Calcular a próxima data de recebimento baseado nos caixas gerenciados
@@ -1614,498 +1002,6 @@ const WalletDashboard = () => {
     );
   };
 
-  const AccountTab = () => (
-    <div className="space-y-6">
-      {/* Card de Status da Conta */}
-      <div className="bg-white border border-gray-200 rounded-xl p-6">
-        <div className="flex items-center gap-3 mb-4">
-          <div className={`w-12 h-12 ${subcontaData ? 'bg-green-100' : 'bg-yellow-100'} rounded-full flex items-center justify-center`}>
-            {subcontaData ? (
-              <Check className="text-green-600" size={24} />
-            ) : (
-              <X className="text-yellow-600" size={24} />
-            )}
-          </div>
-          <div>
-            <h3 className="font-semibold text-gray-800">
-              {subcontaData ? 'Conta Ativa' : 'Subconta Não Encontrada'}
-            </h3>
-            <p className="text-sm text-gray-600">
-              {subcontaData
-                ? 'Sua conta está funcionando normalmente'
-                : 'Crie sua subconta para começar a receber'}
-            </p>
-          </div>
-        </div>
-
-        {!hasSubAccount && (
-          <div className="mb-4">
-            <button
-              onClick={handleCreateSubAccount}
-              className="px-3 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-60"
-              disabled={creatingSubAccount}
-            >
-              Criar Subconta
-            </button>
-            {subAccountError && (
-              <p className="mt-2 text-xs text-red-600">{subAccountError}</p>
-            )}
-          </div>
-        )}
-
-        {/* Dados Principais */}
-        <div className="space-y-3 pt-4 border-t border-gray-200">
-          <div className="flex justify-between">
-            <span className="text-gray-600">Nome Completo</span>
-            <span className="font-medium text-gray-800">{subcontaData?.name || accountData.name}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-gray-600">CPF/CNPJ</span>
-            <span className="font-medium text-gray-800">{subcontaData?.cpfCnpj || accountData.cpf}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-gray-600">E-mail</span>
-            <span className="font-medium text-gray-800">{subcontaData?.email || accountData.email}</span>
-          </div>
-          {subcontaData?.cellphone && (
-            <div className="flex justify-between">
-              <span className="text-gray-600">Celular</span>
-              <span className="font-medium text-gray-800">{subcontaData.cellphone}</span>
-            </div>
-          )}
-          {subcontaData?.type && (
-            <div className="flex justify-between">
-              <span className="text-gray-600">Tipo</span>
-              <span className="font-medium text-gray-800">{subcontaData.type.toUpperCase()}</span>
-            </div>
-          )}
-          <div className="flex justify-between">
-            <span className="text-gray-600">Status</span>
-            <span className={`px-3 py-1 ${subcontaData ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'} rounded-full text-sm font-medium`}>
-              {subcontaData ? 'Ativa' : 'Pendente'}
-            </span>
-          </div>
-          {subcontaData?.createdAt && (
-            <div className="flex justify-between">
-              <span className="text-gray-600">Conta criada em</span>
-              <span className="font-medium text-gray-800">{formatDate(subcontaData.createdAt)}</span>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Card de Dados Lytex */}
-      {subcontaData?.lytexId && (
-        <div className="bg-white border border-gray-200 rounded-xl p-6">
-          <h4 className="font-semibold text-gray-800 mb-4">📋 Dados Lytex</h4>
-          <div className="space-y-3">
-            <div className="flex justify-between items-center">
-              <span className="text-gray-600">ID Lytex</span>
-              <span className="font-mono text-sm bg-gray-100 px-2 py-1 rounded text-gray-800">
-                {subcontaData.lytexId}
-              </span>
-            </div>
-            {subcontaData._id && (
-              <div className="flex justify-between items-center">
-                <span className="text-gray-600">ID Local</span>
-                <span className="font-mono text-sm bg-gray-100 px-2 py-1 rounded text-gray-800">
-                  {subcontaData._id}
-                </span>
-              </div>
-            )}
-            <div className="flex justify-between items-center">
-              <span className="text-gray-600">Credenciais API</span>
-              <span className={`px-3 py-1 ${subcontaData.hasCredentials ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'} rounded-full text-sm font-medium`}>
-                {subcontaData.hasCredentials ? '✓ Configuradas' : '⚠ Não configuradas'}
-              </span>
-            </div>
-            {subcontaData.clientId && (
-              <div className="flex justify-between items-center">
-                <span className="text-gray-600">Client ID</span>
-                <span className="font-mono text-sm bg-blue-50 px-2 py-1 rounded text-blue-800">
-                  {subcontaData.clientId}
-                </span>
-              </div>
-            )}
-            {subcontaData.clientSecret && (
-              <div className="flex justify-between items-center">
-                <span className="text-gray-600">Client Secret</span>
-                <span className="font-mono text-sm bg-blue-50 px-2 py-1 rounded text-blue-800">
-                  {subcontaData.clientSecret}
-                </span>
-              </div>
-            )}
-            {subcontaData.nomeCaixa && (
-              <div className="flex justify-between items-center">
-                <span className="text-gray-600">Caixa Associado</span>
-                <span className="font-medium text-gray-800">
-                  {subcontaData.nomeCaixa}
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Card de Dados Bancários */}
-      <div className="bg-white border border-gray-200 rounded-xl p-6">
-        <h4 className="font-semibold text-gray-800 mb-4">🏦 Dados Bancários</h4>
-
-        {loadingBankAccount ? (
-          <div className="flex items-center justify-center py-4">
-            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-            <span className="ml-2 text-sm text-gray-600">Carregando dados bancários...</span>
-          </div>
-        ) : bankAccountError ? (
-          <div className="text-sm text-red-600 py-2">
-            {bankAccountError}
-          </div>
-        ) : bankAccountData ? (
-          <div className="space-y-3">
-            {bankAccountData.bank && (
-              <>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600">Banco</span>
-                  <span className="font-medium text-gray-800">
-                    {bankAccountData.bank.name}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600">Código do Banco</span>
-                  <span className="font-mono text-sm bg-gray-100 px-2 py-1 rounded text-gray-800">
-                    {bankAccountData.bank.code}
-                  </span>
-                </div>
-                {bankAccountData.bank.ispb && (
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-600">ISPB</span>
-                    <span className="font-mono text-sm bg-gray-100 px-2 py-1 rounded text-gray-800">
-                      {bankAccountData.bank.ispb}
-                    </span>
-                  </div>
-                )}
-              </>
-            )}
-
-            {bankAccountData.agency && (
-              <div className="flex justify-between items-center">
-                <span className="text-gray-600">Agência</span>
-                <span className="font-mono text-sm bg-gray-100 px-2 py-1 rounded text-gray-800">
-                  {bankAccountData.agency.number}
-                  {bankAccountData.agency.dv && `-${bankAccountData.agency.dv}`}
-                </span>
-              </div>
-            )}
-
-            {bankAccountData.account && (
-              <>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600">Tipo de Conta</span>
-                  <span className="font-medium text-gray-800 capitalize">
-                    {bankAccountData.account.type}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600">Conta</span>
-                  <span className="font-mono text-sm bg-gray-100 px-2 py-1 rounded text-gray-800">
-                    {bankAccountData.account.number}
-                    {bankAccountData.account.dv && `-${bankAccountData.account.dv}`}
-                  </span>
-                </div>
-                {bankAccountData.account.operation && (
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-600">Operação</span>
-                    <span className="font-mono text-sm bg-gray-100 px-2 py-1 rounded text-gray-800">
-                      {bankAccountData.account.operation}
-                    </span>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        ) : (
-          <div className="space-y-4">
-            <p className="text-sm text-amber-600 bg-amber-50 p-3 rounded-lg">
-              ⚠️ Nenhum dado bancário cadastrado. Preencha abaixo para receber seus pagamentos.
-            </p>
-
-            {/* Banco e Tipo de Conta na mesma linha */}
-            <div className="grid grid-cols-3 gap-3">
-              {/* Banco (Combobox) - 2 colunas */}
-              <div className="col-span-2 relative">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Banco *</label>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    setBankDropdownOpen(!bankDropdownOpen);
-                    if (!bankDropdownOpen) {
-                      try {
-                        setLoadingBanks(true);
-                        setBanksError(null);
-                        const resp = await bancosService.getAll(bankSearch || undefined);
-                        const list = Array.isArray(resp?.banks) ? resp.banks : (Array.isArray(resp) ? resp : []);
-                        setBanks(list.map((b: any) => ({ code: String(b.code || b.codigo || ''), name: String(b.name || b.nome || '') })));
-                      } catch (e: any) {
-                        setBanksError(e?.response?.data?.message || e?.message || 'Erro ao carregar bancos');
-                      } finally {
-                        setLoadingBanks(false);
-                      }
-                    }
-                  }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg flex items-center justify-between text-sm"
-                >
-                  <span className={selectedBankForSub ? 'text-gray-900' : 'text-gray-400'}>
-                    {selectedBankForSub ? `${selectedBankForSub.code} - ${selectedBankForSub.name}` : 'Selecione o banco'}
-                  </span>
-                  <svg className={`w-4 h-4 text-gray-400 transition-transform ${bankDropdownOpen ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="currentColor">
-                    <path d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 10.168l3.71-2.94a.75.75 0 0 1 .94 1.17l-4.25 3.37a.75.75 0 0 1-.94 0l-4.25-3.37a.75.75 0 0 1-.02-1.06Z" />
-                  </svg>
-                </button>
-                {bankDropdownOpen && (
-                  <div className="absolute z-50 mt-2 w-full bg-white border border-gray-200 rounded-xl shadow-xl">
-                    <div className="p-2 border-b border-gray-100">
-                      <input
-                        type="text"
-                        value={bankSearch}
-                        onChange={async (e) => {
-                          const term = e.target.value;
-                          setBankSearch(term);
-                          try {
-                            setLoadingBanks(true);
-                            const resp = await bancosService.getAll(term || undefined);
-                            const list = Array.isArray(resp?.banks) ? resp.banks : (Array.isArray(resp) ? resp : []);
-                            setBanks(list.map((b: any) => ({ code: String(b.code || b.codigo || ''), name: String(b.name || b.nome || '') })));
-                          } catch (err: any) {
-                            setBanksError(err?.response?.data?.message || err?.message || 'Erro ao buscar bancos');
-                          } finally {
-                            setLoadingBanks(false);
-                          }
-                        }}
-                        placeholder="Buscar por nome ou código..."
-                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
-                        autoFocus
-                      />
-                    </div>
-                    <div className="max-h-64 overflow-y-auto">
-                      {loadingBanks ? (
-                        <div className="p-4 text-center text-gray-500 text-sm">Carregando bancos...</div>
-                      ) : banksError ? (
-                        <div className="p-4 text-center text-red-600 text-sm">{banksError}</div>
-                      ) : banks.filter(b => {
-                        const term = bankSearch.trim().toLowerCase();
-                        return !term || b.name.toLowerCase().includes(term) || b.code.toLowerCase().includes(term);
-                      }).map((b, idx) => (
-                        <button
-                          key={`${b.code}-${idx}`}
-                          type="button"
-                          onClick={() => {
-                            setSelectedBankForSub(b);
-                            setBankDropdownOpen(false);
-                            setBankSearch('');
-                          }}
-                          className="w-full text-left px-3 py-2 hover:bg-gray-50 text-sm"
-                        >
-                          {b.code} - {b.name}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Tipo de Conta - 1 coluna */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de Conta *</label>
-                <div className="grid grid-cols-2 gap-1">
-                  <button
-                    type="button"
-                    onClick={() => setBankAccountType('corrente')}
-                    className={`p-2 text-xs rounded-lg border ${bankAccountType === 'corrente' ? 'border-green-500 bg-green-50 text-green-700 font-medium' : 'border-gray-200'}`}
-                  >
-                    Corrente
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setBankAccountType('poupanca')}
-                    className={`p-2 text-xs rounded-lg border ${bankAccountType === 'poupanca' ? 'border-green-500 bg-green-50 text-green-700 font-medium' : 'border-gray-200'}`}
-                  >
-                    Poupança
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Agência e Conta na mesma linha */}
-            <div className="grid grid-cols-12 gap-2">
-              {/* Agência */}
-              <div className="col-span-3">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Agência *</label>
-                <input
-                  key="bank-agency"
-                  id="bank-agency-input"
-                  type="text"
-                  inputMode="numeric"
-                  placeholder="0000"
-                  value={bankAgency}
-                  onChange={(e) => {
-                    const value = e.target.value.replace(/\D/g, '').slice(0, 5);
-                    handleBankAgencyChange(value);
-                  }}
-                  className="w-full p-2 border border-gray-300 rounded-lg text-sm"
-                  autoComplete="off"
-                />
-              </div>
-              {/* Dígito da Agência */}
-              <div className="col-span-1">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Dígito</label>
-                <input
-                  key="bank-agency-dv"
-                  id="bank-agency-dv-input"
-                  type="text"
-                  inputMode="numeric"
-                  placeholder="0"
-                  value={bankAgencyDv}
-                  onChange={(e) => {
-                    const value = e.target.value.replace(/\D/g, '').slice(0, 1);
-                    handleBankAgencyDvChange(value);
-                  }}
-                  className="w-full p-2 border border-gray-300 rounded-lg text-sm"
-                  autoComplete="off"
-                />
-              </div>
-              {/* Conta */}
-              <div className="col-span-6">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Conta *</label>
-                <input
-                  key="bank-account"
-                  id="bank-account-input"
-                  type="text"
-                  inputMode="numeric"
-                  placeholder="00000000"
-                  value={bankAccount}
-                  onChange={(e) => {
-                    const value = e.target.value.replace(/\D/g, '').slice(0, 12);
-                    handleBankAccountChange(value);
-                  }}
-                  className="w-full p-2 border border-gray-300 rounded-lg text-sm"
-                  autoComplete="off"
-                />
-              </div>
-              {/* Dígito da Conta */}
-              <div className="col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Dígito *</label>
-                <input
-                  key="bank-account-dv"
-                  id="bank-account-dv-input"
-                  type="text"
-                  inputMode="numeric"
-                  placeholder="0"
-                  value={bankAccountDv}
-                  onChange={(e) => {
-                    const value = e.target.value.replace(/\D/g, '').slice(0, 2);
-                    handleBankAccountDvChange(value);
-                  }}
-                  className="w-full p-2 border border-gray-300 rounded-lg text-sm"
-                  autoComplete="off"
-                />
-              </div>
-            </div>
-
-            {/* Erro */}
-            {bankAccountError && (
-              <p className="text-sm text-red-600">{bankAccountError}</p>
-            )}
-
-            {/* Botão Confirmar */}
-            <button
-              type="button"
-              onClick={handleSaveBankAccount}
-              disabled={savingBankAccount || !selectedBankForSub || !bankAgency || !bankAccount || !bankAccountDv}
-              className="w-full py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-            >
-              {savingBankAccount ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                  Salvando...
-                </>
-              ) : (
-                '✅ Confirmar dados bancários'
-              )}
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* Card de Caixas Gerenciados (apenas admin/master) */}
-      {caixasGerenciados.length > 0 && (
-        <div className="bg-white border border-gray-200 rounded-xl p-6">
-          <h4 className="font-semibold text-gray-800 mb-4">📦 Caixas Gerenciados ({caixasGerenciados.length})</h4>
-          <div className="space-y-2">
-            {caixasGerenciados.map((caixa) => (
-              <div key={caixa._id} className="flex justify-between items-center py-2 border-b border-gray-100 last:border-b-0">
-                <span className="font-medium text-gray-800">{caixa.nome}</span>
-                <span className={`px-2 py-1 rounded-full text-xs font-medium ${caixa.status === 'ativo' ? 'bg-green-100 text-green-700' :
-                  caixa.status === 'completo' ? 'bg-blue-100 text-blue-700' :
-                    caixa.status === 'finalizado' ? 'bg-gray-100 text-gray-700' :
-                      'bg-yellow-100 text-yellow-700'
-                  }`}>
-                  {caixa.status || 'Rascunho'}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Card de Endereço */}
-      {subcontaData?.address && (
-        <div className="bg-white border border-gray-200 rounded-xl p-6">
-          <h4 className="font-semibold text-gray-800 mb-4">📍 Endereço</h4>
-          <div className="space-y-3">
-            <div className="flex justify-between">
-              <span className="text-gray-600">Logradouro</span>
-              <span className="font-medium text-gray-800">
-                {subcontaData.address.street}{subcontaData.address.number ? `, ${subcontaData.address.number}` : ''}
-              </span>
-            </div>
-            {subcontaData.address.complement && (
-              <div className="flex justify-between">
-                <span className="text-gray-600">Complemento</span>
-                <span className="font-medium text-gray-800">{subcontaData.address.complement}</span>
-              </div>
-            )}
-            <div className="flex justify-between">
-              <span className="text-gray-600">Bairro</span>
-              <span className="font-medium text-gray-800">{subcontaData.address.zone}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600">Cidade/UF</span>
-              <span className="font-medium text-gray-800">{subcontaData.address.city}/{subcontaData.address.state}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600">CEP</span>
-              <span className="font-medium text-gray-800">{subcontaData.address.zip}</span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Informações Importantes */}
-      <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-        <h4 className="font-semibold text-blue-900 mb-2">Informações Importantes</h4>
-        <ul className="space-y-2 text-sm text-blue-800">
-          <li>• Saques processados em até 1 dia útil</li>
-          <li>• Sem taxa para transferências acima de R$ 100</li>
-          <li>• Suporte disponível de segunda a sexta, 9h às 18h</li>
-          {!subcontaData?.hasCredentials && (
-            <li className="text-orange-700">• ⚠ Credenciais API não configuradas - solicite ao master</li>
-          )}
-        </ul>
-      </div>
-    </div>
-  );
-
-
   // BLOCK: Users must sign contract before accessing wallet
   if (usuario?.tipo === 'usuario' && !usuario?.contratoAssinado) {
     return (
@@ -2177,452 +1073,21 @@ const WalletDashboard = () => {
           </div>
         </div>
 
-        <div className="max-w-6xl mx-auto px-6 py-10">
-          <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
-            {checkingSubAccount ? (
-              <>
-                <h2 className="text-xl font-semibold text-gray-800 mb-2">
-                  Carregando carteira
-                </h2>
-                <p className="text-sm text-gray-600">
-                  Verificando sua subconta...
-                </p>
-              </>
-            ) : (
-              <>
-                <h2 className="text-2xl font-bold text-gray-900 mb-3">
-                  Crie sua subconta para começar a usar a carteira
-                </h2>
-                <div className="text-sm text-gray-700 mb-6 space-y-2">
-                  <p>
-                    Para que você possa receber seus pontos do caixa de forma automática e segura, precisamos criar sua subconta no nosso sistema de pagamentos.
-                  </p>
-                  <p className="font-medium">Por que isso é importante?</p>
-                  <ul className="list-disc pl-5 space-y-1">
-                    <li>✓ Recebimento automático dos seus valores</li>
-                    <li>✓ Segurança nas transações</li>
-                    <li>✓ Rastreamento completo de todos os pagamentos</li>
-                    <li>✓ Proteção dos seus dados financeiros</li>
-                  </ul>
-                  <p>
-                    Preencha os dados abaixo: Alguns campos já foram preenchidos automaticamente com base no seu cadastro. Verifique se as informações estão corretas e complete os dados que faltam.
-                  </p>
-                </div>
-              </>
-            )}
-
-            {checkingSubAccount ? null : (
-              <>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Nome completo
-                    </label>
-                    <input
-                      type="text"
-                      value={subForm.name}
-                      onChange={(e) =>
-                        setSubForm({ ...subForm, name: e.target.value })
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      {subForm.type === 'pj' ? 'CNPJ' : 'CPF'}
-                    </label>
-                    <input
-                      type="text"
-                      value={subForm.cpfCnpj}
-                      onChange={(e) =>
-                        setSubForm({ ...subForm, cpfCnpj: e.target.value })
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Tipo
-                    </label>
-                    <select
-                      value={subForm.type}
-                      onChange={(e) =>
-                        setSubForm({ ...subForm, type: e.target.value as 'pf' | 'pj' })
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value="pf">Pessoa Física</option>
-                      <option value="pj">Pessoa Jurídica</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Telefone
-                    </label>
-                    <input
-                      type="text"
-                      value={subForm.cellphone}
-                      onChange={(e) =>
-                        setSubForm({ ...subForm, cellphone: e.target.value })
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      E-mail
-                    </label>
-                    <input
-                      type="email"
-                      value={subForm.email}
-                      onChange={(e) =>
-                        setSubForm({ ...subForm, email: e.target.value })
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Sobre o negócio
-                    </label>
-                    <input
-                      type="text"
-                      value={subForm.aboutBusiness}
-                      onChange={(e) =>
-                        setSubForm({ ...subForm, aboutBusiness: e.target.value })
-                      }
-                      placeholder="Ex: Administrador de caixas"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Ramo de atividade
-                    </label>
-                    <input
-                      type="text"
-                      value={subForm.branchOfActivity}
-                      onChange={(e) =>
-                        setSubForm({ ...subForm, branchOfActivity: e.target.value })
-                      }
-                      placeholder="Serviços"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                  {subForm.type === 'pj' && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Nome Fantasia</label>
-                      <input
-                        type="text"
-                        value={subForm.fantasyName}
-                        onChange={(e) => setSubForm({ ...subForm, fantasyName: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-                  )}
-                </div>
-
-                <div className="mt-6">
-                  <h3 className="text-sm font-semibold text-gray-800 mb-3">Administrador da conta</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">CPF</label>
-                      <input
-                        type="text"
-                        value={subForm.adminCpf}
-                        onChange={(e) => setSubForm({ ...subForm, adminCpf: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-                    <div className="md:col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Nome completo</label>
-                      <input
-                        type="text"
-                        value={subForm.adminFullName}
-                        onChange={(e) => setSubForm({ ...subForm, adminFullName: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Telefone</label>
-                      <input
-                        type="text"
-                        value={subForm.adminCellphone}
-                        onChange={(e) => setSubForm({ ...subForm, adminCellphone: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Data de nascimento</label>
-                      <input
-                        type="date"
-                        value={subForm.adminBirthDate}
-                        onChange={(e) => setSubForm({ ...subForm, adminBirthDate: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Nome da mãe</label>
-                      <input
-                        type="text"
-                        value={subForm.adminMotherName}
-                        onChange={(e) => setSubForm({ ...subForm, adminMotherName: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Dados Bancários */}
-                <div className="mt-6">
-                  <h3 className="text-sm font-semibold text-gray-800 mb-3">Dados bancários</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                    <div className="relative">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Banco</label>
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          setBankDropdownOpen(!bankDropdownOpen);
-                          try {
-                            setLoadingBanks(true);
-                            setBanksError(null);
-                            const resp = await bancosService.getAll(bankSearch || undefined);
-                            const list = Array.isArray(resp?.banks) ? resp.banks : (Array.isArray(resp) ? resp : []);
-                            setBanks(list.map((b: any) => ({ code: String(b.code || b.codigo || ''), name: String(b.name || b.nome || '') })));
-                          } catch (e: any) {
-                            setBanksError(e?.response?.data?.message || e?.message || 'Erro ao carregar bancos');
-                          } finally {
-                            setLoadingBanks(false);
-                          }
-                        }}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg flex items-center justify-between"
-                      >
-                        <span className={selectedBankForSub ? 'text-gray-900' : 'text-gray-400'}>
-                          {selectedBankForSub ? `${selectedBankForSub.code} - ${selectedBankForSub.name}` : 'Selecione o banco'}
-                        </span>
-                        <svg className={`w-4 h-4 text-gray-400 ${bankDropdownOpen ? 'rotate-180' : ''}`} viewBox="0 0 20 20"><path d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 10.168l3.71-2.94a.75.75 0 0 1 .94 1.17l-4.25 3.37a.75.75 0 0 1-.94 0l-4.25-3.37a.75.75 0 0 1-.02-1.06Z" /></svg>
-                      </button>
-                      {bankDropdownOpen && (
-                        <div className="absolute z-50 mt-2 w-full bg-white border border-gray-200 rounded-xl shadow-xl">
-                          <div className="p-2 border-b border-gray-100">
-                            <input
-                              type="text"
-                              value={bankSearch}
-                              onChange={async (e) => {
-                                const term = e.target.value;
-                                setBankSearch(term);
-                                try {
-                                  setLoadingBanks(true);
-                                  const resp = await bancosService.getAll(term || undefined);
-                                  const list = Array.isArray(resp?.banks) ? resp.banks : (Array.isArray(resp) ? resp : []);
-                                  setBanks(list.map((b: any) => ({ code: String(b.code || b.codigo || ''), name: String(b.name || b.nome || '') })));
-                                } catch (err: any) {
-                                  setBanksError(err?.response?.data?.message || err?.message || 'Erro ao buscar bancos');
-                                } finally {
-                                  setLoadingBanks(false);
-                                }
-                              }}
-                              placeholder="Buscar por nome ou código..."
-                              className="w-full px-3 py-2 border border-gray-200 rounded-lg"
-                              autoFocus
-                            />
-                          </div>
-                          <div className="max-h-64 overflow-y-auto">
-                            {loadingBanks ? (
-                              <div className="p-4 text-center text-gray-500">Carregando bancos...</div>
-                            ) : banksError ? (
-                              <div className="p-4 text-center text-red-600">{banksError}</div>
-                            ) : banks.filter(b => {
-                              const term = bankSearch.trim().toLowerCase();
-                              return !term || b.name.toLowerCase().includes(term) || b.code.toLowerCase().includes(term);
-                            }).map((b, idx) => (
-                              <button
-                                key={`${b.code}-${idx}`}
-                                type="button"
-                                onClick={() => { setSelectedBankForSub(b); setBankDropdownOpen(false); }}
-                                className="w-full text-left px-3 py-2 hover:bg-gray-50"
-                              >
-                                {b.code} - {b.name}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de conta</label>
-                      <div className="grid grid-cols-2 gap-2">
-                        <button type="button" onClick={() => setBankAccountType('corrente')} className={`px-3 py-2 rounded-lg border ${bankAccountType === 'corrente' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-300 text-gray-700'}`}>Conta Corrente</button>
-                        <button type="button" onClick={() => setBankAccountType('poupanca')} className={`px-3 py-2 rounded-lg border ${bankAccountType === 'poupanca' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-300 text-gray-700'}`}>Conta Poupança</button>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Agência</label>
-                      <input type="text" value={bankAgency} onChange={(e) => setBankAgency(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg" />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Dígito</label>
-                      <input type="text" value={bankAgencyDv} onChange={(e) => setBankAgencyDv(e.target.value)} maxLength={1} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-center" />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Conta</label>
-                      <input type="text" value={bankAccount} onChange={(e) => setBankAccount(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg" />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Dígito da conta</label>
-                      <input type="text" value={bankAccountDv} onChange={(e) => setBankAccountDv(e.target.value)} maxLength={2} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-center" />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-6">
-                  <h3 className="text-sm font-semibold text-gray-800 mb-3">
-                    Endereço
-                  </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Rua
-                      </label>
-                      <input
-                        type="text"
-                        value={subForm.addressStreet}
-                        onChange={(e) =>
-                          setSubForm({ ...subForm, addressStreet: e.target.value })
-                        }
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Bairro
-                      </label>
-                      <input
-                        type="text"
-                        value={subForm.addressZone}
-                        onChange={(e) =>
-                          setSubForm({ ...subForm, addressZone: e.target.value })
-                        }
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Cidade
-                      </label>
-                      <input
-                        type="text"
-                        value={subForm.addressCity}
-                        onChange={(e) =>
-                          setSubForm({ ...subForm, addressCity: e.target.value })
-                        }
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Estado
-                      </label>
-                      <input
-                        type="text"
-                        value={subForm.addressState}
-                        onChange={(e) =>
-                          setSubForm({ ...subForm, addressState: e.target.value })
-                        }
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        CEP
-                      </label>
-                      <input
-                        type="text"
-                        value={subForm.addressZip}
-                        onChange={(e) => {
-                          const digits = e.target.value.replace(/\D/g, '').slice(0, 8);
-                          setSubForm({ ...subForm, addressZip: digits });
-                        }}
-                        onBlur={async () => {
-                          const cep = String(subForm.addressZip || '').replace(/\D/g, '');
-                          if (cep.length !== 8) return;
-                          try {
-                            const resp = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
-                            const data = await resp.json();
-                            if (!data?.erro) {
-                              setSubForm({
-                                ...subForm,
-                                addressStreet: data.logradouro || subForm.addressStreet,
-                                addressZone: data.bairro || subForm.addressZone,
-                                addressCity: data.localidade || subForm.addressCity,
-                                addressState: data.uf || subForm.addressState,
-                              });
-                            }
-                          } catch { }
-                        }}
-                        placeholder="00000000"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Número
-                      </label>
-                      <input
-                        type="text"
-                        value={subForm.addressNumber}
-                        onChange={(e) =>
-                          setSubForm({ ...subForm, addressNumber: e.target.value })
-                        }
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Complemento
-                      </label>
-                      <input
-                        type="text"
-                        value={subForm.addressComplement}
-                        onChange={(e) =>
-                          setSubForm({
-                            ...subForm,
-                            addressComplement: e.target.value,
-                          })
-                        }
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {subAccountError && (
-                  <p className="mb-4 text-sm text-red-600">{subAccountError}</p>
-                )}
-
-                <button
-                  onClick={handleCreateSubAccount}
-                  disabled={creatingSubAccount}
-                  className="w-full md:w-auto px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-60"
-                >
-                  {creatingSubAccount ? 'Criando subconta...' : 'Criar Subconta'}
-                </button>
-              </>
-            )}
-          </div>
-        </div>
+        <SubAccountCreation
+          usuario={usuario}
+          updateUsuario={updateUsuario}
+          onSuccess={() => {
+            setHasSubAccount(true);
+            setSuccessMessage('Subconta criada com sucesso! ✅');
+            setShowSuccessModal(true);
+            setTimeout(() => {
+              setShowSuccessModal(false);
+              window.location.reload();
+            }, 2000);
+          }}
+          setOnboardingUrl={setOnboardingUrl}
+          setShowOnboardingModal={setShowOnboardingModal}
+        />
       </div>
     );
   }
@@ -2667,7 +1132,16 @@ const WalletDashboard = () => {
 
       <div className="max-w-6xl mx-auto px-6 py-6">
         {activeTab === 'overview' && <OverviewTab />}
-        {activeTab === 'account' && <AccountTab />}
+        {activeTab === 'account' && (
+          <CarteiraDataAccounts
+            usuario={usuario}
+            subcontaData={subcontaData}
+            accountData={accountData}
+            caixasGerenciados={caixasGerenciados}
+            hasSubAccount={hasSubAccount}
+            createSubAccountAction={() => { }}
+          />
+        )}
       </div>
 
       {/* Success Modal */}
@@ -2748,150 +1222,8 @@ const WalletDashboard = () => {
           </motion.div>
         </div>
       )}
-
-
-
-
-      {/* Onboarding Modal with Iframe - WebView Style */}
-      {showOnboardingModal && onboardingUrl && (
-        <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-[9999] p-2 md:p-4 backdrop-blur-sm">
-          <motion.div
-            initial={{ scale: 0.95, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            className="bg-white rounded-2xl w-full max-w-4xl h-[90vh] shadow-2xl overflow-hidden flex flex-col"
-          >
-            {/* Header do Modal */}
-            <div className="bg-gray-50 border-b border-gray-200 p-4 flex justify-between items-center flex-shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                  <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
-                <div>
-                  <h3 className="font-bold text-gray-800 text-sm md:text-base">Verificação de Identidade</h3>
-                  <p className="text-xs text-gray-500">Ambiente seguro</p>
-                </div>
-              </div>
-
-              {/* Botão de Fechar / Atualizar (Apenas recarrega a página) */}
-              <button
-                onClick={() => window.location.reload()}
-                className="p-2 hover:bg-gray-200 rounded-lg transition-colors text-gray-500"
-                title="Fechar e verificar status"
-              >
-                <X size={24} />
-              </button>
-            </div>
-
-            {/* Texto Explicativo Colapsável */}
-            <motion.div
-              initial={false}
-              animate={{
-                height: isHeaderExpanded ? 'auto' : 0,
-                opacity: isHeaderExpanded ? 1 : 0
-              }}
-              transition={{ duration: 0.4, ease: "easeInOut" }}
-              className="bg-blue-50/50 border-b border-blue-100 overflow-hidden"
-            >
-              <div className="p-4 overflow-y-auto max-h-[30vh]">
-                <div className="flex justify-between items-start mb-2">
-                  <h4 className="text-red-600 font-bold flex items-center gap-2">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
-                    Por que verificar sua identidade?
-                  </h4>
-                  <button onClick={() => setIsHeaderExpanded(false)} className="text-blue-400 hover:text-blue-600 p-1">
-                    <span className="text-xs font-semibold">Ocultar</span>
-                  </button>
-                </div>
-
-                <div className="text-sm text-gray-700 space-y-3 leading-relaxed">
-                  <p>
-                    A captura do documento e reconhecimento facial são <strong>obrigatórios por lei</strong> e garantem:
-                  </p>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs md:text-sm">
-                    <ul className="list-disc pl-5 space-y-1">
-                      <li>Proteção contra fraudes e golpes</li>
-                      <li>Segurança nas suas transações financeiras</li>
-                      <li>Conformidade com as normas do Banco Central</li>
-                    </ul>
-                    <ul className="list-disc pl-5 space-y-1">
-                      <li>Garantia de que as transferências sejam feitas para a conta correta</li>
-                      <li>Ambiente seguro para todos os usuários</li>
-                    </ul>
-                  </div>
-
-                  <p className="text-xs text-gray-500 mt-2 bg-white/50 p-2 rounded border border-gray-100 italic">
-                    No Juntix, trabalhamos com dinheiro real. A verificação garante que você receberá seus recursos na sua própria conta bancária, evitando desvios ou saques não autorizados.
-                    <br />
-                    <span className="font-semibold not-italic text-blue-600 block mt-1">
-                      Seus dados são criptografados e protegidos conforme a LGPD. Este processo leva menos de 2 minutos.
-                    </span>
-                  </p>
-                </div>
-              </div>
-            </motion.div>
-
-            {!isHeaderExpanded && (
-              <button
-                onClick={() => setIsHeaderExpanded(true)}
-                className="w-full bg-blue-50 text-blue-600 text-xs py-1 hover:bg-blue-100 transition-colors flex items-center justify-center gap-1"
-              >
-                <span className="font-bold">?</span> Por que preciso verificar?
-              </button>
-            )}
-
-            {/* IFRAME Container */}
-            <div className="flex-1 bg-gray-100 relative">
-              <iframe
-                ref={iframeRef}
-                key={onboardingUrl}
-                src={onboardingUrl}
-                title="Verificação de Identidade"
-                allow="camera; microphone; geolocation" // Permissões críticas para face match
-                className="w-full h-full border-0"
-              />
-            </div>
-
-
-          </motion.div>
-        </div>
-      )}
-      {/* Error Toast (if needed) */}
-      {subAccountError && (
-        <div className="fixed bottom-6 right-6 z-50">
-          <motion.div
-            initial={{ x: 100, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            exit={{ x: 100, opacity: 0 }}
-            className="bg-red-50 border-l-4 border-red-500 rounded-lg shadow-lg p-4 max-w-md"
-          >
-            <div className="flex items-start gap-3">
-              <div className="flex-shrink-0">
-                <svg className="w-5 h-5 text-red-600" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                </svg>
-              </div>
-              <div className="flex-1">
-                <h3 className="text-sm font-medium text-red-800">Erro ao criar subconta</h3>
-                <p className="mt-1 text-sm text-red-700">{subAccountError}</p>
-              </div>
-              <button
-                onClick={() => setSubAccountError(null)}
-                className="flex-shrink-0 text-red-400 hover:text-red-600"
-              >
-                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                </svg>
-              </button>
-            </div>
-          </motion.div>
-        </div>
-      )}
     </div>
   );
 };
-
-
 
 export default WalletDashboard;

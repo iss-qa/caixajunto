@@ -15,7 +15,6 @@ import { Pagamentos } from './pages/Pagamentos';
 import { PainelMaster } from './pages/PainelMaster';
 import ContratoViewer from './pages/Contrato';
 import Carteira from './pages/Carteira';
-import CarteiraBanco from './pages/CarteiraBanco';
 import SplitConfig from './pages/SplitConfig';
 import GerenciarSplit from './pages/GerenciarSplit';
 import { GerenciarComunicacao } from './pages/GerenciarComunicacao';
@@ -112,7 +111,6 @@ function AppRoutes() {
         } />
         <Route path="/contrato" element={<ContratoViewer />} />
         <Route path="/carteira" element={<Carteira />} />
-        <Route path="/carteira/banco" element={<CarteiraBanco />} />
         <Route path="/painel-master/split" element={
           <RoleRoute allow={["master"]}>
             <SplitConfig />
