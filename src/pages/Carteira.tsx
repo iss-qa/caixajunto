@@ -1814,45 +1814,84 @@ const WalletDashboard = () => {
 
             {/* Banco e Tipo de Conta na mesma linha */}
             <div className="grid grid-cols-3 gap-3">
-              {/* Banco (Dropdown) - 2 colunas */}
+              {/* Banco (Combobox) - 2 colunas */}
               <div className="col-span-2 relative">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Banco *</label>
-                <input
-                  type="text"
-                  placeholder="Digite para buscar..."
-                  value={selectedBankForSub ? `${selectedBankForSub.code} - ${selectedBankForSub.name}` : bankSearch}
-                  onChange={(e) => {
-                    setBankSearch(e.target.value);
-                    setSelectedBankForSub(null);
-                    if (e.target.value.length >= 2) {
-                      setBankDropdownOpen(true);
-                      // Fetch banks
-                      bancosService.getAll(e.target.value).then((data: any) => {
-                        setBanks(data || []);
-                      }).catch(() => setBanks([]));
-                    } else {
-                      setBankDropdownOpen(false);
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setBankDropdownOpen(!bankDropdownOpen);
+                    if (!bankDropdownOpen) {
+                      try {
+                        setLoadingBanks(true);
+                        setBanksError(null);
+                        const resp = await bancosService.getAll(bankSearch || undefined);
+                        const list = Array.isArray(resp?.banks) ? resp.banks : (Array.isArray(resp) ? resp : []);
+                        setBanks(list.map((b: any) => ({ code: String(b.code || b.codigo || ''), name: String(b.name || b.nome || '') })));
+                      } catch (e: any) {
+                        setBanksError(e?.response?.data?.message || e?.message || 'Erro ao carregar bancos');
+                      } finally {
+                        setLoadingBanks(false);
+                      }
                     }
                   }}
-                  onFocus={() => bankSearch.length >= 2 && setBankDropdownOpen(true)}
-                  className="w-full p-2 border border-gray-300 rounded-lg text-sm"
-                />
-                {bankDropdownOpen && banks.length > 0 && (
-                  <div className="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                    {banks.map((bank) => (
-                      <button
-                        key={bank.code}
-                        type="button"
-                        onClick={() => {
-                          setSelectedBankForSub(bank);
-                          setBankSearch('');
-                          setBankDropdownOpen(false);
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg flex items-center justify-between text-sm"
+                >
+                  <span className={selectedBankForSub ? 'text-gray-900' : 'text-gray-400'}>
+                    {selectedBankForSub ? `${selectedBankForSub.code} - ${selectedBankForSub.name}` : 'Selecione o banco'}
+                  </span>
+                  <svg className={`w-4 h-4 text-gray-400 transition-transform ${bankDropdownOpen ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="currentColor">
+                    <path d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 10.168l3.71-2.94a.75.75 0 0 1 .94 1.17l-4.25 3.37a.75.75 0 0 1-.94 0l-4.25-3.37a.75.75 0 0 1-.02-1.06Z" />
+                  </svg>
+                </button>
+                {bankDropdownOpen && (
+                  <div className="absolute z-50 mt-2 w-full bg-white border border-gray-200 rounded-xl shadow-xl">
+                    <div className="p-2 border-b border-gray-100">
+                      <input
+                        type="text"
+                        value={bankSearch}
+                        onChange={async (e) => {
+                          const term = e.target.value;
+                          setBankSearch(term);
+                          try {
+                            setLoadingBanks(true);
+                            const resp = await bancosService.getAll(term || undefined);
+                            const list = Array.isArray(resp?.banks) ? resp.banks : (Array.isArray(resp) ? resp : []);
+                            setBanks(list.map((b: any) => ({ code: String(b.code || b.codigo || ''), name: String(b.name || b.nome || '') })));
+                          } catch (err: any) {
+                            setBanksError(err?.response?.data?.message || err?.message || 'Erro ao buscar bancos');
+                          } finally {
+                            setLoadingBanks(false);
+                          }
                         }}
-                        className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100"
-                      >
-                        {bank.code} - {bank.name}
-                      </button>
-                    ))}
+                        placeholder="Buscar por nome ou código..."
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                        autoFocus
+                      />
+                    </div>
+                    <div className="max-h-64 overflow-y-auto">
+                      {loadingBanks ? (
+                        <div className="p-4 text-center text-gray-500 text-sm">Carregando bancos...</div>
+                      ) : banksError ? (
+                        <div className="p-4 text-center text-red-600 text-sm">{banksError}</div>
+                      ) : banks.filter(b => {
+                        const term = bankSearch.trim().toLowerCase();
+                        return !term || b.name.toLowerCase().includes(term) || b.code.toLowerCase().includes(term);
+                      }).map((b, idx) => (
+                        <button
+                          key={`${b.code}-${idx}`}
+                          type="button"
+                          onClick={() => {
+                            setSelectedBankForSub(b);
+                            setBankDropdownOpen(false);
+                            setBankSearch('');
+                          }}
+                          className="w-full text-left px-3 py-2 hover:bg-gray-50 text-sm"
+                        >
+                          {b.code} - {b.name}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
