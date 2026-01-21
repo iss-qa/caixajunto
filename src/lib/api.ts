@@ -420,16 +420,29 @@ export const subcontasService = {
       complement?: string;
       zip: string;
     };
-    bankAccount: {
-      bankCode: string;
-      bankName: string;
-      bankIspb?: string;
-      accountType: 'corrente' | 'poupanca';
-      agency: string;
-      agencyDv?: string;
-      accountNumber: string;
-      accountDv: string;
-    };
+    banksAccounts: Array<{
+      _bankAccountId?: string;
+      owner: {
+        name: string;
+        type: string;
+        cpfCnpj: string;
+      };
+      bank: {
+        code: string;
+        name: string;
+        ispb?: string;
+      };
+      agency: {
+        number: string;
+        dv?: string;
+      };
+      account: {
+        type: string;
+        number: string;
+        dv: string;
+      };
+      creditCard?: boolean;
+    }>;
   }) => {
     const response = await api.put(`/subcontas/${lytexId}/bank-account`, data);
     return response.data;

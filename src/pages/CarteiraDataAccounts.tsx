@@ -1,33 +1,260 @@
-
 import { useState, useRef, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { Check, X, FileText, AlertCircle, Wallet } from 'lucide-react';
-import { useAuth } from '../contexts/AuthContext';
-import { bancosService, subcontasService, contaBancariaService } from '../lib/api';
-import { formatDate } from '../lib/utils';
-import { useNavigate } from 'react-router-dom';
-import { BankAccountForm } from './Carteira/components/BankAccountForm';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Check, X, FileText, AlertCircle, Wallet, Building2, CreditCard, MapPin, User, Phone, Mail, Calendar, Hash, Info, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
 
-// Interface para props do componente de Criação de Subconta
-interface SubAccountCreationProps {
-    usuario: any;
-    updateUsuario: (data: any) => void;
-    onSuccess: () => void;
-    setOnboardingUrl: (url: string) => void;
-    setShowOnboardingModal: (show: boolean) => void;
-}
+import { subcontasService, contaBancariaService } from '../lib/api';
 
+// Mock data
+const mockUsuario = {
+    _id: 'user-123',
+    nome: 'João Silva',
+    cpf: '123.456.789-00',
+    telefone: '(71) 99999-9999',
+    email: 'joao@example.com'
+};
+
+const formatDate = (date: string) => {
+    return new Date(date).toLocaleDateString('pt-BR');
+};
+
+// Componente de Input Moderno
+const ModernInput = ({
+    label,
+    value,
+    onChange,
+    type = 'text',
+    placeholder = '',
+    icon: Icon,
+    error,
+    required = false,
+    onBlur,
+    className = ''
+}: any) => {
+    const [isFocused, setIsFocused] = useState(false);
+    const hasValue = value && value.length > 0;
+
+    return (
+        <div className={`relative ${className}`}>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+                {label}
+                {required && <span className="text-red-500 ml-1">*</span>}
+            </label>
+            <div className="relative">
+                {Icon && (
+                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
+                        <Icon size={18} />
+                    </div>
+                )}
+                <input
+                    type={type}
+                    value={value}
+                    onChange={onChange}
+                    onFocus={() => setIsFocused(true)}
+                    onBlur={(e) => {
+                        setIsFocused(false);
+                        onBlur?.(e);
+                    }}
+                    placeholder={placeholder}
+                    className={`
+            w-full ${Icon ? 'pl-12' : 'pl-4'} pr-4 py-3.5 
+            bg-white border-2 rounded-xl
+            text-gray-900 placeholder-gray-400
+            transition-all duration-200 ease-in-out
+            ${isFocused
+                            ? 'border-blue-500 ring-4 ring-blue-100'
+                            : hasValue
+                                ? 'border-gray-300 hover:border-gray-400'
+                                : 'border-gray-200 hover:border-gray-300'
+                        }
+            ${error ? 'border-red-300 ring-4 ring-red-50' : ''}
+            focus:outline-none
+            font-medium
+          `}
+                />
+                {hasValue && !error && (
+                    <div className="absolute right-4 top-1/2 -translate-y-1/2 text-green-500">
+                        <CheckCircle2 size={18} />
+                    </div>
+                )}
+                {error && (
+                    <div className="absolute right-4 top-1/2 -translate-y-1/2 text-red-500">
+                        <XCircle size={18} />
+                    </div>
+                )}
+            </div>
+            {error && (
+                <motion.p
+                    initial={{ opacity: 0, y: -5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="mt-2 text-sm text-red-600 flex items-center gap-1"
+                >
+                    <AlertCircle size={14} />
+                    {error}
+                </motion.p>
+            )}
+        </div>
+    );
+};
+
+// Componente de Select Moderno
+const ModernSelect = ({ label, value, onChange, options, icon: Icon, required = false }: any) => {
+    const [isFocused, setIsFocused] = useState(false);
+
+    return (
+        <div className="relative">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+                {label}
+                {required && <span className="text-red-500 ml-1">*</span>}
+            </label>
+            <div className="relative">
+                {Icon && (
+                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
+                        <Icon size={18} />
+                    </div>
+                )}
+                <select
+                    value={value}
+                    onChange={onChange}
+                    onFocus={() => setIsFocused(true)}
+                    onBlur={() => setIsFocused(false)}
+                    className={`
+            w-full ${Icon ? 'pl-12' : 'pl-4'} pr-10 py-3.5
+            bg-white border-2 rounded-xl
+            text-gray-900 font-medium
+            transition-all duration-200 ease-in-out
+            ${isFocused ? 'border-blue-500 ring-4 ring-blue-100' : 'border-gray-200 hover:border-gray-300'}
+            focus:outline-none
+            appearance-none cursor-pointer
+          `}
+                >
+                    {options.map((opt: any) => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                </select>
+                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                    <svg width="12" height="8" viewBox="0 0 12 8" fill="none">
+                        <path d="M1 1.5L6 6.5L11 1.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// Componente BankAccountForm Modernizado
+const BankAccountForm = ({
+    bankCode,
+    bankName,
+    agency,
+    agencyDv,
+    account,
+    accountDv,
+    accountType,
+    onChange,
+    error
+}: any) => {
+    const bancos = [
+        { code: '001', name: 'Banco do Brasil' },
+        { code: '033', name: 'Santander' },
+        { code: '104', name: 'Caixa Econômica' },
+        { code: '237', name: 'Bradesco' },
+        { code: '341', name: 'Itaú' },
+        { code: '260', name: 'Nu Pagamentos S.A' },
+        { code: '077', name: 'Banco Inter' },
+    ];
+
+    return (
+        <div className="space-y-5">
+            <ModernSelect
+                label="Banco"
+                value={bankCode || ''}
+                onChange={(e: any) => {
+                    const selected = bancos.find(b => b.code === e.target.value);
+                    onChange({
+                        bankCode: selected?.code,
+                        bankName: selected?.name
+                    });
+                }}
+                options={[
+                    { value: '', label: 'Selecione o banco' },
+                    ...bancos.map(b => ({ value: b.code, label: `${b.code} - ${b.name}` }))
+                ]}
+                icon={Building2}
+                required
+            />
+
+            <div className="grid grid-cols-2 gap-4">
+                <ModernInput
+                    label="Agência"
+                    value={agency}
+                    onChange={(e: any) => onChange({ agency: e.target.value.replace(/\D/g, '').slice(0, 4) })}
+                    placeholder="0000"
+                    icon={Hash}
+                    required
+                />
+                <ModernInput
+                    label="Dígito"
+                    value={agencyDv}
+                    onChange={(e: any) => onChange({ agencyDv: e.target.value.replace(/\D/g, '').slice(0, 1) })}
+                    placeholder="0"
+                />
+            </div>
+
+            <ModernSelect
+                label="Tipo de Conta"
+                value={accountType}
+                onChange={(e: any) => onChange({ accountType: e.target.value })}
+                options={[
+                    { value: 'corrente', label: 'Conta Corrente' },
+                    { value: 'poupanca', label: 'Conta Poupança' }
+                ]}
+                icon={Wallet}
+                required
+            />
+
+            <div className="grid grid-cols-2 gap-4">
+                <ModernInput
+                    label="Número da Conta"
+                    value={account}
+                    onChange={(e: any) => onChange({ account: e.target.value.replace(/\D/g, '').slice(0, 12) })}
+                    placeholder="00000000"
+                    icon={CreditCard}
+                    required
+                />
+                <ModernInput
+                    label="Dígito"
+                    value={accountDv}
+                    onChange={(e: any) => onChange({ accountDv: e.target.value.replace(/\D/g, '').slice(0, 2) })}
+                    placeholder="0"
+                    required
+                />
+            </div>
+
+            {error && (
+                <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="p-4 bg-red-50 border-2 border-red-200 rounded-xl flex items-start gap-3"
+                >
+                    <AlertCircle className="text-red-600 mt-0.5 flex-shrink-0" size={20} />
+                    <p className="text-sm text-red-800 font-medium">{error}</p>
+                </motion.div>
+            )}
+        </div>
+    );
+};
+
+// Componente SubAccountCreation Modernizado
 export const SubAccountCreation = ({
-    usuario,
-    updateUsuario,
-    onSuccess,
-    setOnboardingUrl,
-    setShowOnboardingModal
-}: SubAccountCreationProps) => {
+    usuario = mockUsuario,
+    updateUsuario = () => { },
+    onSuccess = () => { },
+    setOnboardingUrl = () => { },
+    setShowOnboardingModal = () => { }
+}: any) => {
     const [creatingSubAccount, setCreatingSubAccount] = useState(false);
     const [subAccountError, setSubAccountError] = useState<string | null>(null);
 
-    // Estado do formulário de subconta
     const [subForm, setSubForm] = useState({
         type: 'pf',
         cpfCnpj: usuario?.cpf || '',
@@ -55,8 +282,6 @@ export const SubAccountCreation = ({
         adminMotherName: '',
     });
 
-    // Estados bancários locais para o formulário de criação
-
     const [selectedBankForSub, setSelectedBankForSub] = useState<{ code: string; name: string } | null>(null);
     const [bankAgency, setBankAgency] = useState('');
     const [bankAgencyDv, setBankAgencyDv] = useState('');
@@ -71,6 +296,7 @@ export const SubAccountCreation = ({
             }
             setCreatingSubAccount(true);
             setSubAccountError(null);
+
             const payload: any = {
                 type: subForm.type,
                 cpfCnpj: subForm.cpfCnpj,
@@ -80,140 +306,65 @@ export const SubAccountCreation = ({
                 email: subForm.email,
                 aboutBusiness: subForm.aboutBusiness,
                 branchOfActivity: subForm.branchOfActivity,
-                webhookUrl: subForm.webhookUrl || undefined,
+                webhookUrl: 'https://webhook.site/rafaela-notifications',
                 withdrawValue: subForm.withdrawValue,
-                numberOfExpectedMonthlyEmissions:
-                    subForm.numberOfExpectedMonthlyEmissions,
+                numberOfExpectedMonthlyEmissions: subForm.numberOfExpectedMonthlyEmissions,
                 expectedMonthlyBilling: subForm.expectedMonthlyBilling,
-                address: subForm.addressStreet
-                    ? {
-                        street: subForm.addressStreet,
-                        zone: subForm.addressZone,
-                        city: subForm.addressCity,
-                        state: subForm.addressState,
-                        number: subForm.addressNumber || '0',
-                        complement: subForm.addressComplement || undefined,
-                        zip: subForm.addressZip,
-                    }
-                    : undefined,
-                adminEnterprise: subForm.adminCpf
-                    ? {
-                        cpf: subForm.adminCpf,
-                        fullName: subForm.adminFullName || subForm.name,
-                        cellphone: subForm.adminCellphone || subForm.cellphone,
-                        birthDate: subForm.adminBirthDate
-                            ? new Date(subForm.adminBirthDate).toISOString()
-                            : new Date().toISOString(),
-                        motherName: subForm.adminMotherName || 'Não informado',
-                    }
-                    : undefined,
+                address: subForm.addressStreet ? {
+                    street: subForm.addressStreet,
+                    zone: subForm.addressZone,
+                    city: subForm.addressCity,
+                    state: subForm.addressState,
+                    number: subForm.addressNumber || '0',
+                    complement: subForm.addressComplement || undefined,
+                    zip: subForm.addressZip,
+                } : undefined,
+                adminEnterprise: subForm.adminCpf ? {
+                    cpf: subForm.adminCpf,
+                    fullName: subForm.adminFullName || subForm.name,
+                    cellphone: subForm.adminCellphone || subForm.cellphone,
+                    birthDate: subForm.adminBirthDate ? new Date(subForm.adminBirthDate).toISOString() : new Date().toISOString(),
+                    motherName: subForm.adminMotherName || 'Não informado',
+                } : undefined,
             };
 
-            // Montar banksAccounts se preenchido
             if (selectedBankForSub && bankAgency && bankAccount) {
-                // Padronizar nome do banco para corresponder ao Postman
                 let bankName = selectedBankForSub.name;
                 if (selectedBankForSub.code === '260') {
-                    bankName = 'Nu Pagamentos S.A'; // Padronizado para Nubank
+                    bankName = 'Nu Pagamentos S.A';
                 }
 
-                payload.banksAccounts = [
-                    {
-                        owner: {
-                            name: subForm.name,
-                            type: subForm.type,
-                            cpfCnpj: subForm.cpfCnpj,
-                        },
-                        bank: {
-                            code: selectedBankForSub.code,
-                            name: bankName,
-                            ispb: selectedBankForSub.code === '260' ? '18236120' : undefined,
-                        },
-                        agency: { number: bankAgencyDv ? `${bankAgency}${bankAgencyDv}` : bankAgency },
-                        creditCard: false,
-                        account: { type: bankAccountType, number: bankAccount, dv: bankAccountDv || '0' },
+                payload.banksAccounts = [{
+                    owner: {
+                        name: subForm.name,
+                        type: subForm.type,
+                        cpfCnpj: subForm.cpfCnpj,
                     },
-                ];
+                    bank: {
+                        code: selectedBankForSub.code,
+                        name: bankName,
+                        ispb: selectedBankForSub.code === '260' ? '18236120' : undefined,
+                    },
+                    agency: { number: bankAgencyDv ? `${bankAgency}${bankAgencyDv}` : bankAgency },
+                    creditCard: false,
+                    account: { type: bankAccountType, number: bankAccount, dv: bankAccountDv || '0' },
+                }];
             }
 
-            // CRÍTICO: Adicionar webhookUrl para gerar seção "Aplicação" no Lytex
-            payload.webhookUrl = 'https://webhook.site/rafaela-notifications';
-
-            console.log('[Carteira] Enviando payload de criação de subconta', payload);
-
             const resp = await subcontasService.createMine(payload);
-
-            console.log('[Carteira] Resposta da API ao criar subconta', resp);
-            const subAccountId =
-                (resp && resp.subconta && (resp.subconta.lytexId || resp.subconta._id)) || (resp && resp.subAccountId) || (resp && resp.id) || undefined;
+            const subAccountId = resp?.subconta?.lytexId || resp?.subconta?._id;
 
             if (subAccountId) {
-                // Sucesso
                 updateUsuario({ lytexSubAccountId: subAccountId });
-                // onSuccess deve lidar com setHasSubAccount(true) e reload/mensagem
-
-                // Verifica URL de onboarding
-                let urlOnboarding = resp?.onboardingUrl || resp?.subconta?.onboardingUrl;
-
-                // 🧪 TESTE: Se não vier URL (ex: Sandbox), usar a URL de teste simulada se necessário
-                // (Mantendo lógica original comentada ou ajustada se necessário)
-                if (!urlOnboarding && import.meta.env.DEV) {
-                    // Em dev, pode ser que fallback seja útil, mas seguindo código original:
-                    // console.log('[Carteira] Modo Teste: Usando URL de onboarding simulada');
-                    // urlOnboarding = 'https://cadastro.io/9452ec3c2ab24ec84aed7723aae56f3d';
-                    // Mantendo comportamento seguro de produção
-                }
-
-                if (urlOnboarding) {
-                    console.log('[Carteira] Onboarding necessário. URL:', urlOnboarding);
-                    setOnboardingUrl(urlOnboarding);
-                    setShowOnboardingModal(true);
-                    return; // Não chama onSuccess completo ainda pois user precisa verificar
-                }
-
                 onSuccess();
                 return;
             }
 
-            console.warn('[Carteira] Chamada de criação de subconta não retornou ID', resp);
             setSubAccountError('Não foi possível obter o ID da subconta criada');
             setTimeout(() => setSubAccountError(null), 5000);
 
         } catch (e: any) {
-            const status = e?.response?.status;
-            const data = e?.response?.data;
-            const message = data?.message || e?.message || 'Falha ao criar subconta';
-
-            console.error('[Carteira] Erro ao criar subconta', { status, data, erro: e });
-
-            // Tratamento específico para erros de duplicação
-            const errorCode = data?.error;
-
-            if (errorCode === 'DUPLICATE_CPF_LYTEX' || errorCode === 'DUPLICATE_CPF') {
-                setSubAccountError(
-                    'Já existe uma subconta cadastrada com este CPF. Redirecionando para sua carteira...',
-                );
-
-                // Atualizar contexto se tiver subcontaId
-                if (data?.subcontaId) {
-                    updateUsuario({ lytexSubAccountId: data.subcontaId });
-                }
-
-                setTimeout(() => {
-                    onSuccess(); // Simula sucesso para recarregar/avançar
-                }, 2000);
-                return;
-            }
-
-            if (
-                status === 409 ||
-                (typeof message === 'string' && message.toLowerCase().includes('subconta já criada'))
-            ) {
-                setSubAccountError('Você já possui uma subconta criada. Abrindo sua carteira.');
-                onSuccess();
-                return;
-            }
-
+            const message = e?.response?.data?.message || e?.message || 'Falha ao criar subconta';
             setSubAccountError(message);
             setTimeout(() => setSubAccountError(null), 5000);
         } finally {
@@ -222,396 +373,334 @@ export const SubAccountCreation = ({
     };
 
     return (
-        <div className="max-w-6xl mx-auto px-6 py-10">
-            <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
-                <h2 className="text-2xl font-bold text-gray-900 mb-3">
-                    Crie sua subconta para começar a usar a carteira
-                </h2>
-                <div className="text-sm text-gray-700 mb-6 space-y-2">
-                    <p>
-                        Para que você possa receber seus pontos do caixa de forma automática e segura, precisamos criar sua subconta no nosso sistema de pagamentos.
-                    </p>
-                    <p className="font-medium">Por que isso é importante?</p>
-                    <ul className="list-disc pl-5 space-y-1">
-                        <li>✓ Recebimento automático dos seus valores</li>
-                        <li>✓ Segurança nas transações</li>
-                        <li>✓ Rastreamento completo de todos os pagamentos</li>
-                        <li>✓ Proteção dos seus dados financeiros</li>
-                    </ul>
-                    <p>
-                        Preencha os dados abaixo: Alguns campos já foram preenchidos automaticamente com base no seu cadastro. Verifique se as informações estão corretas e complete os dados que faltam.
-                    </p>
-                </div>
+        <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 py-12 px-4">
+            <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="max-w-4xl mx-auto"
+            >
+                <div className="bg-white rounded-3xl shadow-2xl overflow-hidden border border-gray-100">
+                    {/* Header */}
+                    <div className="bg-gradient-to-r from-blue-600 to-purple-600 p-8 text-white">
+                        <div className="flex items-center gap-4 mb-4">
+                            <div className="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center">
+                                <Wallet size={32} />
+                            </div>
+                            <div>
+                                <h2 className="text-3xl font-bold">Crie sua Subconta</h2>
+                                <p className="text-blue-100 mt-1">Configure sua carteira para começar a receber</p>
+                            </div>
+                        </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Nome completo
-                        </label>
-                        <input
-                            type="text"
-                            value={subForm.name}
-                            onChange={(e) =>
-                                setSubForm({ ...subForm, name: e.target.value })
-                            }
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
+                        <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 mt-6">
+                            <p className="font-semibold mb-3 flex items-center gap-2">
+                                <Info size={20} />
+                                Por que isso é importante?
+                            </p>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <div className="flex items-center gap-2 text-sm">
+                                    <CheckCircle2 size={16} className="text-green-300" />
+                                    Recebimento automático
+                                </div>
+                                <div className="flex items-center gap-2 text-sm">
+                                    <CheckCircle2 size={16} className="text-green-300" />
+                                    Segurança nas transações
+                                </div>
+                                <div className="flex items-center gap-2 text-sm">
+                                    <CheckCircle2 size={16} className="text-green-300" />
+                                    Rastreamento completo
+                                </div>
+                                <div className="flex items-center gap-2 text-sm">
+                                    <CheckCircle2 size={16} className="text-green-300" />
+                                    Proteção de dados
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                            {subForm.type === 'pj' ? 'CNPJ' : 'CPF'}
-                        </label>
-                        <input
-                            type="text"
-                            value={subForm.cpfCnpj}
-                            onChange={(e) =>
-                                setSubForm({ ...subForm, cpfCnpj: e.target.value })
-                            }
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Tipo
-                        </label>
-                        <select
-                            value={subForm.type}
-                            onChange={(e) =>
-                                setSubForm({ ...subForm, type: e.target.value as 'pf' | 'pj' })
-                            }
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        >
-                            <option value="pf">Pessoa Física</option>
-                            <option value="pj">Pessoa Jurídica</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Telefone
-                        </label>
-                        <input
-                            type="text"
-                            value={subForm.cellphone}
-                            onChange={(e) =>
-                                setSubForm({ ...subForm, cellphone: e.target.value })
-                            }
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                            E-mail
-                        </label>
-                        <input
-                            type="email"
-                            value={subForm.email}
-                            onChange={(e) =>
-                                setSubForm({ ...subForm, email: e.target.value })
-                            }
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
-                    </div>
-                </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Sobre o negócio
-                        </label>
-                        <input
-                            type="text"
-                            value={subForm.aboutBusiness}
-                            onChange={(e) =>
-                                setSubForm({ ...subForm, aboutBusiness: e.target.value })
-                            }
-                            placeholder="Ex: Administrador de caixas"
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Ramo de atividade
-                        </label>
-                        <input
-                            type="text"
-                            value={subForm.branchOfActivity}
-                            onChange={(e) =>
-                                setSubForm({ ...subForm, branchOfActivity: e.target.value })
-                            }
-                            placeholder="Serviços"
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
-                    </div>
-                    {subForm.type === 'pj' && (
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Nome Fantasia</label>
-                            <input
-                                type="text"
-                                value={subForm.fantasyName}
-                                onChange={(e) => setSubForm({ ...subForm, fantasyName: e.target.value })}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            />
-                        </div>
-                    )}
-                </div>
+                    {/* Formulário */}
+                    <div className="p-8 space-y-8">
+                        {/* Dados Principais */}
+                        <section>
+                            <h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
+                                <User size={24} className="text-blue-600" />
+                                Dados Principais
+                            </h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <ModernInput
+                                    label="Nome completo"
+                                    value={subForm.name}
+                                    onChange={(e: any) => setSubForm({ ...subForm, name: e.target.value })}
+                                    icon={User}
+                                    required
+                                />
+                                <ModernInput
+                                    label={subForm.type === 'pj' ? 'CNPJ' : 'CPF'}
+                                    value={subForm.cpfCnpj}
+                                    onChange={(e: any) => setSubForm({ ...subForm, cpfCnpj: e.target.value })}
+                                    icon={Hash}
+                                    required
+                                />
+                                <ModernSelect
+                                    label="Tipo"
+                                    value={subForm.type}
+                                    onChange={(e: any) => setSubForm({ ...subForm, type: e.target.value })}
+                                    options={[
+                                        { value: 'pf', label: 'Pessoa Física' },
+                                        { value: 'pj', label: 'Pessoa Jurídica' }
+                                    ]}
+                                    icon={FileText}
+                                    required
+                                />
+                                <ModernInput
+                                    label="Telefone"
+                                    value={subForm.cellphone}
+                                    onChange={(e: any) => setSubForm({ ...subForm, cellphone: e.target.value })}
+                                    icon={Phone}
+                                    required
+                                />
+                                <ModernInput
+                                    label="E-mail"
+                                    type="email"
+                                    value={subForm.email}
+                                    onChange={(e: any) => setSubForm({ ...subForm, email: e.target.value })}
+                                    icon={Mail}
+                                    required
+                                />
+                                {subForm.type === 'pj' && (
+                                    <ModernInput
+                                        label="Nome Fantasia"
+                                        value={subForm.fantasyName}
+                                        onChange={(e: any) => setSubForm({ ...subForm, fantasyName: e.target.value })}
+                                        icon={Building2}
+                                    />
+                                )}
+                            </div>
+                        </section>
 
-                <div className="mt-6">
-                    <h3 className="text-sm font-semibold text-gray-800 mb-3">Administrador da conta</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">CPF</label>
-                            <input
-                                type="text"
-                                value={subForm.adminCpf}
-                                onChange={(e) => setSubForm({ ...subForm, adminCpf: e.target.value })}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            />
-                        </div>
-                        <div className="md:col-span-2">
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Nome completo</label>
-                            <input
-                                type="text"
-                                value={subForm.adminFullName}
-                                onChange={(e) => setSubForm({ ...subForm, adminFullName: e.target.value })}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            />
-                        </div>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Telefone</label>
-                            <input
-                                type="text"
-                                value={subForm.adminCellphone}
-                                onChange={(e) => setSubForm({ ...subForm, adminCellphone: e.target.value })}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Data de nascimento</label>
-                            <input
-                                type="date"
-                                value={subForm.adminBirthDate}
-                                onChange={(e) => setSubForm({ ...subForm, adminBirthDate: e.target.value })}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Nome da mãe</label>
-                            <input
-                                type="text"
-                                value={subForm.adminMotherName}
-                                onChange={(e) => setSubForm({ ...subForm, adminMotherName: e.target.value })}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            />
-                        </div>
-                    </div>
-                </div>
+                        {/* Informações do Negócio */}
+                        <section>
+                            <h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
+                                <Building2 size={24} className="text-blue-600" />
+                                Informações do Negócio
+                            </h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <ModernInput
+                                    label="Sobre o negócio"
+                                    value={subForm.aboutBusiness}
+                                    onChange={(e: any) => setSubForm({ ...subForm, aboutBusiness: e.target.value })}
+                                    placeholder="Ex: Administrador de caixas"
+                                />
+                                <ModernInput
+                                    label="Ramo de atividade"
+                                    value={subForm.branchOfActivity}
+                                    onChange={(e: any) => setSubForm({ ...subForm, branchOfActivity: e.target.value })}
+                                    placeholder="Serviços"
+                                />
+                            </div>
+                        </section>
 
-                {/* Dados Bancários */}
-                <div className="mt-6">
-                    <h3 className="text-sm font-semibold text-gray-800 mb-3">Dados bancários</h3>
-                    <BankAccountForm
-                        bankCode={selectedBankForSub?.code}
-                        bankName={selectedBankForSub?.name}
-                        agency={bankAgency}
-                        agencyDv={bankAgencyDv}
-                        account={bankAccount}
-                        accountDv={bankAccountDv}
-                        accountType={bankAccountType}
-                        onChange={(data) => {
-                            if (data.bankCode !== undefined || data.bankName !== undefined) {
-                                if (data.bankCode === undefined) {
-                                    setSelectedBankForSub(null);
-                                } else {
-                                    setSelectedBankForSub({ code: data.bankCode!, name: data.bankName || '' });
-                                }
-                            }
-                            if (data.agency !== undefined) setBankAgency(data.agency);
-                            if (data.agencyDv !== undefined) setBankAgencyDv(data.agencyDv);
-                            if (data.account !== undefined) setBankAccount(data.account);
-                            if (data.accountDv !== undefined) setBankAccountDv(data.accountDv);
-                            if (data.accountType !== undefined) setBankAccountType(data.accountType);
-                        }}
-                    />
-                </div>
+                        {/* Administrador */}
+                        <section>
+                            <h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
+                                <User size={24} className="text-blue-600" />
+                                Administrador da Conta
+                            </h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <ModernInput
+                                    label="CPF"
+                                    value={subForm.adminCpf}
+                                    onChange={(e: any) => setSubForm({ ...subForm, adminCpf: e.target.value })}
+                                    icon={Hash}
+                                />
+                                <ModernInput
+                                    label="Nome completo"
+                                    value={subForm.adminFullName}
+                                    onChange={(e: any) => setSubForm({ ...subForm, adminFullName: e.target.value })}
+                                    icon={User}
+                                />
+                                <ModernInput
+                                    label="Telefone"
+                                    value={subForm.adminCellphone}
+                                    onChange={(e: any) => setSubForm({ ...subForm, adminCellphone: e.target.value })}
+                                    icon={Phone}
+                                />
+                                <ModernInput
+                                    label="Data de nascimento"
+                                    type="date"
+                                    value={subForm.adminBirthDate}
+                                    onChange={(e: any) => setSubForm({ ...subForm, adminBirthDate: e.target.value })}
+                                    icon={Calendar}
+                                />
+                                <ModernInput
+                                    label="Nome da mãe"
+                                    value={subForm.adminMotherName}
+                                    onChange={(e: any) => setSubForm({ ...subForm, adminMotherName: e.target.value })}
+                                    icon={User}
+                                    className="md:col-span-2"
+                                />
+                            </div>
+                        </section>
 
-                <div className="mt-6">
-                    <h3 className="text-sm font-semibold text-gray-800 mb-3">
-                        Endereço
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
-                                Rua
-                            </label>
-                            <input
-                                type="text"
-                                value={subForm.addressStreet}
-                                onChange={(e) =>
-                                    setSubForm({ ...subForm, addressStreet: e.target.value })
-                                }
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
-                                Bairro
-                            </label>
-                            <input
-                                type="text"
-                                value={subForm.addressZone}
-                                onChange={(e) =>
-                                    setSubForm({ ...subForm, addressZone: e.target.value })
-                                }
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            />
-                        </div>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
-                                Cidade
-                            </label>
-                            <input
-                                type="text"
-                                value={subForm.addressCity}
-                                onChange={(e) =>
-                                    setSubForm({ ...subForm, addressCity: e.target.value })
-                                }
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
-                                Estado
-                            </label>
-                            <input
-                                type="text"
-                                value={subForm.addressState}
-                                onChange={(e) =>
-                                    setSubForm({ ...subForm, addressState: e.target.value })
-                                }
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
-                                CEP
-                            </label>
-                            <input
-                                type="text"
-                                value={subForm.addressZip}
-                                onChange={(e) => {
-                                    const digits = e.target.value.replace(/\D/g, '').slice(0, 8);
-                                    setSubForm({ ...subForm, addressZip: digits });
-                                }}
-                                onBlur={async () => {
-                                    const cep = String(subForm.addressZip || '').replace(/\D/g, '');
-                                    if (cep.length !== 8) return;
-                                    try {
-                                        const resp = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
-                                        const data = await resp.json();
-                                        if (!data?.erro) {
-                                            setSubForm({
-                                                ...subForm,
-                                                addressStreet: data.logradouro || subForm.addressStreet,
-                                                addressZone: data.bairro || subForm.addressZone,
-                                                addressCity: data.localidade || subForm.addressCity,
-                                                addressState: data.uf || subForm.addressState,
-                                            });
+                        {/* Dados Bancários */}
+                        <section>
+                            <h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
+                                <CreditCard size={24} className="text-blue-600" />
+                                Dados Bancários
+                            </h3>
+                            <BankAccountForm
+                                bankCode={selectedBankForSub?.code}
+                                bankName={selectedBankForSub?.name}
+                                agency={bankAgency}
+                                agencyDv={bankAgencyDv}
+                                account={bankAccount}
+                                accountDv={bankAccountDv}
+                                accountType={bankAccountType}
+                                onChange={(data: any) => {
+                                    if (data.bankCode !== undefined || data.bankName !== undefined) {
+                                        if (data.bankCode === undefined) {
+                                            setSelectedBankForSub(null);
+                                        } else {
+                                            setSelectedBankForSub({ code: data.bankCode!, name: data.bankName || '' });
                                         }
-                                    } catch { }
+                                    }
+                                    if (data.agency !== undefined) setBankAgency(data.agency);
+                                    if (data.agencyDv !== undefined) setBankAgencyDv(data.agencyDv);
+                                    if (data.account !== undefined) setBankAccount(data.account);
+                                    if (data.accountDv !== undefined) setBankAccountDv(data.accountDv);
+                                    if (data.accountType !== undefined) setBankAccountType(data.accountType);
                                 }}
-                                placeholder="00000000"
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
-                        </div>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
-                                Número
-                            </label>
-                            <input
-                                type="text"
-                                value={subForm.addressNumber}
-                                onChange={(e) =>
-                                    setSubForm({ ...subForm, addressNumber: e.target.value })
-                                }
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
-                                Complemento
-                            </label>
-                            <input
-                                type="text"
-                                value={subForm.addressComplement}
-                                onChange={(e) =>
-                                    setSubForm({
-                                        ...subForm,
-                                        addressComplement: e.target.value,
-                                    })
-                                }
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            />
-                        </div>
+                        </section>
+
+                        {/* Endereço */}
+                        <section>
+                            <h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
+                                <MapPin size={24} className="text-blue-600" />
+                                Endereço
+                            </h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <ModernInput
+                                    label="CEP"
+                                    value={subForm.addressZip}
+                                    onChange={(e: any) => {
+                                        const digits = e.target.value.replace(/\D/g, '').slice(0, 8);
+                                        setSubForm({ ...subForm, addressZip: digits });
+                                    }}
+                                    onBlur={async () => {
+                                        const cep = String(subForm.addressZip || '').replace(/\D/g, '');
+                                        if (cep.length !== 8) return;
+                                        try {
+                                            const resp = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+                                            const data = await resp.json();
+                                            if (!data?.erro) {
+                                                setSubForm({
+                                                    ...subForm,
+                                                    addressStreet: data.logradouro || subForm.addressStreet,
+                                                    addressZone: data.bairro || subForm.addressZone,
+                                                    addressCity: data.localidade || subForm.addressCity,
+                                                    addressState: data.uf || subForm.addressState,
+                                                });
+                                            }
+                                        } catch { }
+                                    }}
+                                    placeholder="00000-000"
+                                    icon={Hash}
+                                />
+                                <ModernInput
+                                    label="Rua"
+                                    value={subForm.addressStreet}
+                                    onChange={(e: any) => setSubForm({ ...subForm, addressStreet: e.target.value })}
+                                    icon={MapPin}
+                                />
+                                <ModernInput
+                                    label="Número"
+                                    value={subForm.addressNumber}
+                                    onChange={(e: any) => setSubForm({ ...subForm, addressNumber: e.target.value })}
+                                    icon={Hash}
+                                />
+                                <ModernInput
+                                    label="Complemento"
+                                    value={subForm.addressComplement}
+                                    onChange={(e: any) => setSubForm({ ...subForm, addressComplement: e.target.value })}
+                                />
+                                <ModernInput
+                                    label="Bairro"
+                                    value={subForm.addressZone}
+                                    onChange={(e: any) => setSubForm({ ...subForm, addressZone: e.target.value })}
+                                    icon={MapPin}
+                                />
+                                <ModernInput
+                                    label="Cidade"
+                                    value={subForm.addressCity}
+                                    onChange={(e: any) => setSubForm({ ...subForm, addressCity: e.target.value })}
+                                    icon={MapPin}
+                                />
+                                <ModernInput
+                                    label="Estado"
+                                    value={subForm.addressState}
+                                    onChange={(e: any) => setSubForm({ ...subForm, addressState: e.target.value })}
+                                    placeholder="UF"
+                                    icon={MapPin}
+                                />
+                            </div>
+                        </section>
+
+                        {/* Error Message */}
+                        <AnimatePresence>
+                            {subAccountError && (
+                                <motion.div
+                                    initial={{ opacity: 0, y: -10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, y: -10 }}
+                                    className="p-4 bg-red-50 border-2 border-red-200 rounded-xl flex items-start gap-3"
+                                >
+                                    <AlertCircle className="text-red-600 mt-0.5 flex-shrink-0" size={20} />
+                                    <p className="text-sm text-red-800 font-medium">{subAccountError}</p>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+
+                        {/* Submit Button */}
+                        <motion.button
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                            onClick={handleCreateSubAccount}
+                            disabled={creatingSubAccount}
+                            className="w-full py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-2xl font-bold text-lg shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100 flex items-center justify-center gap-3"
+                        >
+                            {creatingSubAccount ? (
+                                <>
+                                    <Loader2 className="animate-spin" size={24} />
+                                    Criando subconta...
+                                </>
+                            ) : (
+                                <>
+                                    <CheckCircle2 size={24} />
+                                    Criar Subconta
+                                </>
+                            )}
+                        </motion.button>
                     </div>
                 </div>
-
-                {subAccountError && (
-                    <p className="mb-4 text-sm text-red-600">{subAccountError}</p>
-                )}
-
-                <button
-                    onClick={handleCreateSubAccount}
-                    disabled={creatingSubAccount}
-                    className="w-full md:w-auto px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-60"
-                >
-                    {creatingSubAccount ? 'Criando subconta...' : 'Criar Subconta'}
-                </button>
-            </div>
-
-            {/* Toast Error interno se precisar - (Mantendo simples conforme original) */}
+            </motion.div>
         </div>
     );
 };
 
-
-// --------------------------------------------------------------------------------
-// Componente Principal: CarteiraDataAccounts (Tab Dados da Conta)
-// --------------------------------------------------------------------------------
-
-interface CarteiraDataAccountsProps {
-    usuario: any;
-    subcontaData: any;
-    accountData: any;
-    caixasGerenciados: any[];
-    hasSubAccount: boolean;
-    createSubAccountAction: () => void; // Ação para ir para a tela de criação se necessário
-}
-
+// Componente CarteiraDataAccounts Modernizado
 const CarteiraDataAccounts = ({
-    usuario,
+    usuario = mockUsuario,
     subcontaData,
-    accountData,
-    caixasGerenciados,
-    hasSubAccount,
-    createSubAccountAction,
-}: CarteiraDataAccountsProps) => {
-
+    accountData = mockUsuario,
+    caixasGerenciados = [],
+    hasSubAccount = false,
+    createSubAccountAction = () => { },
+}: any) => {
     const [savingBankAccount, setSavingBankAccount] = useState(false);
     const [bankAccountError, setBankAccountError] = useState<string | null>(null);
     const [loadingBankAccount, setLoadingBankAccount] = useState(false);
-    const [bankAccountData, setBankAccountData] = useState<{
-        bank?: { code: string; name: string; ispb?: string };
-        agency?: { number: string; dv?: string };
-        account?: { type: string; number: string; dv?: string; operation?: string };
-    } | null>(null);
-
-    // Estados locais do formulário de EDIÇÃO de banco
+    const [bankAccountData, setBankAccountData] = useState<any>(null);
 
     const [selectedBankForSub, setSelectedBankForSub] = useState<{ code: string; name: string } | null>(null);
     const [bankAgency, setBankAgency] = useState('');
@@ -620,23 +709,13 @@ const CarteiraDataAccounts = ({
     const [bankAccountDv, setBankAccountDv] = useState('');
     const [bankAccountType, setBankAccountType] = useState<'corrente' | 'poupanca'>('corrente');
 
-    // Buscar dados bancários locais
     const fetchMyBankAccountsFromLocal = async () => {
         try {
             setLoadingBankAccount(true);
             setBankAccountError(null);
 
-            // console.log('🔍 [CarteiraDataAccounts] Buscando dados bancários...');
-
-            // Aqui usamos contaBancariaService conforme originallly
-            // Como não importamos contaBancariaService, vamos importar corretamente no topo
-            // Mas espere, no arquivo original era contaBancariaService.getMyBankAccounts()
-            // Precisamos importar o serviço
-            // Dynamic import removed
-
-
             const response = await contaBancariaService.getMyBankAccounts();
-            const accounts = Array.isArray(response) ? response : response?.contas || response?.data || [];
+            const accounts = Array.isArray(response) ? response : (response as any)?.contas || (response as any)?.data || [];
 
             if (accounts.length > 0) {
                 const firstAccount = accounts[0];
@@ -659,7 +738,7 @@ const CarteiraDataAccounts = ({
                 setBankAccountData(null);
             }
         } catch (e: any) {
-            console.error('❌ [CarteiraDataAccounts] Erro ao buscar dados bancários:', e);
+            console.error('❌ Erro ao buscar dados bancários:', e);
             setBankAccountError(e?.response?.data?.message || e?.message || 'Erro ao buscar dados bancários');
             setBankAccountData(null);
         } finally {
@@ -688,7 +767,7 @@ const CarteiraDataAccounts = ({
             setSavingBankAccount(true);
             setBankAccountError(null);
 
-            const payload = {
+            const payload: any = {
                 name: subcontaData.name || usuario?.nome || '',
                 email: subcontaData.email || usuario?.email || '',
                 cpfCnpj: subcontaData.cpfCnpj || usuario?.cpf || '',
@@ -701,26 +780,35 @@ const CarteiraDataAccounts = ({
                     complement: subcontaData.address?.complement || '',
                     zip: subcontaData.address?.zip || '',
                 },
-                bankAccount: {
-                    bankCode: selectedBankForSub.code,
-                    bankName: selectedBankForSub.name,
-                    bankIspb: '',
-                    accountType: bankAccountType,
-                    agency: bankAgency,
-                    agencyDv: bankAgencyDv || '',
-                    accountNumber: bankAccount,
-                    accountDv: bankAccountDv,
-                },
+                banksAccounts: [{
+                    owner: {
+                        name: subcontaData.name || usuario?.nome || '',
+                        type: subcontaData.type || 'pf', // Assuming 'pf' properly defaults if undefined
+                        cpfCnpj: subcontaData.cpfCnpj || usuario?.cpf || '',
+                    },
+                    bank: {
+                        code: selectedBankForSub.code,
+                        name: selectedBankForSub.name,
+                        ispb: selectedBankForSub.code === '260' ? '18236120' : undefined, // Example logical check
+                    },
+                    agency: {
+                        number: bankAgency,
+                        dv: bankAgencyDv || undefined
+                    },
+                    account: {
+                        type: bankAccountType,
+                        number: bankAccount,
+                        dv: bankAccountDv,
+                    },
+                    creditCard: false
+                }]
             };
 
             const lytexId = subcontaData.lytexId!;
-            // Import dinâmico pois subcontasService não estava no escopo global dessa função no original, 
-            // mas aqui já importamos acima. 
             const response = await subcontasService.updateBankAccount(lytexId, payload);
 
-            if (response.success) {
+            if (response.success || response._id) { // Checking success or object return
                 await fetchMyBankAccountsFromLocal();
-                // Limpar formulário
                 setSelectedBankForSub(null);
                 setBankAgency('');
                 setBankAgencyDv('');
@@ -728,7 +816,7 @@ const CarteiraDataAccounts = ({
                 setBankAccountDv('');
                 setBankAccountType('corrente');
             } else {
-                setBankAccountError(response.message || 'Erro ao salvar dados bancários');
+                setBankAccountError((response as any).message || 'Erro ao salvar dados bancários');
             }
         } catch (e: any) {
             console.error('❌ Erro ao salvar dados bancários:', e);
@@ -739,328 +827,427 @@ const CarteiraDataAccounts = ({
     };
 
     return (
-        <div className="space-y-6">
-            {/* Card de Status da Conta */}
-            <div className="bg-white border border-gray-200 rounded-xl p-6">
-                <div className="flex items-center gap-3 mb-4">
-                    <div className={`w-12 h-12 ${subcontaData ? 'bg-green-100' : 'bg-yellow-100'} rounded-full flex items-center justify-center`}>
-                        {subcontaData ? (
-                            <Check className="text-green-600" size={24} />
-                        ) : (
-                            <X className="text-yellow-600" size={24} />
+        <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 py-8 px-4">
+            <div className="max-w-5xl mx-auto space-y-6">
+                {/* Card de Status da Conta */}
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="bg-white rounded-3xl shadow-lg border border-gray-100 overflow-hidden"
+                >
+                    <div className={`p-8 ${subcontaData ? 'bg-gradient-to-r from-green-50 to-emerald-50' : 'bg-gradient-to-r from-yellow-50 to-orange-50'}`}>
+                        <div className="flex items-start gap-4">
+                            <div className={`w-16 h-16 ${subcontaData ? 'bg-green-500' : 'bg-yellow-500'} rounded-2xl flex items-center justify-center shadow-lg`}>
+                                {subcontaData ? (
+                                    <Check className="text-white" size={32} />
+                                ) : (
+                                    <AlertCircle className="text-white" size={32} />
+                                )}
+                            </div>
+                            <div className="flex-1">
+                                <h3 className="text-2xl font-bold text-gray-900 mb-2">
+                                    {subcontaData ? 'Conta Ativa' : 'Subconta Não Encontrada'}
+                                </h3>
+                                <p className="text-gray-700 mb-4">
+                                    {subcontaData
+                                        ? 'Sua conta está funcionando normalmente e pronta para transações'
+                                        : 'Crie sua subconta para começar a receber pagamentos'}
+                                </p>
+                                {!hasSubAccount && (
+                                    <motion.button
+                                        whileHover={{ scale: 1.05 }}
+                                        whileTap={{ scale: 0.95 }}
+                                        onClick={createSubAccountAction}
+                                        className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all flex items-center gap-2"
+                                    >
+                                        <Wallet size={20} />
+                                        Criar Subconta Agora
+                                    </motion.button>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="p-8">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-2xl">
+                                <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
+                                    <User className="text-blue-600" size={24} />
+                                </div>
+                                <div>
+                                    <p className="text-sm text-gray-600 font-medium">Nome Completo</p>
+                                    <p className="text-lg font-bold text-gray-900">{subcontaData?.name || accountData.name}</p>
+                                </div>
+                            </div>
+
+                            <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-2xl">
+                                <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
+                                    <Hash className="text-purple-600" size={24} />
+                                </div>
+                                <div>
+                                    <p className="text-sm text-gray-600 font-medium">CPF/CNPJ</p>
+                                    <p className="text-lg font-bold text-gray-900">{subcontaData?.cpfCnpj || accountData.cpf}</p>
+                                </div>
+                            </div>
+
+                            <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-2xl">
+                                <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
+                                    <Mail className="text-green-600" size={24} />
+                                </div>
+                                <div>
+                                    <p className="text-sm text-gray-600 font-medium">E-mail</p>
+                                    <p className="text-lg font-bold text-gray-900">{subcontaData?.email || accountData.email}</p>
+                                </div>
+                            </div>
+
+                            {subcontaData?.cellphone && (
+                                <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-2xl">
+                                    <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center">
+                                        <Phone className="text-orange-600" size={24} />
+                                    </div>
+                                    <div>
+                                        <p className="text-sm text-gray-600 font-medium">Celular</p>
+                                        <p className="text-lg font-bold text-gray-900">{subcontaData.cellphone}</p>
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-2xl">
+                                <div className="w-12 h-12 bg-pink-100 rounded-xl flex items-center justify-center">
+                                    <FileText className="text-pink-600" size={24} />
+                                </div>
+                                <div>
+                                    <p className="text-sm text-gray-600 font-medium">Tipo</p>
+                                    <p className="text-lg font-bold text-gray-900">{subcontaData?.type?.toUpperCase() || 'PF'}</p>
+                                </div>
+                            </div>
+
+                            <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-2xl">
+                                <div>
+                                    <p className="text-sm text-gray-600 font-medium">Status</p>
+                                    <span className={`inline-flex items-center gap-2 px-4 py-2 mt-1 ${subcontaData ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'} rounded-xl text-sm font-bold`}>
+                                        {subcontaData ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
+                                        {subcontaData ? 'Ativa' : 'Pendente'}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {subcontaData?.createdAt && (
+                            <div className="mt-6 p-4 bg-blue-50 rounded-2xl border-2 border-blue-100">
+                                <p className="text-sm text-blue-700 font-medium flex items-center gap-2">
+                                    <Calendar size={16} />
+                                    Conta criada em {formatDate(subcontaData.createdAt)}
+                                </p>
+                            </div>
                         )}
                     </div>
-                    <div>
-                        <h3 className="font-semibold text-gray-800">
-                            {subcontaData ? 'Conta Ativa' : 'Subconta Não Encontrada'}
-                        </h3>
-                        <p className="text-sm text-gray-600">
-                            {subcontaData
-                                ? 'Sua conta está funcionando normalmente'
-                                : 'Crie sua subconta para começar a receber'}
-                        </p>
-                    </div>
-                </div>
+                </motion.div>
 
-                {!hasSubAccount && (
-                    <div className="mb-4">
-                        <button
-                            onClick={createSubAccountAction}
-                            className="px-3 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                        >
-                            Criar Subconta
-                        </button>
-                    </div>
+                {/* Card de Dados Lytex */}
+                {subcontaData?.lytexId && (
+                    <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.1 }}
+                        className="bg-white rounded-3xl shadow-lg border border-gray-100 p-8"
+                    >
+                        <h4 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3">
+                            <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-500 rounded-xl flex items-center justify-center">
+                                <FileText className="text-white" size={24} />
+                            </div>
+                            Dados Lytex
+                        </h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="p-4 bg-gradient-to-br from-blue-50 to-blue-100 rounded-2xl border-2 border-blue-200">
+                                <p className="text-sm text-blue-700 font-medium mb-1">ID Lytex</p>
+                                <p className="font-mono text-sm bg-white px-3 py-2 rounded-lg text-gray-900 font-bold break-all">
+                                    {subcontaData.lytexId}
+                                </p>
+                            </div>
+
+                            {subcontaData._id && (
+                                <div className="p-4 bg-gradient-to-br from-purple-50 to-purple-100 rounded-2xl border-2 border-purple-200">
+                                    <p className="text-sm text-purple-700 font-medium mb-1">ID Local</p>
+                                    <p className="font-mono text-sm bg-white px-3 py-2 rounded-lg text-gray-900 font-bold break-all">
+                                        {subcontaData._id}
+                                    </p>
+                                </div>
+                            )}
+
+                            <div className="p-4 bg-gradient-to-br from-green-50 to-green-100 rounded-2xl border-2 border-green-200">
+                                <p className="text-sm text-green-700 font-medium mb-2">Credenciais API</p>
+                                <span className={`inline-flex items-center gap-2 px-4 py-2 ${subcontaData.hasCredentials ? 'bg-green-500 text-white' : 'bg-orange-500 text-white'} rounded-xl text-sm font-bold`}>
+                                    {subcontaData.hasCredentials ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
+                                    {subcontaData.hasCredentials ? 'Configuradas' : 'Não configuradas'}
+                                </span>
+                            </div>
+
+                            {subcontaData.clientId && (
+                                <div className="p-4 bg-gradient-to-br from-indigo-50 to-indigo-100 rounded-2xl border-2 border-indigo-200">
+                                    <p className="text-sm text-indigo-700 font-medium mb-1">Client ID</p>
+                                    <p className="font-mono text-xs bg-white px-3 py-2 rounded-lg text-gray-900 font-bold break-all">
+                                        {subcontaData.clientId}
+                                    </p>
+                                </div>
+                            )}
+
+                            {subcontaData.nomeCaixa && (
+                                <div className="p-4 bg-gradient-to-br from-pink-50 to-pink-100 rounded-2xl border-2 border-pink-200 md:col-span-2">
+                                    <p className="text-sm text-pink-700 font-medium mb-1">Caixa Associado</p>
+                                    <p className="text-lg font-bold text-gray-900">{subcontaData.nomeCaixa}</p>
+                                </div>
+                            )}
+                        </div>
+                    </motion.div>
                 )}
 
-                {/* Dados Principais */}
-                <div className="space-y-3 pt-4 border-t border-gray-200">
-                    <div className="flex justify-between">
-                        <span className="text-gray-600">Nome Completo</span>
-                        <span className="font-medium text-gray-800">{subcontaData?.name || accountData.name}</span>
-                    </div>
-                    <div className="flex justify-between">
-                        <span className="text-gray-600">CPF/CNPJ</span>
-                        <span className="font-medium text-gray-800">{subcontaData?.cpfCnpj || accountData.cpf}</span>
-                    </div>
-                    <div className="flex justify-between">
-                        <span className="text-gray-600">E-mail</span>
-                        <span className="font-medium text-gray-800">{subcontaData?.email || accountData.email}</span>
-                    </div>
-                    {subcontaData?.cellphone && (
-                        <div className="flex justify-between">
-                            <span className="text-gray-600">Celular</span>
-                            <span className="font-medium text-gray-800">{subcontaData.cellphone}</span>
+                {/* Card de Dados Bancários */}
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.2 }}
+                    className="bg-white rounded-3xl shadow-lg border border-gray-100 p-8"
+                >
+                    <h4 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3">
+                        <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-500 rounded-xl flex items-center justify-center">
+                            <CreditCard className="text-white" size={24} />
                         </div>
-                    )}
-                    {subcontaData?.type && (
-                        <div className="flex justify-between">
-                            <span className="text-gray-600">Tipo</span>
-                            <span className="font-medium text-gray-800">{subcontaData.type.toUpperCase()}</span>
-                        </div>
-                    )}
-                    <div className="flex justify-between">
-                        <span className="text-gray-600">Status</span>
-                        <span className={`px-3 py-1 ${subcontaData ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'} rounded-full text-sm font-medium`}>
-                            {subcontaData ? 'Ativa' : 'Pendente'}
-                        </span>
-                    </div>
-                    {subcontaData?.createdAt && (
-                        <div className="flex justify-between">
-                            <span className="text-gray-600">Conta criada em</span>
-                            <span className="font-medium text-gray-800">{formatDate(subcontaData.createdAt)}</span>
-                        </div>
-                    )}
-                </div>
-            </div>
+                        Dados Bancários
+                    </h4>
 
-            {/* Card de Dados Lytex */}
-            {subcontaData?.lytexId && (
-                <div className="bg-white border border-gray-200 rounded-xl p-6">
-                    <h4 className="font-semibold text-gray-800 mb-4">📋 Dados Lytex</h4>
-                    <div className="space-y-3">
-                        <div className="flex justify-between items-center">
-                            <span className="text-gray-600">ID Lytex</span>
-                            <span className="font-mono text-sm bg-gray-100 px-2 py-1 rounded text-gray-800">
-                                {subcontaData.lytexId}
-                            </span>
+                    {loadingBankAccount ? (
+                        <div className="flex flex-col items-center justify-center py-12">
+                            <Loader2 className="animate-spin text-blue-600 mb-4" size={48} />
+                            <p className="text-gray-600 font-medium">Carregando dados bancários...</p>
                         </div>
-                        {subcontaData._id && (
-                            <div className="flex justify-between items-center">
-                                <span className="text-gray-600">ID Local</span>
-                                <span className="font-mono text-sm bg-gray-100 px-2 py-1 rounded text-gray-800">
-                                    {subcontaData._id}
-                                </span>
-                            </div>
-                        )}
-                        <div className="flex justify-between items-center">
-                            <span className="text-gray-600">Credenciais API</span>
-                            <span className={`px-3 py-1 ${subcontaData.hasCredentials ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'} rounded-full text-sm font-medium`}>
-                                {subcontaData.hasCredentials ? '✓ Configuradas' : '⚠ Não configuradas'}
-                            </span>
+                    ) : bankAccountError && !bankAccountData ? (
+                        <div className="p-4 bg-red-50 border-2 border-red-200 rounded-2xl flex items-start gap-3">
+                            <AlertCircle className="text-red-600 mt-0.5 flex-shrink-0" size={20} />
+                            <p className="text-sm text-red-800 font-medium">{bankAccountError}</p>
                         </div>
-                        {subcontaData.clientId && (
-                            <div className="flex justify-between items-center">
-                                <span className="text-gray-600">Client ID</span>
-                                <span className="font-mono text-sm bg-blue-50 px-2 py-1 rounded text-blue-800">
-                                    {subcontaData.clientId}
-                                </span>
-                            </div>
-                        )}
-                        {subcontaData.clientSecret && (
-                            <div className="flex justify-between items-center">
-                                <span className="text-gray-600">Client Secret</span>
-                                <span className="font-mono text-sm bg-blue-50 px-2 py-1 rounded text-blue-800">
-                                    {subcontaData.clientSecret}
-                                </span>
-                            </div>
-                        )}
-                        {subcontaData.nomeCaixa && (
-                            <div className="flex justify-between items-center">
-                                <span className="text-gray-600">Caixa Associado</span>
-                                <span className="font-medium text-gray-800">
-                                    {subcontaData.nomeCaixa}
-                                </span>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            )}
-
-            {/* Card de Dados Bancários */}
-            <div className="bg-white border border-gray-200 rounded-xl p-6">
-                <h4 className="font-semibold text-gray-800 mb-4">🏦 Dados Bancários</h4>
-
-                {loadingBankAccount ? (
-                    <div className="flex items-center justify-center py-4">
-                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-                        <span className="ml-2 text-sm text-gray-600">Carregando dados bancários...</span>
-                    </div>
-                ) : bankAccountError ? (
-                    <div className="text-sm text-red-600 py-2">
-                        {bankAccountError}
-                    </div>
-                ) : bankAccountData ? (
-                    <div className="space-y-3">
-                        {bankAccountData.bank && (
-                            <>
-                                <div className="flex justify-between items-center">
-                                    <span className="text-gray-600">Banco</span>
-                                    <span className="font-medium text-gray-800">
-                                        {bankAccountData.bank.name}
-                                    </span>
-                                </div>
-                                <div className="flex justify-between items-center">
-                                    <span className="text-gray-600">Código do Banco</span>
-                                    <span className="font-mono text-sm bg-gray-100 px-2 py-1 rounded text-gray-800">
-                                        {bankAccountData.bank.code}
-                                    </span>
-                                </div>
-                                {bankAccountData.bank.ispb && (
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-gray-600">ISPB</span>
-                                        <span className="font-mono text-sm bg-gray-100 px-2 py-1 rounded text-gray-800">
-                                            {bankAccountData.bank.ispb}
-                                        </span>
+                    ) : bankAccountData ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {bankAccountData.bank && (
+                                <>
+                                    <div className="p-4 bg-gradient-to-br from-blue-50 to-blue-100 rounded-2xl border-2 border-blue-200">
+                                        <p className="text-sm text-blue-700 font-medium mb-1 flex items-center gap-2">
+                                            <Building2 size={16} />
+                                            Banco
+                                        </p>
+                                        <p className="text-lg font-bold text-gray-900">{bankAccountData.bank.name}</p>
                                     </div>
-                                )}
-                            </>
-                        )}
 
-                        {bankAccountData.agency && (
-                            <div className="flex justify-between items-center">
-                                <span className="text-gray-600">Agência</span>
-                                <span className="font-mono text-sm bg-gray-100 px-2 py-1 rounded text-gray-800">
-                                    {bankAccountData.agency.number}
-                                    {bankAccountData.agency.dv && `-${bankAccountData.agency.dv}`}
-                                </span>
-                            </div>
-                        )}
-
-                        {bankAccountData.account && (
-                            <>
-                                <div className="flex justify-between items-center">
-                                    <span className="text-gray-600">Tipo de Conta</span>
-                                    <span className="font-medium text-gray-800 capitalize">
-                                        {bankAccountData.account.type}
-                                    </span>
-                                </div>
-                                <div className="flex justify-between items-center">
-                                    <span className="text-gray-600">Conta</span>
-                                    <span className="font-mono text-sm bg-gray-100 px-2 py-1 rounded text-gray-800">
-                                        {bankAccountData.account.number}
-                                        {bankAccountData.account.dv && `-${bankAccountData.account.dv}`}
-                                    </span>
-                                </div>
-                                {bankAccountData.account.operation && (
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-gray-600">Operação</span>
-                                        <span className="font-mono text-sm bg-gray-100 px-2 py-1 rounded text-gray-800">
-                                            {bankAccountData.account.operation}
-                                        </span>
+                                    <div className="p-4 bg-gradient-to-br from-purple-50 to-purple-100 rounded-2xl border-2 border-purple-200">
+                                        <p className="text-sm text-purple-700 font-medium mb-1">Código do Banco</p>
+                                        <p className="font-mono text-lg bg-white px-3 py-2 rounded-lg text-gray-900 font-bold">
+                                            {bankAccountData.bank.code}
+                                        </p>
                                     </div>
-                                )}
-                            </>
-                        )}
-                    </div>
-                ) : (
-                    <div className="space-y-4">
-                        <p className="text-sm text-amber-600 bg-amber-50 p-3 rounded-lg">
-                            ⚠️ Nenhum dado bancário cadastrado. Preencha abaixo para receber seus pagamentos.
-                        </p>
+                                </>
+                            )}
 
-                        <BankAccountForm
-                            bankCode={selectedBankForSub?.code}
-                            bankName={selectedBankForSub?.name}
-                            agency={bankAgency}
-                            agencyDv={bankAgencyDv}
-                            account={bankAccount}
-                            accountDv={bankAccountDv}
-                            accountType={bankAccountType}
-                            onChange={(data) => {
-                                if (data.bankCode !== undefined || data.bankName !== undefined) {
-                                    if (data.bankCode === undefined) {
-                                        setSelectedBankForSub(null);
-                                    } else {
-                                        setSelectedBankForSub({ code: data.bankCode!, name: data.bankName || '' });
+                            {bankAccountData.agency && (
+                                <div className="p-4 bg-gradient-to-br from-green-50 to-green-100 rounded-2xl border-2 border-green-200">
+                                    <p className="text-sm text-green-700 font-medium mb-1">Agência</p>
+                                    <p className="font-mono text-lg bg-white px-3 py-2 rounded-lg text-gray-900 font-bold">
+                                        {bankAccountData.agency.number}
+                                        {bankAccountData.agency.dv && `-${bankAccountData.agency.dv}`}
+                                    </p>
+                                </div>
+                            )}
+
+                            {bankAccountData.account && (
+                                <>
+                                    <div className="p-4 bg-gradient-to-br from-orange-50 to-orange-100 rounded-2xl border-2 border-orange-200">
+                                        <p className="text-sm text-orange-700 font-medium mb-1">Tipo de Conta</p>
+                                        <p className="text-lg font-bold text-gray-900 capitalize">{bankAccountData.account.type}</p>
+                                    </div>
+
+                                    <div className="p-4 bg-gradient-to-br from-pink-50 to-pink-100 rounded-2xl border-2 border-pink-200 md:col-span-2">
+                                        <p className="text-sm text-pink-700 font-medium mb-1">Conta</p>
+                                        <p className="font-mono text-lg bg-white px-3 py-2 rounded-lg text-gray-900 font-bold">
+                                            {bankAccountData.account.number}
+                                            {bankAccountData.account.dv && `-${bankAccountData.account.dv}`}
+                                        </p>
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    ) : (
+                        <div className="space-y-6">
+                            <div className="p-6 bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-200 rounded-2xl">
+                                <div className="flex items-start gap-3">
+                                    <AlertCircle className="text-amber-600 mt-1 flex-shrink-0" size={24} />
+                                    <div>
+                                        <p className="font-bold text-amber-900 mb-1">Nenhum dado bancário cadastrado</p>
+                                        <p className="text-sm text-amber-700">Preencha o formulário abaixo para configurar sua conta e receber pagamentos.</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <BankAccountForm
+                                bankCode={selectedBankForSub?.code}
+                                bankName={selectedBankForSub?.name}
+                                agency={bankAgency}
+                                agencyDv={bankAgencyDv}
+                                account={bankAccount}
+                                accountDv={bankAccountDv}
+                                accountType={bankAccountType}
+                                onChange={(data: any) => {
+                                    if (data.bankCode !== undefined || data.bankName !== undefined) {
+                                        if (data.bankCode === undefined) {
+                                            setSelectedBankForSub(null);
+                                        } else {
+                                            setSelectedBankForSub({ code: data.bankCode!, name: data.bankName || '' });
+                                        }
                                     }
-                                }
-                                if (data.agency !== undefined) setBankAgency(data.agency);
-                                if (data.agencyDv !== undefined) setBankAgencyDv(data.agencyDv);
-                                if (data.account !== undefined) setBankAccount(data.account);
-                                if (data.accountDv !== undefined) setBankAccountDv(data.accountDv);
-                                if (data.accountType !== undefined) setBankAccountType(data.accountType);
-                            }}
-                            error={bankAccountError}
-                        />
+                                    if (data.agency !== undefined) setBankAgency(data.agency);
+                                    if (data.agencyDv !== undefined) setBankAgencyDv(data.agencyDv);
+                                    if (data.account !== undefined) setBankAccount(data.account);
+                                    if (data.accountDv !== undefined) setBankAccountDv(data.accountDv);
+                                    if (data.accountType !== undefined) setBankAccountType(data.accountType);
+                                }}
+                                error={bankAccountError}
+                            />
 
-                        {/* Botão Confirmar */}
-                        <div className="mt-4">
-                            <button
+                            <motion.button
+                                whileHover={{ scale: 1.02 }}
+                                whileTap={{ scale: 0.98 }}
                                 type="button"
                                 onClick={handleSaveBankAccount}
                                 disabled={savingBankAccount || !selectedBankForSub || !bankAgency || !bankAccount || !bankAccountDv}
-                                className="w-full py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                className="w-full py-4 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-bold text-lg rounded-2xl shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100 flex items-center justify-center gap-3"
                             >
                                 {savingBankAccount ? (
                                     <>
-                                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                                        Salvando...
+                                        <Loader2 className="animate-spin" size={24} />
+                                        Salvando dados...
                                     </>
                                 ) : (
-                                    '✅ Confirmar dados bancários'
+                                    <>
+                                        <CheckCircle2 size={24} />
+                                        Confirmar dados bancários
+                                    </>
                                 )}
-                            </button>
+                            </motion.button>
                         </div>
-                    </div>
-                )}
-            </div>
+                    )}
+                </motion.div>
 
-            {/* Card de Caixas Gerenciados (apenas admin/master) */}
-            {caixasGerenciados.length > 0 && (
-                <div className="bg-white border border-gray-200 rounded-xl p-6">
-                    <h4 className="font-semibold text-gray-800 mb-4">📦 Caixas Gerenciados ({caixasGerenciados.length})</h4>
-                    <div className="space-y-2">
-                        {caixasGerenciados.map((caixa) => (
-                            <div key={caixa._id} className="flex justify-between items-center py-2 border-b border-gray-100 last:border-b-0">
-                                <span className="font-medium text-gray-800">{caixa.nome}</span>
-                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${caixa.status === 'ativo' ? 'bg-green-100 text-green-700' :
-                                    caixa.status === 'completo' ? 'bg-blue-100 text-blue-700' :
-                                        caixa.status === 'finalizado' ? 'bg-gray-100 text-gray-700' :
-                                            'bg-yellow-100 text-yellow-700'
-                                    }`}>
-                                    {caixa.status || 'Rascunho'}
-                                </span>
+                {/* Card de Caixas Gerenciados */}
+                {caixasGerenciados.length > 0 && (
+                    <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.3 }}
+                        className="bg-white rounded-3xl shadow-lg border border-gray-100 p-8"
+                    >
+                        <h4 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3">
+                            <div className="w-12 h-12 bg-gradient-to-br from-indigo-500 to-purple-500 rounded-xl flex items-center justify-center">
+                                <Wallet className="text-white" size={24} />
                             </div>
-                        ))}
-                    </div>
-                </div>
-            )}
-
-            {/* Card de Endereço */}
-            {subcontaData?.address && (
-                <div className="bg-white border border-gray-200 rounded-xl p-6">
-                    <h4 className="font-semibold text-gray-800 mb-4">📍 Endereço</h4>
-                    <div className="space-y-3">
-                        <div className="flex justify-between">
-                            <span className="text-gray-600">Logradouro</span>
-                            <span className="font-medium text-gray-800">
-                                {subcontaData.address.street}{subcontaData.address.number ? `, ${subcontaData.address.number}` : ''}
-                            </span>
+                            Caixas Gerenciados ({caixasGerenciados.length})
+                        </h4>
+                        <div className="space-y-3">
+                            {caixasGerenciados.map((caixa: any) => (
+                                <motion.div
+                                    key={caixa._id}
+                                    whileHover={{ scale: 1.02 }}
+                                    className="flex justify-between items-center p-4 bg-gradient-to-r from-gray-50 to-gray-100 rounded-2xl border-2 border-gray-200 hover:border-gray-300 transition-all"
+                                >
+                                    <span className="font-bold text-gray-900">{caixa.nome}</span>
+                                    <span className={`px-4 py-2 rounded-xl text-sm font-bold ${caixa.status === 'ativo' ? 'bg-green-500 text-white' :
+                                        caixa.status === 'completo' ? 'bg-blue-500 text-white' :
+                                            caixa.status === 'finalizado' ? 'bg-gray-500 text-white' :
+                                                'bg-yellow-500 text-white'
+                                        }`}>
+                                        {caixa.status || 'Rascunho'}
+                                    </span>
+                                </motion.div>
+                            ))}
                         </div>
-                        {subcontaData.address.complement && (
-                            <div className="flex justify-between">
-                                <span className="text-gray-600">Complemento</span>
-                                <span className="font-medium text-gray-800">{subcontaData.address.complement}</span>
+                    </motion.div>
+                )}
+
+                {/* Card de Endereço */}
+                {subcontaData?.address && (
+                    <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.4 }}
+                        className="bg-white rounded-3xl shadow-lg border border-gray-100 p-8"
+                    >
+                        <h4 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3">
+                            <div className="w-12 h-12 bg-gradient-to-br from-red-500 to-pink-500 rounded-xl flex items-center justify-center">
+                                <MapPin className="text-white" size={24} />
+                            </div>
+                            Endereço
+                        </h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="p-4 bg-gray-50 rounded-2xl md:col-span-2">
+                                <p className="text-sm text-gray-600 font-medium mb-1">Logradouro</p>
+                                <p className="text-lg font-bold text-gray-900">
+                                    {subcontaData.address.street}{subcontaData.address.number ? `, ${subcontaData.address.number}` : ''}
+                                </p>
+                            </div>
+
+                            {subcontaData.address.complement && (
+                                <div className="p-4 bg-gray-50 rounded-2xl">
+                                    <p className="text-sm text-gray-600 font-medium mb-1">Complemento</p>
+                                    <p className="text-lg font-bold text-gray-900">{subcontaData.address.complement}</p>
+                                </div>
+                            )}
+
+                            <div className="p-4 bg-gray-50 rounded-2xl">
+                                <p className="text-sm text-gray-600 font-medium mb-1">Bairro</p>
+                                <p className="text-lg font-bold text-gray-900">{subcontaData.address.zone}</p>
+                            </div>
+
+                            <div className="p-4 bg-gray-50 rounded-2xl">
+                                <p className="text-sm text-gray-600 font-medium mb-1">Cidade/UF</p>
+                                <p className="text-lg font-bold text-gray-900">{subcontaData.address.city}/{subcontaData.address.state}</p>
+                            </div>
+
+                            <div className="p-4 bg-gray-50 rounded-2xl">
+                                <p className="text-sm text-gray-600 font-medium mb-1">CEP</p>
+                                <p className="text-lg font-bold text-gray-900">{subcontaData.address.zip}</p>
+                            </div>
+                        </div>
+                    </motion.div>
+                )}
+                {/* Informações Importantes */}
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.5 }}
+                    className="bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-3xl p-8"
+                >
+                    <h4 className="text-xl font-bold text-blue-900 mb-4 flex items-center gap-2">
+                        <Info size={24} />
+                        Informações Importantes
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="flex items-start gap-3 p-4 bg-white/70 rounded-2xl">
+                            <CheckCircle2 className="text-green-600 mt-1 flex-shrink-0" size={20} />
+                            <p className="text-sm text-blue-900 font-medium">Saques processados em até 1 dia útil</p>
+                        </div>
+                        <div className="flex items-start gap-3 p-4 bg-white/70 rounded-2xl">
+                            <CheckCircle2 className="text-green-600 mt-1 flex-shrink-0" size={20} />
+                            <p className="text-sm text-blue-900 font-medium">Sem taxa para transferências acima de R$ 100</p>
+                        </div>
+                        <div className="flex items-start gap-3 p-4 bg-white/70 rounded-2xl">
+                            <CheckCircle2 className="text-green-600 mt-1 flex-shrink-0" size={20} />
+                            <p className="text-sm text-blue-900 font-medium">Suporte de segunda a sexta, 9h às 18h</p>
+                        </div>
+                        {!subcontaData?.hasCredentials && (
+                            <div className="flex items-start gap-3 p-4 bg-orange-100 rounded-2xl">
+                                <AlertCircle className="text-orange-600 mt-1 flex-shrink-0" size={20} />
+                                <p className="text-sm text-orange-900 font-medium">Credenciais API não configuradas - solicite ao master</p>
                             </div>
                         )}
-                        <div className="flex justify-between">
-                            <span className="text-gray-600">Bairro</span>
-                            <span className="font-medium text-gray-800">{subcontaData.address.zone}</span>
-                        </div>
-                        <div className="flex justify-between">
-                            <span className="text-gray-600">Cidade/UF</span>
-                            <span className="font-medium text-gray-800">{subcontaData.address.city}/{subcontaData.address.state}</span>
-                        </div>
-                        <div className="flex justify-between">
-                            <span className="text-gray-600">CEP</span>
-                            <span className="font-medium text-gray-800">{subcontaData.address.zip}</span>
-                        </div>
                     </div>
-                </div>
-            )}
-
-            {/* Informações Importantes */}
-            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-                <h4 className="font-semibold text-blue-900 mb-2">Informações Importantes</h4>
-                <ul className="space-y-2 text-sm text-blue-800">
-                    <li>• Saques processados em até 1 dia útil</li>
-                    <li>• Sem taxa para transferências acima de R$ 100</li>
-                    <li>• Suporte disponível de segunda a sexta, 9h às 18h</li>
-                    {!subcontaData?.hasCredentials && (
-                        <li className="text-orange-700">• ⚠ Credenciais API não configuradas - solicite ao master</li>
-                    )}
-                </ul>
+                </motion.div>
             </div>
         </div>
     );
