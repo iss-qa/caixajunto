@@ -1812,73 +1812,77 @@ const WalletDashboard = () => {
               ⚠️ Nenhum dado bancário cadastrado. Preencha abaixo para receber seus pagamentos.
             </p>
 
-            {/* Banco (Dropdown) */}
-            <div className="relative">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Banco *</label>
-              <input
-                type="text"
-                placeholder="Digite para buscar..."
-                value={selectedBankForSub ? `${selectedBankForSub.code} - ${selectedBankForSub.name}` : bankSearch}
-                onChange={(e) => {
-                  setBankSearch(e.target.value);
-                  setSelectedBankForSub(null);
-                  if (e.target.value.length >= 2) {
-                    setBankDropdownOpen(true);
-                    // Fetch banks
-                    bancosService.getAll(e.target.value).then((data: any) => {
-                      setBanks(data || []);
-                    }).catch(() => setBanks([]));
-                  } else {
-                    setBankDropdownOpen(false);
-                  }
-                }}
-                onFocus={() => bankSearch.length >= 2 && setBankDropdownOpen(true)}
-                className="w-full p-2 border border-gray-300 rounded-lg text-sm"
-              />
-              {bankDropdownOpen && banks.length > 0 && (
-                <div className="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                  {banks.map((bank) => (
-                    <button
-                      key={bank.code}
-                      type="button"
-                      onClick={() => {
-                        setSelectedBankForSub(bank);
-                        setBankSearch('');
-                        setBankDropdownOpen(false);
-                      }}
-                      className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100"
-                    >
-                      {bank.code} - {bank.name}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+            {/* Banco e Tipo de Conta na mesma linha */}
+            <div className="grid grid-cols-3 gap-3">
+              {/* Banco (Dropdown) - 2 colunas */}
+              <div className="col-span-2 relative">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Banco *</label>
+                <input
+                  type="text"
+                  placeholder="Digite para buscar..."
+                  value={selectedBankForSub ? `${selectedBankForSub.code} - ${selectedBankForSub.name}` : bankSearch}
+                  onChange={(e) => {
+                    setBankSearch(e.target.value);
+                    setSelectedBankForSub(null);
+                    if (e.target.value.length >= 2) {
+                      setBankDropdownOpen(true);
+                      // Fetch banks
+                      bancosService.getAll(e.target.value).then((data: any) => {
+                        setBanks(data || []);
+                      }).catch(() => setBanks([]));
+                    } else {
+                      setBankDropdownOpen(false);
+                    }
+                  }}
+                  onFocus={() => bankSearch.length >= 2 && setBankDropdownOpen(true)}
+                  className="w-full p-2 border border-gray-300 rounded-lg text-sm"
+                />
+                {bankDropdownOpen && banks.length > 0 && (
+                  <div className="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                    {banks.map((bank) => (
+                      <button
+                        key={bank.code}
+                        type="button"
+                        onClick={() => {
+                          setSelectedBankForSub(bank);
+                          setBankSearch('');
+                          setBankDropdownOpen(false);
+                        }}
+                        className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100"
+                      >
+                        {bank.code} - {bank.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
 
-            {/* Tipo de Conta */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de Conta *</label>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setBankAccountType('corrente')}
-                  className={`p-2 text-sm rounded-lg border ${bankAccountType === 'corrente' ? 'border-green-500 bg-green-50 text-green-700' : 'border-gray-200'}`}
-                >
-                  Corrente
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setBankAccountType('poupanca')}
-                  className={`p-2 text-sm rounded-lg border ${bankAccountType === 'poupanca' ? 'border-green-500 bg-green-50 text-green-700' : 'border-gray-200'}`}
-                >
-                  Poupança
-                </button>
+              {/* Tipo de Conta - 1 coluna */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de Conta *</label>
+                <div className="grid grid-cols-2 gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setBankAccountType('corrente')}
+                    className={`p-2 text-xs rounded-lg border ${bankAccountType === 'corrente' ? 'border-green-500 bg-green-50 text-green-700 font-medium' : 'border-gray-200'}`}
+                  >
+                    Corrente
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBankAccountType('poupanca')}
+                    className={`p-2 text-xs rounded-lg border ${bankAccountType === 'poupanca' ? 'border-green-500 bg-green-50 text-green-700 font-medium' : 'border-gray-200'}`}
+                  >
+                    Poupança
+                  </button>
+                </div>
               </div>
             </div>
 
-            {/* Agência */}
-            <div className="grid grid-cols-3 gap-2">
-              <div className="col-span-2">
+            {/* Agência e Conta na mesma linha */}
+            <div className="grid grid-cols-12 gap-2">
+              {/* Agência */}
+              <div className="col-span-3">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Agência *</label>
                 <input
                   type="text"
@@ -1888,7 +1892,8 @@ const WalletDashboard = () => {
                   className="w-full p-2 border border-gray-300 rounded-lg text-sm"
                 />
               </div>
-              <div>
+              {/* Dígito da Agência */}
+              <div className="col-span-1">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Dígito</label>
                 <input
                   type="text"
@@ -1898,11 +1903,8 @@ const WalletDashboard = () => {
                   className="w-full p-2 border border-gray-300 rounded-lg text-sm"
                 />
               </div>
-            </div>
-
-            {/* Conta */}
-            <div className="grid grid-cols-3 gap-2">
-              <div className="col-span-2">
+              {/* Conta */}
+              <div className="col-span-6">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Conta *</label>
                 <input
                   type="text"
@@ -1912,7 +1914,8 @@ const WalletDashboard = () => {
                   className="w-full p-2 border border-gray-300 rounded-lg text-sm"
                 />
               </div>
-              <div>
+              {/* Dígito da Conta */}
+              <div className="col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Dígito *</label>
                 <input
                   type="text"
