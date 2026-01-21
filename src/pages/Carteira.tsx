@@ -898,7 +898,7 @@ const WalletDashboard = () => {
               name: bankName,
               ispb: selectedBankForSub.code === '260' ? '18236120' : undefined, // ISPB do Nubank
             },
-            agency: { number: bankAgency },
+            agency: { number: bankAgencyDv ? `${bankAgency}${bankAgencyDv}` : bankAgency },
             creditCard: false,
             account: { type: bankAccountType, number: bankAccount, dv: bankAccountDv || '0' },
           },

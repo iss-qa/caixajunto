@@ -909,156 +909,284 @@ export function Participantes() {
           onAction={!searchTerm ? () => setShowAddModal(true) : undefined}
         />
       ) : (
-        <Card>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-gray-200">
-                  <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Participante</th>
-                  <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Contato</th>
-                  <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Chave PIX</th>
-                  <th className="text-center py-3 px-4 text-sm font-semibold text-gray-700">Score</th>
-                  <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Caixa</th>
-                  {usuarioLogado?.tipo === 'master' && (
-                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Gerenciado por</th>
-                  )}
-                  <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700">Ações</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredParticipantes.map((participante) => (
-                  <motion.tr
-                    key={participante._id}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="border-b border-gray-100 hover:bg-gray-50 transition-colors"
-                  >
-                    <td className="py-3 px-4">
-                      <div className="flex items-center gap-3">
-                        <Avatar
-                          src={participante.picture}
-                          name={participante.nome}
-                          size="sm"
-                        />
-                        <div>
-                          <p className="font-medium text-gray-900">{participante.nome}</p>
-                          <p className="text-xs text-gray-500">{participante.cpf || 'CPF não informado'}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="py-3 px-4">
-                      <div className="flex flex-col gap-1">
-                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                          <Mail className="w-3 h-3" />
-                          {participante.email}
-                        </div>
-                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                          <Phone className="w-3 h-3" />
-                          {participante.telefone}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="py-3 px-4">
-                      <div className="flex items-center gap-2 text-sm text-gray-600">
-                        <CreditCard className="w-3 h-3" />
-                        {participante.chavePix || '-'}
-                      </div>
-                    </td>
-                    <td className="py-3 px-4 text-center">
-                      <Badge variant={participante.score >= 80 ? 'success' : 'warning'} size="sm">
+        <>
+          {/* Mobile/Tablet View (Cards) */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:hidden">
+            {filteredParticipantes.map((participante) => (
+              <Card key={participante._id} className="p-4 relative">
+                <div className="flex justify-between items-start mb-4">
+                  <div className="flex items-center gap-3">
+                    <Avatar
+                      src={participante.picture}
+                      name={participante.nome}
+                      size="md"
+                    />
+                    <div>
+                      <p className="font-bold text-gray-900 line-clamp-1">{participante.nome}</p>
+                      <p className="text-xs text-gray-500">{participante.cpf ? maskCPF(participante.cpf) : 'CPF não informado'}</p>
+                      <Badge variant={participante.score >= 80 ? 'success' : 'warning'} size="sm" className="mt-1">
                         <Award className="w-3 h-3 mr-1" />
-                        {participante.score}
+                        Score: {participante.score}
                       </Badge>
-                    </td>
-                    <td className="py-3 px-4">
-                      {participante.caixaNome ? (
-                        <div className="flex items-center gap-2">
-                          <Badge variant="info" size="sm">
-                            {participante.caixaNome}
-                          </Badge>
-                        </div>
-                      ) : (
-                        <span className="text-xs text-gray-400">Sem caixa</span>
-                      )}
-                    </td>
-                    {usuarioLogado?.tipo === 'master' && (
-                      <td className="py-3 px-4 text-sm text-gray-600">
-                        {participante.adminNome || participante.criadoPorNome || '-'}
-                      </td>
-                    )}
+                    </div>
+                  </div>
 
+                  {/* Actions Dropdown for Mobile */}
+                  <div className="relative">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setOpenDropdownId(openDropdownId === participante._id ? null : participante._id);
+                      }}
+                      className="p-2 -mr-2 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100"
+                    >
+                      <MoreVertical className="w-5 h-5" />
+                    </button>
 
-                    <td className="py-3 px-4">
-                      <div className="flex items-center justify-end gap-2 relative">
+                    {openDropdownId === participante._id && (
+                      <div className="absolute right-0 top-full mt-1 bg-white rounded-lg shadow-xl border border-gray-100 py-1 min-w-[200px] z-50">
                         <button
-                          onClick={() => setOpenDropdownId(openDropdownId === participante._id ? null : participante._id)}
-                          className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                          onClick={() => {
+                            openDetailModal(participante);
+                            setOpenDropdownId(null);
+                          }}
+                          className="w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3"
                         >
-                          <MoreVertical className="w-5 h-5 text-gray-600" />
+                          <Eye className="w-4 h-4 text-gray-400" />
+                          Visualizar Detalhes
                         </button>
+                        <button
+                          onClick={() => {
+                            openEditModal(participante);
+                            setOpenDropdownId(null);
+                          }}
+                          className="w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3"
+                        >
+                          <Edit className="w-4 h-4 text-gray-400" />
+                          Editar Participante
+                        </button>
+                        {usuarioLogado?.tipo === 'master' && (
+                          <button
+                            onClick={() => {
+                              openTransferModal(participante);
+                              setOpenDropdownId(null);
+                            }}
+                            className="w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3"
+                          >
+                            <ArrowRightLeft className="w-4 h-4 text-gray-400" />
+                            Transferir Participante
+                          </button>
+                        )}
+                        <div className="h-px bg-gray-100 my-1"></div>
+                        <button
+                          onClick={() => {
+                            openDeleteModal(participante);
+                            setOpenDropdownId(null);
+                          }}
+                          className="w-full px-4 py-3 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-3"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                          Excluir Participante
+                        </button>
+                      </div>
+                    )}
+                    {openDropdownId === participante._id && (
+                      <div
+                        className="fixed inset-0 z-40"
+                        onClick={() => setOpenDropdownId(null)}
+                      />
+                    )}
+                  </div>
+                </div>
 
-                        {openDropdownId === participante._id && (
-                          <>
-                            {/* Backdrop to close dropdown */}
-                            <div
-                              className="fixed inset-0 z-10"
-                              onClick={() => setOpenDropdownId(null)}
-                            />
-                            {/* Dropdown menu */}
-                            <div className="absolute right-0 top-full mt-1 bg-white rounded-lg shadow-lg border border-gray-200 py-1 min-w-[200px] z-20">
-                              <button
-                                onClick={() => {
-                                  openDetailModal(participante);
-                                  setOpenDropdownId(null);
-                                }}
-                                className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
-                              >
-                                <Eye className="w-4 h-4" />
-                                Visualizar Detalhes
-                              </button>
-                              <button
-                                onClick={() => {
-                                  openEditModal(participante);
-                                  setOpenDropdownId(null);
-                                }}
-                                className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
-                              >
-                                <Edit className="w-4 h-4" />
-                                Editar Participante
-                              </button>
-                              {usuarioLogado?.tipo === 'master' && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 text-sm text-gray-600 bg-gray-50 p-2 rounded-lg">
+                    <Mail className="w-4 h-4 text-gray-400" />
+                    <span className="truncate">{participante.email}</span>
+                  </div>
+
+                  <div className="flex items-center gap-2 text-sm text-gray-600 bg-gray-50 p-2 rounded-lg">
+                    <Phone className="w-4 h-4 text-gray-400" />
+                    <span>{maskPhone(participante.telefone)}</span>
+                  </div>
+
+                  {participante.caixaNome ? (
+                    <div className="flex items-center gap-2 text-sm bg-blue-50 text-blue-700 p-2 rounded-lg">
+                      <Home className="w-4 h-4 text-blue-500" />
+                      <span className="truncate">{participante.caixaNome}</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 text-sm bg-gray-50 text-gray-500 p-2 rounded-lg">
+                      <Home className="w-4 h-4 text-gray-400" />
+                      <span>Sem caixa vinculado</span>
+                    </div>
+                  )}
+
+                  {usuarioLogado?.tipo === 'master' && (
+                    <div className="flex items-center gap-2 text-xs text-gray-500 mt-2 pl-1">
+                      <span>Gerenciado por:</span>
+                      <span className="font-medium text-gray-700">
+                        {participante.adminNome || participante.criadoPorNome || '-'}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </Card>
+            ))}
+          </div>
+
+          {/* Desktop View (Table) */}
+          <Card className="hidden lg:block">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-200">
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Participante</th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Contato</th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Chave PIX</th>
+                    <th className="text-center py-3 px-4 text-sm font-semibold text-gray-700">Score</th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Caixa</th>
+                    {usuarioLogado?.tipo === 'master' && (
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Gerenciado por</th>
+                    )}
+                    <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700">Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredParticipantes.map((participante) => (
+                    <motion.tr
+                      key={participante._id}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="border-b border-gray-100 hover:bg-gray-50 transition-colors"
+                    >
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-3">
+                          <Avatar
+                            src={participante.picture}
+                            name={participante.nome}
+                            size="sm"
+                          />
+                          <div>
+                            <p className="font-medium text-gray-900">{participante.nome}</p>
+                            <p className="text-xs text-gray-500">{participante.cpf ? maskCPF(participante.cpf) : 'CPF não informado'}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="flex flex-col gap-1">
+                          <div className="flex items-center gap-2 text-sm text-gray-600">
+                            <Mail className="w-3 h-3" />
+                            {participante.email}
+                          </div>
+                          <div className="flex items-center gap-2 text-sm text-gray-600">
+                            <Phone className="w-3 h-3" />
+                            {participante.telefone ? maskPhone(participante.telefone) : '-'}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-2 text-sm text-gray-600">
+                          <CreditCard className="w-3 h-3" />
+                          {participante.chavePix || '-'}
+                        </div>
+                      </td>
+                      <td className="py-3 px-4 text-center">
+                        <Badge variant={participante.score >= 80 ? 'success' : 'warning'} size="sm">
+                          <Award className="w-3 h-3 mr-1" />
+                          {participante.score}
+                        </Badge>
+                      </td>
+                      <td className="py-3 px-4">
+                        {participante.caixaNome ? (
+                          <div className="flex items-center gap-2">
+                            <Badge variant="info" size="sm">
+                              {participante.caixaNome}
+                            </Badge>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-gray-400">Sem caixa</span>
+                        )}
+                      </td>
+                      {usuarioLogado?.tipo === 'master' && (
+                        <td className="py-3 px-4 text-sm text-gray-600">
+                          {participante.adminNome || participante.criadoPorNome || '-'}
+                        </td>
+                      )}
+
+
+                      <td className="py-3 px-4">
+                        <div className="flex items-center justify-end gap-2 relative">
+                          <button
+                            onClick={() => setOpenDropdownId(openDropdownId === participante._id ? null : participante._id)}
+                            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                          >
+                            <MoreVertical className="w-5 h-5 text-gray-600" />
+                          </button>
+
+                          {openDropdownId === participante._id && (
+                            <>
+                              {/* Backdrop to close dropdown */}
+                              <div
+                                className="fixed inset-0 z-10"
+                                onClick={() => setOpenDropdownId(null)}
+                              />
+                              {/* Dropdown menu */}
+                              <div className="absolute right-0 top-full mt-1 bg-white rounded-lg shadow-lg border border-gray-200 py-1 min-w-[200px] z-20">
                                 <button
                                   onClick={() => {
-                                    openTransferModal(participante);
+                                    openDetailModal(participante);
                                     setOpenDropdownId(null);
                                   }}
                                   className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
                                 >
-                                  <ArrowRightLeft className="w-4 h-4" />
-                                  Transferir Participante
+                                  <Eye className="w-4 h-4" />
+                                  Visualizar Detalhes
                                 </button>
-                              )}
-                              <button
-                                onClick={() => {
-                                  openDeleteModal(participante);
-                                  setOpenDropdownId(null);
-                                }}
-                                className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                                Excluir Participante
-                              </button>
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    </td>
-                  </motion.tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Card>
+                                <button
+                                  onClick={() => {
+                                    openEditModal(participante);
+                                    setOpenDropdownId(null);
+                                  }}
+                                  className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                >
+                                  <Edit className="w-4 h-4" />
+                                  Editar Participante
+                                </button>
+                                {usuarioLogado?.tipo === 'master' && (
+                                  <button
+                                    onClick={() => {
+                                      openTransferModal(participante);
+                                      setOpenDropdownId(null);
+                                    }}
+                                    className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                  >
+                                    <ArrowRightLeft className="w-4 h-4" />
+                                    Transferir Participante
+                                  </button>
+                                )}
+                                <button
+                                  onClick={() => {
+                                    openDeleteModal(participante);
+                                    setOpenDropdownId(null);
+                                  }}
+                                  className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                  Excluir Participante
+                                </button>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </motion.tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </>
       )}
 
       {/* Modal Adicionar Participante */}
