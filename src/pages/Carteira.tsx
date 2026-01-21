@@ -958,7 +958,13 @@ const WalletDashboard = () => {
         setSuccessMessage('Subconta criada com sucesso! ✅');
 
         // Check for onboarding URL
-        const urlOnboarding = resp?.onboardingUrl || resp?.subconta?.onboardingUrl;
+        let urlOnboarding = resp?.onboardingUrl || resp?.subconta?.onboardingUrl;
+
+        // 🧪 TESTE: Se não vier URL (ex: Sandbox), usar a URL de teste fornecida
+        if (!urlOnboarding) {
+          console.log('[Carteira] Modo Teste: Usando URL de onboarding simulada');
+          urlOnboarding = 'https://cadastro.io/9452ec3c2ab24ec84aed7723aae56f3d';
+        }
 
         if (urlOnboarding) {
           console.log('[Carteira] Onboarding necessário. URL:', urlOnboarding);
