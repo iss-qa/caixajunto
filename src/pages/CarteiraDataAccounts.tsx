@@ -1038,7 +1038,7 @@ const CarteiraDataAccounts = ({
                         <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-500 rounded-xl flex items-center justify-center">
                             <CreditCard className="text-white" size={24} />
                         </div>
-                        Dados Bancários
+                        Dados da Conta e Endereço
                     </h4>
 
                     {loadingBankAccount ? (
@@ -1136,13 +1136,88 @@ const CarteiraDataAccounts = ({
                                 error={bankAccountError}
                             />
 
+                            <div className="mt-8 pt-8 border-t-2 border-gray-100">
+                                <h5 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                                    <MapPin className="text-blue-600" size={20} />
+                                    Endereço de Correspondência
+                                </h5>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <ModernInput
+                                        label="CEP"
+                                        value={addressZip}
+                                        onChange={(e: any) => {
+                                            const digits = e.target.value.replace(/\D/g, '').slice(0, 8);
+                                            setAddressZip(digits);
+                                        }}
+                                        onBlur={async () => {
+                                            const cep = String(addressZip || '').replace(/\D/g, '');
+                                            if (cep.length !== 8) return;
+                                            try {
+                                                const resp = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+                                                const data = await resp.json();
+                                                if (!data?.erro) {
+                                                    setAddressStreet(data.logradouro || addressStreet);
+                                                    setAddressZone(data.bairro || addressZone);
+                                                    setAddressCity(data.localidade || addressCity);
+                                                    setAddressState(data.uf || addressState);
+                                                }
+                                            } catch { }
+                                        }}
+                                        placeholder="00000-000"
+                                        icon={Hash}
+                                        required
+                                    />
+                                    <ModernInput
+                                        label="Rua"
+                                        value={addressStreet}
+                                        onChange={(e: any) => setAddressStreet(e.target.value)}
+                                        icon={MapPin}
+                                        required
+                                    />
+                                    <ModernInput
+                                        label="Número"
+                                        value={addressNumber}
+                                        onChange={(e: any) => setAddressNumber(e.target.value)}
+                                        icon={Hash}
+                                        required
+                                    />
+                                    <ModernInput
+                                        label="Complemento"
+                                        value={addressComplement}
+                                        onChange={(e: any) => setAddressComplement(e.target.value)}
+                                    />
+                                    <ModernInput
+                                        label="Bairro"
+                                        value={addressZone}
+                                        onChange={(e: any) => setAddressZone(e.target.value)}
+                                        icon={MapPin}
+                                        required
+                                    />
+                                    <ModernInput
+                                        label="Cidade"
+                                        value={addressCity}
+                                        onChange={(e: any) => setAddressCity(e.target.value)}
+                                        icon={MapPin}
+                                        required
+                                    />
+                                    <ModernInput
+                                        label="Estado"
+                                        value={addressState}
+                                        onChange={(e: any) => setAddressState(e.target.value)}
+                                        placeholder="UF"
+                                        icon={MapPin}
+                                        required
+                                    />
+                                </div>
+                            </div>
+
                             <motion.button
                                 whileHover={{ scale: 1.02 }}
                                 whileTap={{ scale: 0.98 }}
                                 type="button"
                                 onClick={handleSaveBankAccount}
                                 disabled={savingBankAccount || !selectedBankForSub || !bankAgency || !bankAccount || !bankAccountDv}
-                                className="w-full py-4 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-bold text-lg rounded-2xl shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100 flex items-center justify-center gap-3"
+                                className="w-full py-4 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-bold text-lg rounded-2xl shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100 flex items-center justify-center gap-3 mt-8"
                             >
                                 {savingBankAccount ? (
                                     <>
@@ -1152,7 +1227,7 @@ const CarteiraDataAccounts = ({
                                 ) : (
                                     <>
                                         <CheckCircle2 size={24} />
-                                        Confirmar dados bancários
+                                        Confirmar Dados
                                     </>
                                 )}
                             </motion.button>
@@ -1198,88 +1273,7 @@ const CarteiraDataAccounts = ({
                 {/* Card de Faturamento e Limites */}
                 {/* ... (existing cards) ... */}
 
-                {/* Card de Endereço Editável */}
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.4 }}
-                    className="bg-white rounded-3xl shadow-lg border border-gray-100 p-8"
-                >
-                    <h4 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3">
-                        <div className="w-12 h-12 bg-gradient-to-br from-red-500 to-pink-500 rounded-xl flex items-center justify-center">
-                            <MapPin className="text-white" size={24} />
-                        </div>
-                        Endereço de Correspondência
-                    </h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <ModernInput
-                            label="CEP"
-                            value={addressZip}
-                            onChange={(e: any) => {
-                                const digits = e.target.value.replace(/\D/g, '').slice(0, 8);
-                                setAddressZip(digits);
-                            }}
-                            onBlur={async () => {
-                                const cep = String(addressZip || '').replace(/\D/g, '');
-                                if (cep.length !== 8) return;
-                                try {
-                                    const resp = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
-                                    const data = await resp.json();
-                                    if (!data?.erro) {
-                                        setAddressStreet(data.logradouro || addressStreet);
-                                        setAddressZone(data.bairro || addressZone);
-                                        setAddressCity(data.localidade || addressCity);
-                                        setAddressState(data.uf || addressState);
-                                    }
-                                } catch { }
-                            }}
-                            placeholder="00000-000"
-                            icon={Hash}
-                            required
-                        />
-                        <ModernInput
-                            label="Rua"
-                            value={addressStreet}
-                            onChange={(e: any) => setAddressStreet(e.target.value)}
-                            icon={MapPin}
-                            required
-                        />
-                        <ModernInput
-                            label="Número"
-                            value={addressNumber}
-                            onChange={(e: any) => setAddressNumber(e.target.value)}
-                            icon={Hash}
-                            required
-                        />
-                        <ModernInput
-                            label="Complemento"
-                            value={addressComplement}
-                            onChange={(e: any) => setAddressComplement(e.target.value)}
-                        />
-                        <ModernInput
-                            label="Bairro"
-                            value={addressZone}
-                            onChange={(e: any) => setAddressZone(e.target.value)}
-                            icon={MapPin}
-                            required
-                        />
-                        <ModernInput
-                            label="Cidade"
-                            value={addressCity}
-                            onChange={(e: any) => setAddressCity(e.target.value)}
-                            icon={MapPin}
-                            required
-                        />
-                        <ModernInput
-                            label="Estado"
-                            value={addressState}
-                            onChange={(e: any) => setAddressState(e.target.value)}
-                            placeholder="UF"
-                            icon={MapPin}
-                            required
-                        />
-                    </div>
-                </motion.div>
+
                 {/* Informações Importantes */}
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
