@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Wallet, TrendingUp, Download, Plus, Eye, EyeOff, Building2, Check, X, Calendar, Mail, Clock, AlertCircle, FileText } from 'lucide-react';
@@ -197,6 +197,23 @@ const WalletDashboard = () => {
   const [bankAccount, setBankAccount] = useState('');
   const [bankAccountDv, setBankAccountDv] = useState('');
   const [bankAccountType, setBankAccountType] = useState<'corrente' | 'poupanca'>('corrente');
+
+  // useCallback handlers to prevent re-creation and maintain focus
+  const handleBankAgencyChange = useCallback((value: string) => {
+    setBankAgency(value);
+  }, []);
+
+  const handleBankAgencyDvChange = useCallback((value: string) => {
+    setBankAgencyDv(value);
+  }, []);
+
+  const handleBankAccountChange = useCallback((value: string) => {
+    setBankAccount(value);
+  }, []);
+
+  const handleBankAccountDvChange = useCallback((value: string) => {
+    setBankAccountDv(value);
+  }, []);
 
   const [bankAccounts, setBankAccounts] = useState<
     Array<{
@@ -1924,52 +1941,72 @@ const WalletDashboard = () => {
               <div className="col-span-3">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Agência *</label>
                 <input
+                  key="bank-agency"
                   id="bank-agency-input"
                   type="text"
                   inputMode="numeric"
                   placeholder="0000"
                   value={bankAgency}
-                  onChange={(e) => setBankAgency(e.target.value.replace(/\D/g, '').slice(0, 5))}
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/\D/g, '').slice(0, 5);
+                    handleBankAgencyChange(value);
+                  }}
                   className="w-full p-2 border border-gray-300 rounded-lg text-sm"
+                  autoComplete="off"
                 />
               </div>
               {/* Dígito da Agência */}
               <div className="col-span-1">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Dígito</label>
                 <input
+                  key="bank-agency-dv"
                   id="bank-agency-dv-input"
                   type="text"
                   inputMode="numeric"
                   placeholder="0"
                   value={bankAgencyDv}
-                  onChange={(e) => setBankAgencyDv(e.target.value.replace(/\D/g, '').slice(0, 1))}
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/\D/g, '').slice(0, 1);
+                    handleBankAgencyDvChange(value);
+                  }}
                   className="w-full p-2 border border-gray-300 rounded-lg text-sm"
+                  autoComplete="off"
                 />
               </div>
               {/* Conta */}
               <div className="col-span-6">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Conta *</label>
                 <input
+                  key="bank-account"
                   id="bank-account-input"
                   type="text"
                   inputMode="numeric"
                   placeholder="00000000"
                   value={bankAccount}
-                  onChange={(e) => setBankAccount(e.target.value.replace(/\D/g, '').slice(0, 12))}
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/\D/g, '').slice(0, 12);
+                    handleBankAccountChange(value);
+                  }}
                   className="w-full p-2 border border-gray-300 rounded-lg text-sm"
+                  autoComplete="off"
                 />
               </div>
               {/* Dígito da Conta */}
               <div className="col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Dígito *</label>
                 <input
+                  key="bank-account-dv"
                   id="bank-account-dv-input"
                   type="text"
                   inputMode="numeric"
                   placeholder="0"
                   value={bankAccountDv}
-                  onChange={(e) => setBankAccountDv(e.target.value.replace(/\D/g, '').slice(0, 2))}
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/\D/g, '').slice(0, 2);
+                    handleBankAccountDvChange(value);
+                  }}
                   className="w-full p-2 border border-gray-300 rounded-lg text-sm"
+                  autoComplete="off"
                 />
               </div>
             </div>
