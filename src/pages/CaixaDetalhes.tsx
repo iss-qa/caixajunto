@@ -193,7 +193,7 @@ export function CaixaDetalhes() {
   const [editForm, setEditForm] = useState({
     nome: '',
     descricao: '',
-    tipo: 'mensal' as 'mensal' | 'semanal',
+    tipo: 'mensal' as 'mensal' | 'semanal' | 'diario',
     valorTotal: 5000,
     qtdParticipantes: 10,
     duracaoMeses: 10,
