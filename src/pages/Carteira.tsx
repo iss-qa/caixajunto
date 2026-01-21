@@ -1282,70 +1282,50 @@ const WalletDashboard = () => {
   }, [hasSubAccount, usuario]);
 
   // 🧪 TESTE FORCE: Ativar modal se tiver subconta (simulando pendência)
-  useEffect(() => {
-    if (hasSubAccount && !onboardingUrl) {
-      const testUrl = 'https://cadastro.io/9452ec3c2ab24ec84aed7723aae56f3d';
-      console.log('[Carteira] 🧪 FORCE TEST: Abrindo modal com URL de teste');
-      setOnboardingUrl(testUrl);
-      setShowOnboardingModal(true);
-    }
-  }, [hasSubAccount]);
+  // DESABILITADO: Este código era para teste e estava causando loops de estado.
+  // Em produção, o modal deve abrir apenas quando o backend retorna uma onboardingUrl real.
+  // useEffect(() => {
+  //   if (hasSubAccount && !onboardingUrl) {
+  //     const testUrl = 'https://cadastro.io/9452ec3c2ab24ec84aed7723aae56f3d';
+  //     console.log('[Carteira] 🧪 FORCE TEST: Abrindo modal com URL de teste');
+  //     setOnboardingUrl(testUrl);
+  //     setShowOnboardingModal(true);
+  //   }
+  // }, [hasSubAccount]);
 
 
   // 🔄 POLLING: Verificar status do onboarding automaticamente
-  useEffect(() => {
-    let intervalId: any;
-
-    if (showOnboardingModal && onboardingUrl) {
-      console.log('🔄 Iniciando polling de verificação de onboarding...');
-
-      intervalId = setInterval(async () => {
-        try {
-          console.log('📡 Verificando status da subconta (Polling)...');
-          // Nota: checkByCpf retorna dados mais completos do status no Lytex
-          // Mas getMine é o que usamos para criar. Vamos usar getMine ou checkByCpf?
-          // checkByCpf é mais robusto para status externo.
-
-          if (usuario?.cpf) {
-            const checkResp = await subcontasService.checkByCpf(usuario.cpf);
-
-            // Se não tiver mais onboardingUrl no retorno, ou status for diferente
-            // Assumimos que foi concluído.
-            // Como não sabemos o campo exato de status de sucesso, vamos assumir que
-            // se a URL sumir do retorno do backend, ou algo mudar, é sucesso.
-            // Mas o backend atual sempre retorna a URL se ela existir no objeto do mongo/lytex?
-            // Se o usuário completou, o Lytex deve atualizar o status.
-
-            // Para garantir, vamos verificar se o onboardingUrl MUDOU ou SUMIU
-            // ou se temos um indicativo de sucesso.
-            // Por enquanto, vamos logar. 
-            // Se o usuário pediu para remover o botão, precisamos confiar que algo muda.
-
-            console.log('📦 Status Polling:', checkResp);
-
-            // Lógica Provisória: Se a subconta existe e NÃO tem onboardingUrl (ou mudou status), fecha.
-            // Mas o backend pode retornar a URL antiga cacheada?
-            // Vamos confiar que o clique no final do fluxo do iframe (redirect) ou o polling resolve.
-
-            const currentOnboardingUrl = checkResp?.subconta?.onboardingUrl;
-
-            // Se não tiver URL de onboarding no retorno, FINALIZOU!
-            if (!currentOnboardingUrl && checkResp?.exists) {
-              console.log('✅ Onboarding concluído! Recarregando...');
-              clearInterval(intervalId);
-              window.location.reload();
-            }
-          }
-        } catch (error) {
-          console.error('❌ Erro no polling:', error);
-        }
-      }, 60000); // Checar a cada 1 minuto (60s)
-    }
-
-    return () => {
-      if (intervalId) clearInterval(intervalId);
-    };
-  }, [showOnboardingModal, onboardingUrl, usuario?.cpf]);
+  // DESABILITADO TEMPORARIAMENTE: O polling pode estar causando instabilidade no iframe.
+  // O usuário pode clicar no X para verificar manualmente se o onboarding foi concluído.
+  // useEffect(() => {
+  //   let intervalId: any;
+  //
+  //   if (showOnboardingModal && onboardingUrl) {
+  //     console.log('🔄 Iniciando polling de verificação de onboarding...');
+  //
+  //     intervalId = setInterval(async () => {
+  //       try {
+  //         console.log('📡 Verificando status da subconta (Polling)...');
+  //         if (usuario?.cpf) {
+  //           const checkResp = await subcontasService.checkByCpf(usuario.cpf);
+  //           console.log('📦 Status Polling:', checkResp);
+  //           const currentOnboardingUrl = checkResp?.subconta?.onboardingUrl;
+  //           if (!currentOnboardingUrl && checkResp?.exists) {
+  //             console.log('✅ Onboarding concluído! Recarregando...');
+  //             clearInterval(intervalId);
+  //             window.location.reload();
+  //           }
+  //         }
+  //       } catch (error) {
+  //         console.error('❌ Erro no polling:', error);
+  //       }
+  //     }, 60000);
+  //   }
+  //
+  //   return () => {
+  //     if (intervalId) clearInterval(intervalId);
+  //   };
+  // }, [showOnboardingModal, onboardingUrl, usuario?.cpf]);
 
 
   useEffect(() => {
