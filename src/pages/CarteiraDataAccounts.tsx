@@ -264,6 +264,16 @@ export const SubAccountCreation = ({
 
             if (subAccountId) {
                 updateUsuario({ lytexSubAccountId: subAccountId });
+
+                // 🆕 NOVO: Acionar modal de onboarding se URL estiver disponível
+                if (resp.onboardingUrl) {
+                    console.log('✅ URL de onboarding recebida:', resp.onboardingUrl);
+                    setOnboardingUrl(resp.onboardingUrl);
+                    setShowOnboardingModal(true);
+                } else {
+                    console.warn('⚠️ URL de onboarding não recebida do backend');
+                }
+
                 onSuccess();
                 return;
             }
