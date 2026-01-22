@@ -197,13 +197,13 @@ export const SubAccountCreation = ({
         const errorMessages: { [key: string]: string } = {
             name: 'Por favor, informe seu nome completo',
             cpfCnpj: 'Por favor, informe seu CPF',
-            cellphone: 'Por favor, informe seu telefone',
+            cellphone: 'Por favor, informe seu telefone com DDD (11 dígitos)',
             email: 'Por favor, informe seu e-mail',
             aboutBusiness: 'Por favor, informe sobre o seu negócio',
             branchOfActivity: 'Por favor, informe o ramo de atividade',
             adminCpf: 'Por favor, informe o CPF do administrador',
             adminFullName: 'Por favor, informe o nome completo do administrador',
-            adminCellphone: 'Por favor, informe o telefone do administrador',
+            adminCellphone: 'Por favor, informe o telefone do administrador com DDD (11 dígitos)',
             adminBirthDate: 'Por favor, informe a data de nascimento',
             adminMotherName: 'Por favor, informe o nome da mãe',
             bank: 'Por favor, selecione um banco',
@@ -218,12 +218,26 @@ export const SubAccountCreation = ({
             addressState: 'Por favor, informe o estado',
         };
 
-        // Remove erro se campo foi preenchido
-        if (value && value.toString().trim()) {
+        let isValid = true;
+        let errorMessage = errorMessages[fieldName] || 'Campo obrigatório';
+
+        if (!value || !value.toString().trim()) {
+            isValid = false;
+        } else {
+            // Validação específica para telefone
+            if (fieldName === 'cellphone' || fieldName === 'adminCellphone') {
+                const digits = value.toString().replace(/\D/g, '');
+                if (digits.length < 10 || digits.length > 11) {
+                    isValid = false;
+                    errorMessage = 'Telefone inválido (use DDD + Número, ex: 11999999999)';
+                }
+            }
+        }
+
+        if (isValid) {
             delete newErrors[fieldName];
         } else {
-            // Adiciona erro se campo está vazio
-            newErrors[fieldName] = errorMessages[fieldName] || 'Campo obrigatório';
+            newErrors[fieldName] = errorMessage;
         }
 
         setValidationErrors(newErrors);
@@ -263,32 +277,32 @@ export const SubAccountCreation = ({
 
             const payload: any = {
                 type: subForm.type,
-                cpfCnpj: subForm.cpfCnpj,
-                name: subForm.name,
-                fantasyName: subForm.type === 'pj' ? subForm.fantasyName : undefined,
-                cellphone: subForm.cellphone,
-                email: subForm.email,
-                aboutBusiness: subForm.aboutBusiness,
-                branchOfActivity: subForm.branchOfActivity,
+                cpfCnpj: subForm.cpfCnpj.replace(/\D/g, ''),
+                name: subForm.name.trim(),
+                fantasyName: subForm.type === 'pj' ? subForm.fantasyName.trim() : undefined,
+                cellphone: subForm.cellphone.replace(/\D/g, ''),
+                email: subForm.email.trim(),
+                aboutBusiness: subForm.aboutBusiness.trim(),
+                branchOfActivity: subForm.branchOfActivity.trim(),
                 // webhookUrl: 'https://webhook.site/rafaela-notifications', // REMOVIDO: Evitar erro 500 se URL for inválida
                 withdrawValue: subForm.withdrawValue,
                 numberOfExpectedMonthlyEmissions: subForm.numberOfExpectedMonthlyEmissions,
                 expectedMonthlyBilling: subForm.expectedMonthlyBilling,
                 address: subForm.addressStreet ? {
-                    street: subForm.addressStreet,
-                    zone: subForm.addressZone,
-                    city: subForm.addressCity,
-                    state: subForm.addressState,
-                    number: subForm.addressNumber || '0',
-                    complement: subForm.addressComplement || undefined,
-                    zip: subForm.addressZip,
+                    street: subForm.addressStreet.trim(),
+                    zone: subForm.addressZone.trim(),
+                    city: subForm.addressCity.trim(),
+                    state: subForm.addressState.trim(),
+                    number: (subForm.addressNumber || '0').trim(),
+                    complement: (subForm.addressComplement || '').trim() || undefined,
+                    zip: subForm.addressZip.replace(/\D/g, ''),
                 } : undefined,
                 adminEnterprise: (subForm.adminCpf && subForm.adminBirthDate) ? { // Só envia se tiver data de nascimento
-                    cpf: subForm.adminCpf,
-                    fullName: subForm.adminFullName || subForm.name,
-                    cellphone: subForm.adminCellphone || subForm.cellphone,
+                    cpf: subForm.adminCpf.replace(/\D/g, ''),
+                    fullName: (subForm.adminFullName || subForm.name).trim(),
+                    cellphone: (subForm.adminCellphone || subForm.cellphone).replace(/\D/g, ''),
                     birthDate: new Date(subForm.adminBirthDate).toISOString(),
-                    motherName: subForm.adminMotherName || 'Não informado',
+                    motherName: (subForm.adminMotherName || '').trim() || 'Não informado',
                 } : undefined,
             };
 
@@ -309,7 +323,7 @@ export const SubAccountCreation = ({
                         name: bankName,
                         ispb: selectedBankForSub.code === '260' ? '18236120' : undefined,
                     },
-                    agency: { number: bankAgencyDv ? `${bankAgency}${bankAgencyDv}` : bankAgency },
+                    agency: { number: bankAgencyDv ? `${bankAgency.replace(/^0+/, '')}${bankAgencyDv}` : bankAgency.replace(/^0+/, '') },
                     creditCard: false,
                     account: { type: bankAccountType, number: bankAccount, dv: bankAccountDv || '0' },
                 }];
