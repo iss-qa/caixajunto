@@ -141,108 +141,8 @@ const ModernSelect = ({ label, value, onChange, options, icon: Icon, required = 
     );
 };
 
-// Componente BankAccountForm Modernizado
-const BankAccountForm = ({
-    bankCode,
-    bankName,
-    agency,
-    agencyDv,
-    account,
-    accountDv,
-    accountType,
-    onChange,
-    error
-}: any) => {
-    const bancos = [
-        { code: '001', name: 'Banco do Brasil' },
-        { code: '033', name: 'Santander' },
-        { code: '104', name: 'Caixa Econômica' },
-        { code: '237', name: 'Bradesco' },
-        { code: '341', name: 'Itaú' },
-        { code: '260', name: 'Nu Pagamentos S.A' },
-        { code: '077', name: 'Banco Inter' },
-    ];
-
-    return (
-        <div className="space-y-5">
-            <ModernSelect
-                label="Banco"
-                value={bankCode || ''}
-                onChange={(e: any) => {
-                    const selected = bancos.find(b => b.code === e.target.value);
-                    onChange({
-                        bankCode: selected?.code,
-                        bankName: selected?.name
-                    });
-                }}
-                options={[
-                    { value: '', label: 'Selecione o banco' },
-                    ...bancos.map(b => ({ value: b.code, label: `${b.code} - ${b.name}` }))
-                ]}
-                icon={Building2}
-                required
-            />
-
-            <div className="grid grid-cols-2 gap-4">
-                <ModernInput
-                    label="Agência"
-                    value={agency}
-                    onChange={(e: any) => onChange({ agency: e.target.value.replace(/\D/g, '').slice(0, 4) })}
-                    placeholder="0000"
-                    icon={Hash}
-                    required
-                />
-                <ModernInput
-                    label="Dígito"
-                    value={agencyDv}
-                    onChange={(e: any) => onChange({ agencyDv: e.target.value.replace(/\D/g, '').slice(0, 1) })}
-                    placeholder="0"
-                />
-            </div>
-
-            <ModernSelect
-                label="Tipo de Conta"
-                value={accountType}
-                onChange={(e: any) => onChange({ accountType: e.target.value })}
-                options={[
-                    { value: 'corrente', label: 'Conta Corrente' },
-                    { value: 'poupanca', label: 'Conta Poupança' }
-                ]}
-                icon={Wallet}
-                required
-            />
-
-            <div className="grid grid-cols-2 gap-4">
-                <ModernInput
-                    label="Número da Conta"
-                    value={account}
-                    onChange={(e: any) => onChange({ account: e.target.value.replace(/\D/g, '').slice(0, 12) })}
-                    placeholder="00000000"
-                    icon={CreditCard}
-                    required
-                />
-                <ModernInput
-                    label="Dígito"
-                    value={accountDv}
-                    onChange={(e: any) => onChange({ accountDv: e.target.value.replace(/\D/g, '').slice(0, 2) })}
-                    placeholder="0"
-                    required
-                />
-            </div>
-
-            {error && (
-                <motion.div
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="p-4 bg-red-50 border-2 border-red-200 rounded-xl flex items-start gap-3"
-                >
-                    <AlertCircle className="text-red-600 mt-0.5 flex-shrink-0" size={20} />
-                    <p className="text-sm text-red-800 font-medium">{error}</p>
-                </motion.div>
-            )}
-        </div>
-    );
-};
+// Componente BankAccountForm Modernizado - Importado de components
+import { BankAccountForm } from './Carteira/components/BankAccountForm';
 
 // Componente SubAccountCreation Modernizado
 export const SubAccountCreation = ({
@@ -306,7 +206,7 @@ export const SubAccountCreation = ({
                 email: subForm.email,
                 aboutBusiness: subForm.aboutBusiness,
                 branchOfActivity: subForm.branchOfActivity,
-                webhookUrl: 'https://webhook.site/rafaela-notifications',
+                // webhookUrl: 'https://webhook.site/rafaela-notifications', // REMOVIDO: Evitar erro 500 se URL for inválida
                 withdrawValue: subForm.withdrawValue,
                 numberOfExpectedMonthlyEmissions: subForm.numberOfExpectedMonthlyEmissions,
                 expectedMonthlyBilling: subForm.expectedMonthlyBilling,
@@ -319,11 +219,11 @@ export const SubAccountCreation = ({
                     complement: subForm.addressComplement || undefined,
                     zip: subForm.addressZip,
                 } : undefined,
-                adminEnterprise: subForm.adminCpf ? {
+                adminEnterprise: (subForm.adminCpf && subForm.adminBirthDate) ? { // Só envia se tiver data de nascimento
                     cpf: subForm.adminCpf,
                     fullName: subForm.adminFullName || subForm.name,
                     cellphone: subForm.adminCellphone || subForm.cellphone,
-                    birthDate: subForm.adminBirthDate ? new Date(subForm.adminBirthDate).toISOString() : new Date().toISOString(),
+                    birthDate: new Date(subForm.adminBirthDate).toISOString(),
                     motherName: subForm.adminMotherName || 'Não informado',
                 } : undefined,
             };
@@ -352,6 +252,14 @@ export const SubAccountCreation = ({
             }
 
             const resp = await subcontasService.createMine(payload);
+
+            if (!resp.success) {
+                // Se o backend retornou erro explícito (ex: 500 do Lytex tratado)
+                setSubAccountError(resp.message || resp.error || 'Erro ao criar subconta');
+                setTimeout(() => setSubAccountError(null), 10000);
+                return;
+            }
+
             const subAccountId = resp?.subconta?.lytexId || resp?.subconta?._id;
 
             if (subAccountId) {
@@ -360,7 +268,7 @@ export const SubAccountCreation = ({
                 return;
             }
 
-            setSubAccountError('Não foi possível obter o ID da subconta criada');
+            setSubAccountError('Não foi possível obter o ID da subconta criada (Resposta sem ID)');
             setTimeout(() => setSubAccountError(null), 5000);
 
         } catch (e: any) {
@@ -795,15 +703,15 @@ const CarteiraDataAccounts = ({
                 name: subcontaData.name || usuario?.nome || '',
                 email: subcontaData.email || usuario?.email || '',
                 cpfCnpj: subcontaData.cpfCnpj || usuario?.cpf || '',
-                address: {
+                address: (addressZip && addressStreet) ? {
                     street: addressStreet,
                     zone: addressZone,
                     city: addressCity,
                     state: addressState,
-                    number: addressNumber,
+                    number: addressNumber || '0',
                     complement: addressComplement,
                     zip: addressZip,
-                },
+                } : undefined,
                 banksAccounts: [{
                     _bankAccountId: bankAccountId || undefined,
                     owner: {

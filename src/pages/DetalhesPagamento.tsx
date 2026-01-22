@@ -421,7 +421,9 @@ export function DetalhesPagamento({
     for (let parcela = 1; parcela <= numParcelas; parcela++) {
       const dataVencimento = new Date(dataBase)
 
-      if (isSemanal) {
+      if (caixa.tipo === 'diario') {
+        dataVencimento.setDate(dataVencimento.getDate() + (parcela - 1))
+      } else if (isSemanal) {
         dataVencimento.setDate(dataVencimento.getDate() + ((parcela - 1) * 7))
       } else {
         dataVencimento.setMonth(dataVencimento.getMonth() + parcela - 1)
@@ -495,7 +497,7 @@ export function DetalhesPagamento({
 
     w.document.write(`
       <html>
-        <head><title>PIX - Mês ${mes}</title></head>
+        <head><title>PIX - ${caixa?.tipo === 'diario' ? 'Dia' : caixa?.tipo === 'semanal' ? 'Semana' : 'Mês'} ${mes}</title></head>
         <body style="font-family: system-ui;">
           <div style="padding:24px;">
             <h1 style="font-size:18px;margin:0 0 12px 0;color:#111;">Código PIX (EMV)</h1>
@@ -528,7 +530,7 @@ export function DetalhesPagamento({
 
     w.document.write(`
       <html>
-        <head><title>Boleto - Mês ${mes}</title></head>
+        <head><title>Boleto - ${caixa?.tipo === 'diario' ? 'Dia' : caixa?.tipo === 'semanal' ? 'Semana' : 'Mês'} ${mes}</title></head>
         <body style="font-family: system-ui;">
           <div style="padding:24px;">
             <h1 style="font-size:18px;margin:0 0 12px 0;color:#111;">Boleto</h1>
@@ -577,7 +579,7 @@ export function DetalhesPagamento({
               const normalizada = normalizarCobranca(
                 invoice,
                 boleto.mes,
-                cobrancaDB.descricao || `Pagamento Mês ${boleto.mes}`
+                cobrancaDB.descricao || `Pagamento ${caixa?.tipo === 'diario' ? 'Dia' : caixa?.tipo === 'semanal' ? 'Semana' : 'Mês'} ${boleto.mes}`
               )
 
               if (normalizada) {
@@ -651,7 +653,7 @@ export function DetalhesPagamento({
         const cobrancaNormalizada = normalizarCobranca(
           invoiceResp?.cobranca || invoiceResp,
           boleto.mes,
-          `Pagamento ${caixa.tipo === 'semanal' ? 'Semana' : 'Mês'} ${boleto.mes}`
+          `Pagamento ${caixa.tipo === 'diario' ? 'Dia' : caixa.tipo === 'semanal' ? 'Semana' : 'Mês'} ${boleto.mes}`
         )
 
         if (cobrancaNormalizada) {
@@ -684,7 +686,9 @@ export function DetalhesPagamento({
 
     const data = new Date(caixa.dataInicio)
 
-    if (caixa.tipo === 'semanal') {
+    if (caixa.tipo === 'diario') {
+      data.setDate(data.getDate() + (posicao - 1))
+    } else if (caixa.tipo === 'semanal') {
       data.setDate(data.getDate() + ((posicao - 1) * 7))
     } else {
       data.setMonth(data.getMonth() + posicao - 1)
@@ -781,7 +785,7 @@ export function DetalhesPagamento({
               const normalizada = normalizarCobranca(
                 merged,
                 novoMes,
-                cobrancaDB.descricao || `Pagamento Mês ${novoMes}`
+                cobrancaDB.descricao || `Pagamento ${caixa.tipo === 'diario' ? 'Dia' : caixa.tipo === 'semanal' ? 'Semana' : 'Mês'} ${novoMes}`
               )
 
               if (normalizada) {
@@ -991,7 +995,7 @@ export function DetalhesPagamento({
                 >
                   <div className="flex items-center gap-2">
                     <span className="font-semibold">
-                      {caixa?.tipo === 'semanal' ? 'Semana' : 'Mês'} {boleto.mes}
+                      {caixa?.tipo === 'diario' ? 'Dia' : caixa?.tipo === 'semanal' ? 'Semana' : 'Mês'} {boleto.mes}
                     </span>
                     <Badge
                       variant={isPago ? 'success' : isAtrasado ? 'danger' : 'warning'}

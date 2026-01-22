@@ -329,22 +329,29 @@ export function CaixaDetalhes() {
     return { isPago, isAtrasado: atrasado, isVenceHoje: vencHoje };
   }, [caixa, verificarPagamento]);
 
-  // Calcular data mínima de vencimento (diario: +1 dia, outros: +5 dias)
+  // Calcular data mínima de vencimento (diario: 0 dias/hoje, outros: +5 dias)
   const getMinDataVencimento = (tipo?: string) => {
     const data = new Date();
-    const diasMinimos = tipo === 'diario' ? 1 : 5;
+    // Diário: permite começar hoje (0 dias). Outros: mínimo 5 dias.
+    const diasMinimos = tipo === 'diario' ? 0 : 5;
     data.setDate(data.getDate() + diasMinimos);
     return data.toISOString().split('T')[0];
   };
 
-  // Validar se a data de vencimento é válida (diario: +1 dia, outros: +5 dias)
+  // Validar se a data de vencimento é válida (diario: 0 dias/hoje, outros: +5 dias)
   const isDataVencimentoValida = (data: string, tipo?: string) => {
     if (!data) return false;
     const dataVenc = new Date(data);
+    // Zerar horas para comparar apenas datas
+    dataVenc.setHours(0, 0, 0, 0);
     const minData = new Date();
-    const diasMinimos = tipo === 'diario' ? 1 : 5;
+    minData.setHours(0, 0, 0, 0);
+
+    // Diário: permite começar hoje (0 dias). Outros: mínimo 5 dias.
+    const diasMinimos = tipo === 'diario' ? 0 : 5;
     minData.setDate(minData.getDate() + diasMinimos);
-    return dataVenc >= minData;
+
+    return dataVenc.getTime() >= minData.getTime();
   };
 
   // Carregar participantes do localStorage
@@ -772,7 +779,9 @@ ${link}`;
 
     for (let i = 0; i < caixa.qtdParticipantes; i++) {
       const dataRecebimento = new Date(dataBase);
-      if (isSemanal) {
+      if (caixa.tipo === 'diario') {
+        dataRecebimento.setDate(dataRecebimento.getDate() + i);
+      } else if (isSemanal) {
         dataRecebimento.setDate(dataRecebimento.getDate() + (i * 7));
       } else {
         dataRecebimento.setMonth(dataRecebimento.getMonth() + i);
@@ -1206,7 +1215,10 @@ ${link}`;
     for (let parcela = 1; parcela <= numParcelas; parcela++) {
       let dataVencimento: Date;
 
-      if (isSemanal) {
+      if (caixa.tipo === 'diario') {
+        dataVencimento = new Date(baseYear, baseMonth, baseDay);
+        dataVencimento.setDate(dataVencimento.getDate() + (parcela - 1));
+      } else if (isSemanal) {
         dataVencimento = new Date(baseYear, baseMonth, baseDay);
         dataVencimento.setDate(dataVencimento.getDate() + ((parcela - 1) * 7));
       } else {
@@ -1254,7 +1266,9 @@ ${link}`;
   const calcularDataRecebimento = (posicao: number): string => {
     if (!caixa?.dataInicio) return '-';
     const data = new Date(caixa.dataInicio);
-    if (caixa.tipo === 'semanal') {
+    if (caixa.tipo === 'diario') {
+      data.setDate(data.getDate() + (posicao - 1));
+    } else if (caixa.tipo === 'semanal') {
       data.setDate(data.getDate() + ((posicao - 1) * 7));
     } else {
       data.setMonth(data.getMonth() + posicao - 1);
@@ -1275,7 +1289,11 @@ ${link}`;
 
     const atual = Math.max(1, caixa.mesAtual || 1);
 
-    if (caixa.tipo === 'semanal') {
+    if (caixa.tipo === 'diario') {
+      const baseDate = new Date(year, month, day);
+      baseDate.setDate(baseDate.getDate() + (atual - 1));
+      return formatDate(baseDate.toISOString());
+    } else if (caixa.tipo === 'semanal') {
       // For weekly: add weeks
       const baseDate = new Date(year, month, day);
       baseDate.setDate(baseDate.getDate() + ((atual - 1) * 7));
@@ -1304,7 +1322,11 @@ ${link}`;
     const month = parseInt(parts[1]) - 1;
     const day = caixa.diaVencimento || parseInt(parts[2]);
 
-    if (caixa.tipo === 'semanal') {
+    if (caixa.tipo === 'diario') {
+      const d = new Date(year, month, day);
+      d.setDate(d.getDate() + (caixa.qtdParticipantes - 1));
+      return formatDate(d.toISOString());
+    } else if (caixa.tipo === 'semanal') {
       const d = new Date(year, month, day);
       d.setDate(d.getDate() + ((caixa.qtdParticipantes - 1) * 7));
       return formatDate(d.toISOString());
@@ -1323,7 +1345,11 @@ ${link}`;
     const month = parseInt(parts[1]) - 1; // JS months are 0-indexed
     const day = caixa.diaVencimento || parseInt(parts[2]);
 
-    if (caixa.tipo === 'semanal') {
+    if (caixa.tipo === 'diario') {
+      const baseDate = new Date(year, month, day);
+      baseDate.setDate(baseDate.getDate() + (parcela - 1));
+      return formatDate(baseDate.toISOString());
+    } else if (caixa.tipo === 'semanal') {
       const baseDate = new Date(year, month, day);
       baseDate.setDate(baseDate.getDate() + ((parcela - 1) * 7));
       return formatDate(baseDate.toISOString());
@@ -1479,7 +1505,7 @@ ${link}`;
                     </Badge>
                   )}
                   <span className="text-white/90 text-sm font-medium border-l border-white/30 pl-2 ml-1">
-                    Tipo de Caixa: {caixa.tipo === 'semanal' ? 'Semanal' : 'Mensal'}
+                    Tipo de Caixa: {caixa.tipo === 'diario' ? 'Diário' : caixa.tipo === 'semanal' ? 'Semanal' : 'Mensal'}
                   </span>
                 </div>
                 {caixa.adminId?.nome && (
@@ -1648,7 +1674,7 @@ ${link}`;
                 <div className="text-right">
                   <p className="text-xs text-gray-500">Total de {caixa.qtdParticipantes} parcelas</p>
                   <p className="text-sm text-gray-600">
-                    {caixa.tipo === 'semanal' ? 'Semanais' : 'Mensais'}
+                    {caixa.tipo === 'diario' ? 'Diárias' : caixa.tipo === 'semanal' ? 'Semanais' : 'Mensais'}
                   </p>
                 </div>
               </div>
@@ -1689,7 +1715,7 @@ ${link}`;
                         )}>
                           <div className="flex items-center justify-between mb-3">
                             <h4 className={cn("font-semibold text-sm", isCurrent ? "text-blue-700" : "text-gray-700")}>
-                              {caixa.tipo === 'semanal' ? 'Semana' : 'Mês'} {mes}
+                              {caixa.tipo === 'diario' ? 'Dia' : caixa.tipo === 'semanal' ? 'Semana' : 'Mês'} {mes}
                             </h4>
                             {isCurrent && <Badge className="bg-blue-100 text-blue-700 text-[10px] px-1.5 py-0">Atual</Badge>}
                             {isPast && pagos === participantes.length && <CheckCircle2 className="w-4 h-4 text-green-500" />}
@@ -1900,7 +1926,7 @@ ${link}`;
                     <div className="bg-white/70 backdrop-blur-sm rounded-xl p-4 border border-green-200/50 shadow-sm">
                       {/* Recebe este mês */}
                       <div className="mb-4 pb-4 border-b border-green-200">
-                        <p className="text-xs text-green-600 font-semibold mb-2">Recebe este mês</p>
+                        <p className="text-xs text-green-600 font-semibold mb-2">Recebe {caixa?.tipo === 'diario' ? 'hoje' : caixa?.tipo === 'semanal' ? 'esta semana' : 'este mês'}</p>
                         <div className="flex items-center gap-3 mb-2">
                           <Avatar
                             name={recebedorAtual.usuarioId.nome}
@@ -2143,7 +2169,7 @@ ${link}`;
                               : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-200'
                           )}
                         >
-                          {caixa.tipo === 'semanal' ? 'Semana' : 'Mês'} {num}
+                          {caixa.tipo === 'diario' ? 'Dia' : caixa.tipo === 'semanal' ? 'Semana' : 'Mês'} {num}
                         </button>
                       );
                     })}

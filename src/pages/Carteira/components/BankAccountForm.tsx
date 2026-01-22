@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { bancosService } from '../../../lib/api';
+import { SearchableBankSelect } from '../../../components/ui/SearchableBankSelect';
 
 interface BankAccountFormProps {
     bankCode?: string;
@@ -34,88 +35,22 @@ export const BankAccountForm = ({
     error,
     loadingBankData
 }: BankAccountFormProps) => {
-    const [bankSearch, setBankSearch] = useState('');
-    const [banks, setBanks] = useState<Array<{ code: string; name: string }>>([]);
-    const [bankDropdownOpen, setBankDropdownOpen] = useState(false);
-    const [loadingBanks, setLoadingBanks] = useState(false);
-    const [localBanksError, setLocalBanksError] = useState<string | null>(null);
-
     const agencyRef = useRef<HTMLInputElement>(null);
     const agencyDvRef = useRef<HTMLInputElement>(null);
     const accountRef = useRef<HTMLInputElement>(null);
     const accountDvRef = useRef<HTMLInputElement>(null);
 
-    // Sync internal search state with props when they change (e.g. loaded from API)
-    useEffect(() => {
-        if (bankCode && bankName) {
-            // Avoid overwriting if user is typing search
-            if (!bankDropdownOpen) {
-                // Keep it simple, rely on parent for values mostly
-            }
-        }
-    }, [bankCode, bankName, bankDropdownOpen]);
-
-
-    const handleBankSearch = async (term: string) => {
-        setBankSearch(term);
-        if (term.length >= 2) {
-            setBankDropdownOpen(true);
-            setLoadingBanks(true);
-            try {
-                const resp = await bancosService.getAll(term);
-                const list = Array.isArray(resp?.banks) ? resp.banks : (Array.isArray(resp) ? resp : []);
-                setBanks(list.map((b: any) => ({ code: String(b.code || b.codigo || ''), name: String(b.name || b.nome || '') })));
-            } catch (e: any) {
-                setLocalBanksError('Erro ao buscar bancos');
-            } finally {
-                setLoadingBanks(false);
-            }
-        } else {
-            setBankDropdownOpen(false);
-        }
-    };
-
     return (
         <div className="space-y-4">
             {/* Banco e Tipo de Conta na mesma linha */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                {/* Banco (Dropdown) - 2 colunas */}
-                <div className="md:col-span-2 relative">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Banco *</label>
-                    <input
-                        type="text"
-                        placeholder="Digite para buscar..."
-                        value={bankCode ? `${bankCode} - ${bankName}` : bankSearch}
-                        onChange={(e) => {
-                            // Clear selection if user types
-                            onChange({ bankCode: undefined, bankName: undefined });
-                            handleBankSearch(e.target.value);
-                        }}
-                        onFocus={() => bankSearch.length >= 2 && setBankDropdownOpen(true)}
-                        className="w-full p-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                {/* Banco (Using SearchableBankSelect) - 2 colunas */}
+                <div className="md:col-span-2">
+                    <SearchableBankSelect
+                        value={bankCode}
+                        onChange={(code, name) => onChange({ bankCode: code, bankName: name })}
+                        disabled={loadingBankData}
                     />
-                    {bankDropdownOpen && banks.length > 0 && (
-                        <div className="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                            {loadingBanks ? (
-                                <div className="p-2 text-center text-sm text-gray-500">Carregando...</div>
-                            ) : (
-                                banks.map((bank) => (
-                                    <button
-                                        key={bank.code}
-                                        type="button"
-                                        onClick={() => {
-                                            onChange({ bankCode: bank.code, bankName: bank.name });
-                                            setBankSearch('');
-                                            setBankDropdownOpen(false);
-                                        }}
-                                        className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100"
-                                    >
-                                        {bank.code} - {bank.name}
-                                    </button>
-                                ))
-                            )}
-                        </div>
-                    )}
                 </div>
 
                 {/* Tipo de Conta - 1 coluna */}
@@ -235,9 +170,6 @@ export const BankAccountForm = ({
 
             {error && (
                 <p className="text-sm text-red-600">{error}</p>
-            )}
-            {localBanksError && (
-                <p className="text-xs text-red-500">{localBanksError}</p>
             )}
         </div>
     );
