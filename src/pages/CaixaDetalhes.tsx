@@ -335,21 +335,31 @@ export function CaixaDetalhes() {
     // Diário: permite começar hoje (0 dias). Outros: mínimo 5 dias.
     const diasMinimos = tipo === 'diario' ? 0 : 5;
     data.setDate(data.getDate() + diasMinimos);
-    return data.toISOString().split('T')[0];
+
+    // Format as YYYY-MM-DD in local time
+    const year = data.getFullYear();
+    const month = String(data.getMonth() + 1).padStart(2, '0');
+    const day = String(data.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   };
 
   // Validar se a data de vencimento é válida (diario: 0 dias/hoje, outros: +5 dias)
   const isDataVencimentoValida = (data: string, tipo?: string) => {
+    // Para caixa diário, não há restrição mínima de dias (pode ser hoje ou qualquer data futura)
+    if (tipo === 'diario') return true;
+
     if (!data) return false;
-    const dataVenc = new Date(data);
-    // Zerar horas para comparar apenas datas
+
+    // Parse input properly as local date
+    const [y, m, d] = data.split('-').map(Number);
+    const dataVenc = new Date(y, m - 1, d);
     dataVenc.setHours(0, 0, 0, 0);
+
     const minData = new Date();
     minData.setHours(0, 0, 0, 0);
 
-    // Diário: permite começar hoje (0 dias). Outros: mínimo 5 dias.
-    const diasMinimos = tipo === 'diario' ? 0 : 5;
-    minData.setDate(minData.getDate() + diasMinimos);
+    // Outros: mínimo 5 dias.
+    minData.setDate(minData.getDate() + 5);
 
     return dataVenc.getTime() >= minData.getTime();
   };
@@ -824,8 +834,9 @@ ${link}`;
       alert('Máximo de 12 meses para caixa mensal');
       return;
     }
-    if (!isDataVencimentoValida(editForm.dataVencimento)) {
-      alert('A data de vencimento deve ser no mínimo 5 dias após hoje');
+    console.log('Validating date:', editForm.dataVencimento, 'type:', editForm.tipo);
+    if (!isDataVencimentoValida(editForm.dataVencimento, editForm.tipo)) {
+      alert(editForm.tipo === 'diario' ? 'A data de vencimento deve ser a partir de hoje' : 'A data de vencimento deve ser no mínimo 5 dias após hoje');
       return;
     }
 
@@ -3050,7 +3061,7 @@ ${link}`;
               leftIcon={<Calendar className="w-4 h-4" />}
             />
             <p className="text-xs text-gray-500 mt-1">
-              Mínimo: {editForm.tipo === 'diario' ? '1 dia' : '5 dias'} a partir de hoje
+              Mínimo: {editForm.tipo === 'diario' ? 'A partir de hoje' : '5 dias a partir de hoje'}
             </p>
           </div>
 
