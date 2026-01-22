@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { MessageSquare, Calendar, User, FileText, CheckCircle2, XCircle, Clock, Search, Filter, RefreshCw, Send } from 'lucide-react';
+import { MessageSquare, Calendar, User, FileText, CheckCircle2, XCircle, Clock, Search, Filter, RefreshCw, Send, BookOpen } from 'lucide-react';
 import { comunicacaoService, type MensagemHistorico } from '../lib/api/comunicacao.service';
 import { caixasService, participantesService } from '../lib/api';
 import { formatDate } from '../lib/utils';
@@ -57,6 +57,57 @@ export function GerenciarComunicacao() {
     const [participantesCaixa, setParticipantesCaixa] = useState<Array<{ _id: string; usuarioId: any }>>([]);
     const [sendingManual, setSendingManual] = useState(false);
     const [caixasAtivos, setCaixasAtivos] = useState<Array<{ _id: string; nome: string }>>([]);
+
+    // Modal de Regras de Disparo
+    const [showRegrasModal, setShowRegrasModal] = useState(false);
+
+    const regrasComunicacao = [
+        {
+            nome: 'Boas-vindas',
+            gatilho: 'Ao Iniciar o Caixa',
+            descricao: 'Enviada para todos os participantes quando o administrador inicia o caixa (status muda para Ativo).'
+        },
+        {
+            nome: 'Caixa Iniciado',
+            gatilho: '1 min após Boas-vindas',
+            descricao: 'Informa a ordem de contemplação (posição sorteada) para cada participante. Agendada automaticamente após o envio das boas-vindas.'
+        },
+        {
+            nome: 'Envio de Contrato',
+            gatilho: '2 min após Boas-vindas',
+            descricao: 'Envia o arquivo PDF do contrato "Juntix" para assinatura digital.'
+        },
+        {
+            nome: 'Envio de Termos',
+            gatilho: '3 min após Boas-vindas',
+            descricao: 'Envia o arquivo PDF dos Termos de Uso da plataforma.'
+        },
+        {
+            nome: 'Nova Cobrança',
+            gatilho: 'Ao Gerar Cobrança',
+            descricao: 'Enviada quando um boleto/PIX é gerado pelo sistema (integração Lytex). Contém link de pagamento, código de barras e QR Code.'
+        },
+        {
+            nome: 'Lembrete Pré-Vencimento',
+            gatilho: '1 a 5 dias ANTES do vencimento',
+            descricao: 'Lembrete diário automático (09:00) enviado para o participante com QR Code e código PIX Copia e Cola.'
+        },
+        {
+            nome: 'Alerta Atraso Leve',
+            gatilho: '0 a 5 dias APÓS vencimento',
+            descricao: 'Alerta diário automático (09:00) enviado APENAS para o Administrador informando sobre o atraso do participante.'
+        },
+        {
+            nome: 'Alerta Atraso Crítico',
+            gatilho: '6 a 30 dias APÓS vencimento',
+            descricao: 'Alerta diário automático (09:00) enviado para o Administrador e para TODOS os participantes do grupo, expondo o atraso.'
+        },
+        {
+            nome: 'Confirmação de Pagamento',
+            gatilho: 'Ao Confirmar Pagamento',
+            descricao: 'Notifica o grupo quando o pagamento de um participante é confirmado (via webhook ou baixa manual).'
+        }
+    ];
 
     useEffect(() => {
         loadCaixas();
@@ -252,6 +303,17 @@ export function GerenciarComunicacao() {
                     </div>
                 </div>
             </motion.div>
+
+            <div className="flex justify-end mb-6">
+                <Button
+                    variant="secondary"
+                    className="border-red-500 text-red-600 hover:bg-red-50 bg-white"
+                    leftIcon={<BookOpen className="w-4 h-4" />}
+                    onClick={() => setShowRegrasModal(true)}
+                >
+                    Regras de Disparo
+                </Button>
+            </div>
 
             {/* Filtros */}
             <Card className="mb-6">
@@ -779,6 +841,71 @@ export function GerenciarComunicacao() {
                                 >
                                     {sendingManual ? 'Enviando...' : 'Enviar Mensagem'}
                                 </Button>
+                            </div>
+                        </div>
+                    </motion.div>
+                </div>
+            )}
+            {/* Modal de Regras de Disparo */}
+            {showRegrasModal && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="bg-white rounded-2xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto"
+                    >
+                        <div className="p-6">
+                            <div className="flex items-center justify-between mb-6">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
+                                        <BookOpen className="w-5 h-5 text-red-600" />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-xl font-bold text-gray-900">Regras de Disparo Automático</h3>
+                                        <p className="text-sm text-gray-500">
+                                            Entenda quando cada mensagem é enviada pelo sistema Evolution API
+                                        </p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => setShowRegrasModal(false)}
+                                    className="text-gray-400 hover:text-gray-600 transition-colors"
+                                >
+                                    <XCircle className="w-6 h-6" />
+                                </button>
+                            </div>
+
+                            <div className="border rounded-xl overflow-hidden">
+                                <table className="w-full">
+                                    <thead className="bg-gray-50">
+                                        <tr>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/4">Regra / Tipo</th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/4">Gatilho</th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/2">Descrição</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="bg-white divide-y divide-gray-200">
+                                        {regrasComunicacao.map((regra, idx) => (
+                                            <tr key={idx} className="hover:bg-gray-50">
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                                    {regra.nome}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                    <Badge variant={regra.gatilho.includes('ANTES') ? 'warning' : regra.gatilho.includes('APÓS') && regra.gatilho.includes('Crítico') ? 'danger' : 'gray'} size="sm">
+                                                        {regra.gatilho}
+                                                    </Badge>
+                                                </td>
+                                                <td className="px-6 py-4 text-sm text-gray-600">
+                                                    {regra.descricao}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <div className="mt-6 flex justify-end">
+                                <Button onClick={() => setShowRegrasModal(false)}>Fechar</Button>
                             </div>
                         </div>
                     </motion.div>

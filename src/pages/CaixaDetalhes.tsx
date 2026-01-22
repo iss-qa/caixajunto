@@ -352,6 +352,10 @@ export function CaixaDetalhes() {
 
     // Parse input properly as local date
     const [y, m, d] = data.split('-').map(Number);
+
+    // BACKEND CONSTRAINT: Ensure day is not > 28
+    if (d > 28) return false;
+
     const dataVenc = new Date(y, m - 1, d);
     dataVenc.setHours(0, 0, 0, 0);
 
@@ -836,6 +840,11 @@ ${link}`;
     }
     console.log('Validating date:', editForm.dataVencimento, 'type:', editForm.tipo);
     if (!isDataVencimentoValida(editForm.dataVencimento, editForm.tipo)) {
+      const [, , d] = editForm.dataVencimento.split('-').map(Number);
+      if (d > 28) {
+        alert('O dia de vencimento deve ser no máximo dia 28 (para garantir compatibilidade com todos os meses).');
+        return;
+      }
       alert(editForm.tipo === 'diario' ? 'A data de vencimento deve ser a partir de hoje' : 'A data de vencimento deve ser no mínimo 5 dias após hoje');
       return;
     }
