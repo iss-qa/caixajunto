@@ -2,6 +2,7 @@ import { motion } from 'framer-motion';
 import { useRef, useState, useEffect } from 'react';
 import { subcontasService } from '../lib/api';
 import { Loader2 } from 'lucide-react';
+import { useUI } from '../contexts/UIContext';
 
 interface IdentityVerificationProps {
     isOpen: boolean;
@@ -25,6 +26,21 @@ export const IdentityVerification = ({
     const [isLoading, setIsLoading] = useState(false);
     const [showManualButton, setShowManualButton] = useState(false);
     const iframeRef = useRef<HTMLIFrameElement>(null);
+    const { setBottomNavVisible } = useUI();
+
+    // Hide bottom nav when modal is open (mobile only)
+    useEffect(() => {
+        if (isOpen) {
+            setBottomNavVisible(false);
+        } else {
+            setBottomNavVisible(true);
+        }
+
+        // Cleanup: restore bottom nav when component unmounts
+        return () => {
+            setBottomNavVisible(true);
+        };
+    }, [isOpen, setBottomNavVisible]);
 
     // Timer silencioso para exibir o botão manual após 3 minutos
     useEffect(() => {

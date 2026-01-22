@@ -850,10 +850,12 @@ ${link}`;
     }
 
     try {
-      const dataVenc = new Date(editForm.dataVencimento);
+      // FIX: Parse manual evitar problemas de timezone com new Date("YYYY-MM-DD") que assume UTC
+      const [, , day] = editForm.dataVencimento.split('-').map(Number);
+
       const updateData = {
         ...editForm,
-        diaVencimento: dataVenc.getDate(),
+        diaVencimento: day,
         dataVencimento: editForm.dataVencimento,
         dataInicio: editForm.dataVencimento,
         valorParcela: editForm.valorTotal / editForm.qtdParticipantes,
@@ -863,7 +865,7 @@ ${link}`;
         setCaixa({
           ...caixa,
           ...editForm,
-          diaVencimento: dataVenc.getDate(),
+          diaVencimento: day,
           dataVencimento: editForm.dataVencimento,
           valorParcela: editForm.valorTotal / editForm.qtdParticipantes,
         });
@@ -874,11 +876,11 @@ ${link}`;
     } catch (error) {
       console.error('Erro ao atualizar:', error);
       if (caixa) {
-        const dataVenc = new Date(editForm.dataVencimento);
+        const [, , day] = editForm.dataVencimento.split('-').map(Number);
         setCaixa({
           ...caixa,
           ...editForm,
-          diaVencimento: dataVenc.getDate(),
+          diaVencimento: day,
           valorParcela: editForm.valorTotal / editForm.qtdParticipantes,
         });
       }

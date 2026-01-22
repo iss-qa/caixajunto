@@ -216,6 +216,7 @@ export const SubAccountCreation = ({
             addressZone: 'Por favor, informe o bairro',
             addressCity: 'Por favor, informe a cidade',
             addressState: 'Por favor, informe o estado',
+            fantasyName: 'Por favor, informe o Nome Fantasia',
         };
 
         let isValid = true;
@@ -265,7 +266,9 @@ export const SubAccountCreation = ({
         subForm.addressNumber.trim() &&
         subForm.addressZone.trim() &&
         subForm.addressCity.trim() &&
-        subForm.addressState.trim();
+        subForm.addressCity.trim() &&
+        subForm.addressState.trim() &&
+        (subForm.type !== 'pj' || (subForm.fantasyName && subForm.fantasyName.trim()));
 
     const handleCreateSubAccount = async () => {
         try {
@@ -468,7 +471,10 @@ export const SubAccountCreation = ({
                                         label="Nome Fantasia"
                                         value={subForm.fantasyName}
                                         onChange={(e: any) => setSubForm({ ...subForm, fantasyName: e.target.value })}
+                                        onBlur={() => validateField('fantasyName', subForm.fantasyName)}
                                         icon={Building2}
+                                        required
+                                        error={validationErrors.fantasyName}
                                     />
                                 )}
                             </div>

@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { UIProvider } from './contexts/UIContext';
 import { Layout } from './components/layout/Layout';
 import { Login } from './pages/Login';
 import { Registro } from './pages/Registro';
@@ -179,7 +180,9 @@ function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <AppRoutes />
+        <UIProvider>
+          <AppRoutes />
+        </UIProvider>
       </AuthProvider>
     </BrowserRouter>
   );
