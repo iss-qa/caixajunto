@@ -96,6 +96,9 @@ const WalletDashboard = () => {
     clientId?: string; // ID da aplicação Lytex
     clientSecret?: string; // Segredo da aplicação (mascarado)
     nomeCaixa?: string; // Nome do caixa associado
+    status?: string; // Status da subconta (active, created, etc)
+    onboardingUrl?: string; // URL para verificação de identidade
+    upload_docs_reconhecimento_facial?: boolean; // Status de docs enviados
   } | null>(null);
 
   // Lista de caixas que o admin gerencia
@@ -644,7 +647,22 @@ const WalletDashboard = () => {
               clientId: local.clientId || undefined,
               clientSecret: local.clientSecret ? '••••••••••••••••' : undefined,
               nomeCaixa: local.nomeCaixa || undefined,
+              status: local.raw?.status || local.status,
+              onboardingUrl: local.raw?.onboardingUrl || local.raw?.onboarding_url || local.onboardingUrl,
+              upload_docs_reconhecimento_facial: local.upload_docs_reconhecimento_facial || local.raw?.upload_docs_reconhecimento_facial || false,
             });
+
+            // Lógica de exibição do Modal de Verificação
+            const status = local.raw?.status || local.status;
+            const url = local.raw?.onboardingUrl || local.raw?.onboarding_url || local.onboardingUrl;
+            const isFacialRecognitionDone = local.upload_docs_reconhecimento_facial || local.raw?.upload_docs_reconhecimento_facial || false;
+
+            // Só abre se tiver URL, status não for 'active' (ou verificação forçada) E não tiver concluído ainda
+            if (url && !isFacialRecognitionDone) {
+              console.log('⚠️ Subconta pendente de verificação. Abrindo modal...');
+              setOnboardingUrl(url);
+              setShowOnboardingModal(true);
+            }
 
             setAccountData((prev) => ({
               ...prev,
@@ -722,7 +740,21 @@ const WalletDashboard = () => {
               clientId: local.clientId || undefined,
               clientSecret: local.clientSecret ? '••••••••••••••••' : undefined, // Mascarado
               nomeCaixa: local.nomeCaixa || undefined,
+              status: local.raw?.status || local.status,
+              onboardingUrl: local.raw?.onboardingUrl || local.raw?.onboarding_url || local.onboardingUrl,
+              upload_docs_reconhecimento_facial: local.upload_docs_reconhecimento_facial || local.raw?.upload_docs_reconhecimento_facial || false,
             });
+
+            // Lógica de exibição do Modal de Verificação
+            const status = local.raw?.status || local.status;
+            const url = local.raw?.onboardingUrl || local.raw?.onboarding_url || local.onboardingUrl;
+            const isFacialRecognitionDone = local.upload_docs_reconhecimento_facial || local.raw?.upload_docs_reconhecimento_facial || false;
+
+            if (url && !isFacialRecognitionDone) {
+              console.log('⚠️ Subconta pendente de verificação. Abrindo modal...');
+              setOnboardingUrl(url);
+              setShowOnboardingModal(true);
+            }
 
             // Atualiza accountData com dados da subconta
             setAccountData((prev) => ({
@@ -1078,7 +1110,7 @@ const WalletDashboard = () => {
             setShowSuccessModal(true);
             setTimeout(() => {
               setShowSuccessModal(false);
-              window.location.reload();
+              // window.location.reload(); // Removido para permitir fluxo de Onboarding
             }, 2000);
           }}
           setOnboardingUrl={setOnboardingUrl}

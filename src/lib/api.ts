@@ -447,6 +447,16 @@ export const subcontasService = {
     const response = await api.put(`/subcontas/${lytexId}/bank-account`, data);
     return response.data;
   },
+  // Atualiza status de reconhecimento facial
+  updateFacialRecognition: async (status: boolean) => {
+    const response = await api.patch('/subcontas/me/facial-recognition', { status });
+    return response.data;
+  },
+  // Verifica status automaticamente
+  checkStatus: async () => {
+    const response = await api.get('/subcontas/me/status-check');
+    return response.data;
+  },
 };
 
 export const splitService = {

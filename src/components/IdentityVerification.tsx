@@ -1,5 +1,7 @@
 import { motion } from 'framer-motion';
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
+import { subcontasService } from '../lib/api';
+import { Loader2 } from 'lucide-react';
 
 interface IdentityVerificationProps {
     isOpen: boolean;
@@ -20,7 +22,57 @@ export const IdentityVerification = ({
     onClose,
 }: IdentityVerificationProps) => {
     const [isIframeMode, setIsIframeMode] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
+    const [showManualButton, setShowManualButton] = useState(false);
     const iframeRef = useRef<HTMLIFrameElement>(null);
+
+    // Timer silencioso para exibir o botão manual após 3 minutos
+    useEffect(() => {
+        if (!isOpen) return;
+
+        console.log('⏳ Iniciando timer de 3 minutos para botão manual...');
+        const timer = setTimeout(() => {
+            console.log('🕒 3 minutos passaram, exibindo botão manual.');
+            setShowManualButton(true);
+        }, 180000); // 180 segundos = 3 minutos
+
+        return () => clearTimeout(timer);
+    }, [isOpen]);
+
+    // Polling de status (Pulse Check) - Verificação silenciosa
+    useEffect(() => {
+        if (!isOpen) return;
+
+        const pollTimer = setInterval(async () => {
+            try {
+                // Check silencioso - não afeta UI a menos que verificado
+                const status = await subcontasService.checkStatus();
+
+                if (status.verified) {
+                    console.log('✅ Verificação confirmada automaticamente! Recarregando...');
+                    clearInterval(pollTimer);
+                    setIsLoading(true); // Bloqueia UI
+                    window.location.reload(); // Recarrega para atualizar status principal
+                }
+            } catch (error) {
+                // Erros silenciosos no console para não atrapalhar o usuário
+                console.warn('Silent check falhou:', error);
+            }
+        }, 5000); // Verifica a cada 5 segundos
+
+        return () => clearInterval(pollTimer);
+    }, [isOpen]);
+
+    const handleComplete = async () => {
+        try {
+            setIsLoading(true);
+            await subcontasService.updateFacialRecognition(true);
+            window.location.reload();
+        } catch (error) {
+            console.error('Erro ao atualizar status:', error);
+            setIsLoading(false);
+        }
+    };
 
     if (!isOpen || !onboardingUrl) return null;
 
@@ -44,14 +96,8 @@ export const IdentityVerification = ({
                             <p className="text-green-100 text-sm">Ambiente seguro</p>
                         </div>
                     </div>
-                    <button
-                        onClick={onClose}
-                        className="text-white/80 hover:text-white transition-colors p-2 hover:bg-white/10 rounded-full"
-                    >
-                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                    </button>
+                    {/* Botão de Fechar removido para forçar verificação */}
+                    <div className="w-10"></div>
                 </div>
 
                 {/* Conteúdo - Expandido/Colapsado */}
@@ -166,6 +212,26 @@ export const IdentityVerification = ({
                                 >
                                     Abrir em nova janela (verificação externa)
                                 </a>
+
+                                {/* Já concluí a verificação (Botão Manual com Delay) */}
+                                {showManualButton && (
+                                    <motion.button
+                                        initial={{ opacity: 0, height: 0 }}
+                                        animate={{ opacity: 1, height: 'auto' }}
+                                        onClick={handleComplete}
+                                        disabled={isLoading}
+                                        className="w-full bg-gray-100 text-gray-700 font-medium py-3 px-6 rounded-xl hover:bg-gray-200 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        {isLoading ? (
+                                            <Loader2 className="w-5 h-5 animate-spin" />
+                                        ) : (
+                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                            </svg>
+                                        )}
+                                        {isLoading ? 'Confirmando...' : 'Já concluí a verificação (Atualizar status)'}
+                                    </motion.button>
+                                )}
                             </div>
                         </div>
                     </div>
