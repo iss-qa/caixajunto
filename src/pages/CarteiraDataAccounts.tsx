@@ -154,6 +154,7 @@ export const SubAccountCreation = ({
 }: any) => {
     const [creatingSubAccount, setCreatingSubAccount] = useState(false);
     const [subAccountError, setSubAccountError] = useState<string | null>(null);
+    const [validationErrors, setValidationErrors] = useState<{ [key: string]: string }>({});
 
     const [subForm, setSubForm] = useState({
         type: 'pf',
@@ -188,6 +189,69 @@ export const SubAccountCreation = ({
     const [bankAccount, setBankAccount] = useState('');
     const [bankAccountDv, setBankAccountDv] = useState('');
     const [bankAccountType, setBankAccountType] = useState<'corrente' | 'poupanca'>('corrente');
+
+    // Função para validar campo individual
+    const validateField = (fieldName: string, value: any) => {
+        const newErrors = { ...validationErrors };
+
+        const errorMessages: { [key: string]: string } = {
+            name: 'Por favor, informe seu nome completo',
+            cpfCnpj: 'Por favor, informe seu CPF',
+            cellphone: 'Por favor, informe seu telefone',
+            email: 'Por favor, informe seu e-mail',
+            aboutBusiness: 'Por favor, informe sobre o seu negócio',
+            branchOfActivity: 'Por favor, informe o ramo de atividade',
+            adminCpf: 'Por favor, informe o CPF do administrador',
+            adminFullName: 'Por favor, informe o nome completo do administrador',
+            adminCellphone: 'Por favor, informe o telefone do administrador',
+            adminBirthDate: 'Por favor, informe a data de nascimento',
+            adminMotherName: 'Por favor, informe o nome da mãe',
+            bank: 'Por favor, selecione um banco',
+            bankAgency: 'Por favor, informe a agência',
+            bankAccount: 'Por favor, informe a conta',
+            bankAccountDv: 'Por favor, informe o dígito da conta',
+            addressZip: 'Por favor, informe o CEP',
+            addressStreet: 'Por favor, informe a rua',
+            addressNumber: 'Por favor, informe o número',
+            addressZone: 'Por favor, informe o bairro',
+            addressCity: 'Por favor, informe a cidade',
+            addressState: 'Por favor, informe o estado',
+        };
+
+        // Remove erro se campo foi preenchido
+        if (value && value.toString().trim()) {
+            delete newErrors[fieldName];
+        } else {
+            // Adiciona erro se campo está vazio
+            newErrors[fieldName] = errorMessages[fieldName] || 'Campo obrigatório';
+        }
+
+        setValidationErrors(newErrors);
+    };
+
+    // Verificar se formulário está válido
+    const isFormValid =
+        subForm.name.trim() &&
+        subForm.cpfCnpj.trim() &&
+        subForm.cellphone.trim() &&
+        subForm.email.trim() &&
+        subForm.aboutBusiness.trim() &&
+        subForm.branchOfActivity.trim() &&
+        subForm.adminCpf.trim() &&
+        subForm.adminFullName.trim() &&
+        subForm.adminCellphone.trim() &&
+        subForm.adminBirthDate.trim() &&
+        subForm.adminMotherName.trim() &&
+        selectedBankForSub &&
+        bankAgency.trim() &&
+        bankAccount.trim() &&
+        bankAccountDv.trim() &&
+        subForm.addressZip.trim() &&
+        subForm.addressStreet.trim() &&
+        subForm.addressNumber.trim() &&
+        subForm.addressZone.trim() &&
+        subForm.addressCity.trim() &&
+        subForm.addressState.trim();
 
     const handleCreateSubAccount = async () => {
         try {
@@ -407,13 +471,19 @@ export const SubAccountCreation = ({
                                     label="Sobre o negócio"
                                     value={subForm.aboutBusiness}
                                     onChange={(e: any) => setSubForm({ ...subForm, aboutBusiness: e.target.value })}
+                                    onBlur={() => validateField('aboutBusiness', subForm.aboutBusiness)}
                                     placeholder="Ex: Administrador de caixas"
+                                    error={validationErrors.aboutBusiness}
+                                    required
                                 />
                                 <ModernInput
                                     label="Ramo de atividade"
                                     value={subForm.branchOfActivity}
                                     onChange={(e: any) => setSubForm({ ...subForm, branchOfActivity: e.target.value })}
+                                    onBlur={() => validateField('branchOfActivity', subForm.branchOfActivity)}
                                     placeholder="Serviços"
+                                    error={validationErrors.branchOfActivity}
+                                    required
                                 />
                             </div>
                         </section>
@@ -429,33 +499,48 @@ export const SubAccountCreation = ({
                                     label="CPF"
                                     value={subForm.adminCpf}
                                     onChange={(e: any) => setSubForm({ ...subForm, adminCpf: e.target.value })}
+                                    onBlur={() => validateField('adminCpf', subForm.adminCpf)}
                                     icon={Hash}
+                                    error={validationErrors.adminCpf}
+                                    required
                                 />
                                 <ModernInput
                                     label="Nome completo"
                                     value={subForm.adminFullName}
                                     onChange={(e: any) => setSubForm({ ...subForm, adminFullName: e.target.value })}
+                                    onBlur={() => validateField('adminFullName', subForm.adminFullName)}
                                     icon={User}
+                                    error={validationErrors.adminFullName}
+                                    required
                                 />
                                 <ModernInput
                                     label="Telefone"
                                     value={subForm.adminCellphone}
                                     onChange={(e: any) => setSubForm({ ...subForm, adminCellphone: e.target.value })}
+                                    onBlur={() => validateField('adminCellphone', subForm.adminCellphone)}
                                     icon={Phone}
+                                    error={validationErrors.adminCellphone}
+                                    required
                                 />
                                 <ModernInput
                                     label="Data de nascimento"
                                     type="date"
                                     value={subForm.adminBirthDate}
                                     onChange={(e: any) => setSubForm({ ...subForm, adminBirthDate: e.target.value })}
+                                    onBlur={() => validateField('adminBirthDate', subForm.adminBirthDate)}
                                     icon={Calendar}
+                                    error={validationErrors.adminBirthDate}
+                                    required
                                 />
                                 <ModernInput
                                     label="Nome da mãe"
                                     value={subForm.adminMotherName}
                                     onChange={(e: any) => setSubForm({ ...subForm, adminMotherName: e.target.value })}
+                                    onBlur={() => validateField('adminMotherName', subForm.adminMotherName)}
                                     icon={User}
                                     className="md:col-span-2"
+                                    error={validationErrors.adminMotherName}
+                                    required
                                 />
                             </div>
                         </section>
@@ -506,6 +591,7 @@ export const SubAccountCreation = ({
                                         setSubForm({ ...subForm, addressZip: digits });
                                     }}
                                     onBlur={async () => {
+                                        validateField('addressZip', subForm.addressZip);
                                         const cep = String(subForm.addressZip || '').replace(/\D/g, '');
                                         if (cep.length !== 8) return;
                                         try {
@@ -524,18 +610,26 @@ export const SubAccountCreation = ({
                                     }}
                                     placeholder="00000-000"
                                     icon={Hash}
+                                    error={validationErrors.addressZip}
+                                    required
                                 />
                                 <ModernInput
                                     label="Rua"
                                     value={subForm.addressStreet}
                                     onChange={(e: any) => setSubForm({ ...subForm, addressStreet: e.target.value })}
+                                    onBlur={() => validateField('addressStreet', subForm.addressStreet)}
                                     icon={MapPin}
+                                    error={validationErrors.addressStreet}
+                                    required
                                 />
                                 <ModernInput
                                     label="Número"
                                     value={subForm.addressNumber}
                                     onChange={(e: any) => setSubForm({ ...subForm, addressNumber: e.target.value })}
+                                    onBlur={() => validateField('addressNumber', subForm.addressNumber)}
                                     icon={Hash}
+                                    error={validationErrors.addressNumber}
+                                    required
                                 />
                                 <ModernInput
                                     label="Complemento"
@@ -546,20 +640,29 @@ export const SubAccountCreation = ({
                                     label="Bairro"
                                     value={subForm.addressZone}
                                     onChange={(e: any) => setSubForm({ ...subForm, addressZone: e.target.value })}
+                                    onBlur={() => validateField('addressZone', subForm.addressZone)}
                                     icon={MapPin}
+                                    error={validationErrors.addressZone}
+                                    required
                                 />
                                 <ModernInput
                                     label="Cidade"
                                     value={subForm.addressCity}
                                     onChange={(e: any) => setSubForm({ ...subForm, addressCity: e.target.value })}
+                                    onBlur={() => validateField('addressCity', subForm.addressCity)}
                                     icon={MapPin}
+                                    error={validationErrors.addressCity}
+                                    required
                                 />
                                 <ModernInput
                                     label="Estado"
                                     value={subForm.addressState}
                                     onChange={(e: any) => setSubForm({ ...subForm, addressState: e.target.value })}
+                                    onBlur={() => validateField('addressState', subForm.addressState)}
                                     placeholder="UF"
                                     icon={MapPin}
+                                    error={validationErrors.addressState}
+                                    required
                                 />
                             </div>
                         </section>
@@ -581,10 +684,10 @@ export const SubAccountCreation = ({
 
                         {/* Submit Button */}
                         <motion.button
-                            whileHover={{ scale: 1.02 }}
-                            whileTap={{ scale: 0.98 }}
+                            whileHover={{ scale: isFormValid ? 1.02 : 1 }}
+                            whileTap={{ scale: isFormValid ? 0.98 : 1 }}
                             onClick={handleCreateSubAccount}
-                            disabled={creatingSubAccount}
+                            disabled={creatingSubAccount || !isFormValid}
                             className="w-full py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-2xl font-bold text-lg shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100 flex items-center justify-center gap-3"
                         >
                             {creatingSubAccount ? (
