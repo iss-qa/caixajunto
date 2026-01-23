@@ -607,12 +607,48 @@ export function DetalhesPagamento({
         logger.log(`PIX expirado para mês ${boleto.mes} (>30min). Gerando nova cobrança...`)
       }
 
+      // ✅ BUSCAR CPF DE MÚLTIPLAS FONTES (robustez)
+      let cpfParticipante = ''
+
+      // Fonte 1: usuarioId populado (objeto completo)
+      if (typeof participante.usuarioId === 'object' && participante.usuarioId?.cpf) {
+        cpfParticipante = participante.usuarioId.cpf
+        logger.log(`CPF encontrado em usuarioId populado: ${cpfParticipante}`)
+      }
+
+      // Fonte 2: campo cpf direto no participante (se existir)
+      if (!cpfParticipante && (participante as any).cpf) {
+        cpfParticipante = (participante as any).cpf
+        logger.log(`CPF encontrado no campo direto do participante: ${cpfParticipante}`)
+      }
+
+      // Fonte 3: Buscar do backend se usuarioId for apenas string (ObjectId)
+      if (!cpfParticipante && typeof participante.usuarioId === 'string') {
+        try {
+          logger.log(`usuarioId não populado (${participante.usuarioId}). Buscando usuário no backend...`)
+          const usuarioResp = await fetch(`/api/usuarios/${participante.usuarioId}`)
+          if (usuarioResp.ok) {
+            const usuarioData = await usuarioResp.json()
+            cpfParticipante = usuarioData.cpf || ''
+            logger.log(`CPF encontrado via API: ${cpfParticipante}`)
+          }
+        } catch (error) {
+          logger.error('Erro ao buscar usuário:', error)
+        }
+      }
+
       const payload = {
         participante: {
-          nome: participante.usuarioId?.nome || 'Participante',
-          cpf: participante.usuarioId?.cpf || '',
-          email: participante.usuarioId?.email || '',
-          telefone: participante.usuarioId?.telefone || '',
+          nome: typeof participante.usuarioId === 'object'
+            ? (participante.usuarioId?.nome || 'Participante')
+            : 'Participante',
+          cpf: cpfParticipante,
+          email: typeof participante.usuarioId === 'object'
+            ? (participante.usuarioId?.email || '')
+            : '',
+          telefone: typeof participante.usuarioId === 'object'
+            ? (participante.usuarioId?.telefone || '')
+            : '',
         },
         caixa: {
           nome: caixa.nome,
@@ -633,13 +669,20 @@ export function DetalhesPagamento({
         habilitarBoleto: true,
       }
 
-      // ✅ VALIDAÇÃO: Verificar se o participante tem CPF cadastrado
+      // ✅ VALIDAÇÃO: Verificar se conseguimos obter o CPF
       if (!payload.participante.cpf) {
-        alert(`❌ Erro: O participante ${payload.participante.nome} não possui CPF cadastrado. Por favor, atualize o cadastro antes de gerar a cobrança.`)
+        const nomeParticipante = payload.participante.nome
+        logger.error(`CPF não encontrado para participante ${nomeParticipante}`)
+        alert(`❌ Erro: Não foi possível obter o CPF do participante ${nomeParticipante}.\n\nPor favor, verifique se o cadastro está completo e tente novamente.`)
         return
       }
 
-      logger.log('Gerando nova cobrança', { mes: boleto.mes, valor: boleto.valorTotal, cpf: payload.participante.cpf })
+      logger.log('Gerando nova cobrança', {
+        mes: boleto.mes,
+        valor: boleto.valorTotal,
+        cpf: payload.participante.cpf,
+        nome: payload.participante.nome
+      })
 
       const response = await cobrancasService.gerar(payload)
 
