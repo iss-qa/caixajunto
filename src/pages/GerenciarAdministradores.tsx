@@ -12,6 +12,8 @@ import {
     CheckCircle2,
     XCircle,
     Loader2,
+    DollarSign,
+    Gift,
 } from 'lucide-react';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -25,6 +27,10 @@ interface AdministradorPendente {
     telefone: string;
     createdAt: string;
     statusAprovacao: 'pendente' | 'aprovado' | 'recusado';
+    taxaAdesao?: {
+        status: 'pendente' | 'pago' | 'isento';
+        isentoPorNome?: string;
+    };
 }
 
 export function GerenciarAdministradores() {
@@ -41,6 +47,7 @@ export function GerenciarAdministradores() {
     const [actionLoading, setActionLoading] = useState(false);
     const [successMessage, setSuccessMessage] = useState('');
     const [errorMessage, setErrorMessage] = useState('');
+    const [showIsentarModal, setShowIsentarModal] = useState(false);
 
     useEffect(() => {
         loadAdministradores();
@@ -121,6 +128,31 @@ export function GerenciarAdministradores() {
         setSelectedAdmin(admin);
         setShowRecusaModal(true);
         setMotivoRecusa('');
+    };
+
+    const openIsentarModal = (admin: AdministradorPendente) => {
+        setSelectedAdmin(admin);
+        setShowIsentarModal(true);
+    };
+
+    const handleIsentar = async () => {
+        if (!selectedAdmin) return;
+
+        try {
+            setActionLoading(true);
+            await api.post(`/usuarios/administradores/${selectedAdmin._id}/taxa-adesao/isentar`);
+            await loadAdministradores();
+            setShowIsentarModal(false);
+            setSuccessMessage(`${selectedAdmin.nome} foi isento da taxa de adesão!`);
+            setShowSuccessModal(true);
+            setSelectedAdmin(null);
+        } catch (error: any) {
+            setShowIsentarModal(false);
+            setErrorMessage(error.response?.data?.message || 'Erro ao isentar administrador');
+            setShowErrorModal(true);
+        } finally {
+            setActionLoading(false);
+        }
     };
 
     const formatDate = (dateString: string) => {
@@ -237,6 +269,9 @@ export function GerenciarAdministradores() {
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                         Data de Cadastro
                                     </th>
+                                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Taxa Adesão
+                                    </th>
                                     <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                                         Ações
                                     </th>
@@ -295,6 +330,40 @@ export function GerenciarAdministradores() {
                                                 <div className="flex items-center gap-2 text-sm text-gray-600">
                                                     <Calendar className="w-4 h-4 text-gray-400" />
                                                     {formatDate(admin.createdAt)}
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-center">
+                                                <div className="flex flex-col items-center gap-1">
+                                                    {admin.taxaAdesao?.status === 'pago' && (
+                                                        <Badge variant="success" size="sm" className="bg-green-100 text-green-700">
+                                                            <DollarSign className="w-3 h-3 mr-1" />
+                                                            Pago
+                                                        </Badge>
+                                                    )}
+                                                    {admin.taxaAdesao?.status === 'isento' && (
+                                                        <Badge variant="info" size="sm" className="bg-blue-100 text-blue-700">
+                                                            <Gift className="w-3 h-3 mr-1" />
+                                                            Isento
+                                                        </Badge>
+                                                    )}
+                                                    {(!admin.taxaAdesao?.status || admin.taxaAdesao?.status === 'pendente') && (
+                                                        <>
+                                                            <Badge variant="danger" size="sm" className="bg-red-100 text-red-700">
+                                                                Não Pago
+                                                            </Badge>
+                                                            {admin.statusAprovacao === 'aprovado' && (
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    className="text-xs text-blue-600 hover:text-blue-800"
+                                                                    onClick={() => openIsentarModal(admin)}
+                                                                    disabled={actionLoading}
+                                                                >
+                                                                    Isentar
+                                                                </Button>
+                                                            )}
+                                                        </>
+                                                    )}
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-right">
@@ -500,6 +569,54 @@ export function GerenciarAdministradores() {
                                 onClick={() => setShowErrorModal(false)}
                             >
                                 Fechar
+                            </Button>
+                        </div>
+                    </motion.div>
+                </div>
+            )}
+
+            {/* Modal de Isenção */}
+            {showIsentarModal && selectedAdmin && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6"
+                    >
+                        <div className="flex items-start gap-3 mb-4">
+                            <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+                                <Gift className="w-5 h-5 text-blue-600" />
+                            </div>
+                            <div>
+                                <h3 className="text-lg font-semibold text-gray-900">Isentar Taxa de Adesão</h3>
+                                <p className="text-sm text-gray-500 mt-1">
+                                    Tem certeza que deseja isentar <strong>{selectedAdmin.nome}</strong> da taxa de adesão de R$ 100,00?
+                                </p>
+                                <p className="text-xs text-amber-600 mt-2">
+                                    ⚠️ Esta ação não pode ser desfeita.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="flex gap-3">
+                            <Button
+                                variant="ghost"
+                                className="flex-1"
+                                onClick={() => {
+                                    setShowIsentarModal(false);
+                                    setSelectedAdmin(null);
+                                }}
+                                disabled={actionLoading}
+                            >
+                                Cancelar
+                            </Button>
+                            <Button
+                                variant="primary"
+                                className="flex-1 bg-blue-600 hover:bg-blue-700"
+                                onClick={handleIsentar}
+                                isLoading={actionLoading}
+                            >
+                                Confirmar Isenção
                             </Button>
                         </div>
                     </motion.div>

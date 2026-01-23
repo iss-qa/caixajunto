@@ -105,7 +105,7 @@ const valoresComparativo = [
 ];
 
 export function Dashboard() {
-  const { usuario } = useAuth();
+  const { usuario, recarregarUsuario } = useAuth();
   const navigate = useNavigate();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -115,6 +115,11 @@ export function Dashboard() {
   const [loadingPart, setLoadingPart] = useState(true);
   const [selectedCreditParticipant, setSelectedCreditParticipant] = useState(5000);
   const isParticipant = usuario?.tipo === 'usuario';
+
+  // Recarregar dados do usuário ao montar o componente para garantir taxaAdesao atualizado
+  useEffect(() => {
+    recarregarUsuario();
+  }, []);
 
   useEffect(() => {
     if (!isParticipant) {
@@ -686,27 +691,57 @@ export function Dashboard() {
         <span className="text-sm text-gray-500">• Score: {usuario?.score ?? 70}</span>
       </div>
 
-      {/* Botões de Ação */}
+      {/* Botões de Ação - Apenas se taxa de adesão paga/isenta */}
       {usuario?.tipo !== 'usuario' && (
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-6">
-          <div className="flex gap-2">
-            <Button
-              variant="primary"
-              onClick={() => navigate('/caixas/novo')}
-              leftIcon={<Plus className="w-4 h-4" />}
-            >
-              Criar Caixa
-            </Button>
-            <Button
-              variant="secondary"
-              onClick={() => navigate('/participantes')}
-              leftIcon={<Users className="w-4 h-4" />}
-            >
-              Participantes
-            </Button>
-          </div>
-        </div>
+        <>
+          {/* Banner de Taxa Pendente para Administradores */}
+          {usuario?.tipo === 'administrador' &&
+            (usuario as any)?.taxaAdesao?.status !== 'pago' &&
+            (usuario as any)?.taxaAdesao?.status !== 'isento' && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6 flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                <div className="flex-1">
+                  <p className="font-semibold text-amber-800">⚠️ Taxa de Adesão Pendente</p>
+                  <p className="text-sm text-amber-700">
+                    Para criar caixas e gerenciar participantes, é necessário realizar o pagamento da taxa de adesão.
+                  </p>
+                </div>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  className="bg-amber-600 hover:bg-amber-700 whitespace-nowrap"
+                  onClick={() => navigate('/taxa-adesao')}
+                >
+                  Pagar Agora
+                </Button>
+              </div>
+            )}
+
+          {/* Botões - só aparecem se taxa paga/isenta */}
+          {((usuario as any)?.taxaAdesao?.status === 'pago' ||
+            (usuario as any)?.taxaAdesao?.status === 'isento' ||
+            usuario?.tipo === 'master') && (
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-6">
+                <div className="flex gap-2">
+                  <Button
+                    variant="primary"
+                    onClick={() => navigate('/caixas/novo')}
+                    leftIcon={<Plus className="w-4 h-4" />}
+                  >
+                    Criar Caixa
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    onClick={() => navigate('/participantes')}
+                    leftIcon={<Users className="w-4 h-4" />}
+                  >
+                    Participantes
+                  </Button>
+                </div>
+              </div>
+            )}
+        </>
       )}
+
 
       {/* Stats Cards - Com espaçamento do header */}
       <motion.div variants={itemVariants} className="mb-6 mt-2">

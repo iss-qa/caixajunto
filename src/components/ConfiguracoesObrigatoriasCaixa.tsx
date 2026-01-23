@@ -95,10 +95,44 @@ export function ConfiguracoesObrigatoriasCaixa({
         });
     }, [splitConfigStatus, participantesSubcontasStatus]);
 
+    // Função para calcular data de término baseada no tipo do caixa
+    const calcularDataTermino = (dataInicio: Date, duracao: number, tipo: string): Date => {
+        const dataFim = new Date(dataInicio);
+
+        switch (tipo?.toLowerCase()) {
+            case 'diario':
+            case 'diário':
+                dataFim.setDate(dataFim.getDate() + duracao);
+                break;
+            case 'semanal':
+                dataFim.setDate(dataFim.getDate() + (duracao * 7));
+                break;
+            case 'mensal':
+            default:
+                dataFim.setMonth(dataFim.getMonth() + duracao);
+                break;
+        }
+
+        return dataFim;
+    };
+
+    // Função para obter label de duração dinâmico
+    const obterLabelDuracao = (duracao: number, tipo: string): string => {
+        switch (tipo?.toLowerCase()) {
+            case 'diario':
+            case 'diário':
+                return duracao === 1 ? 'dia' : 'dias';
+            case 'semanal':
+                return duracao === 1 ? 'semana' : 'semanas';
+            case 'mensal':
+            default:
+                return duracao === 1 ? 'mês' : 'meses';
+        }
+    };
+
     // Calcular data de término
     const dataInicio = caixa.dataInicio ? new Date(caixa.dataInicio) : new Date();
-    const dataTermino = new Date(dataInicio);
-    dataTermino.setMonth(dataTermino.getMonth() + caixa.duracaoMeses);
+    const dataTermino = calcularDataTermino(dataInicio, caixa.duracaoMeses, caixa.tipo || 'mensal');
 
     // Verificar se configuração está completa
     const configuracaoCompleta =
@@ -172,7 +206,9 @@ export function ConfiguracoesObrigatoriasCaixa({
                         </div>
                         <div className="p-3 bg-teal-50 rounded-xl text-center border border-teal-200">
                             <p className="text-xs text-gray-500 font-medium">Duração</p>
-                            <p className="font-bold text-teal-700 mt-1">{caixa.duracaoMeses} meses</p>
+                            <p className="font-bold text-teal-700 mt-1">
+                                {caixa.duracaoMeses} {obterLabelDuracao(caixa.duracaoMeses, caixa.tipo || 'mensal')}
+                            </p>
                         </div>
                     </div>
 

@@ -22,6 +22,7 @@ import { GerenciarComunicacao } from './pages/GerenciarComunicacao';
 import { GerenciarAdministradores } from './pages/GerenciarAdministradores';
 import { GerenciarComissoes } from './pages/GerenciarComissoes';
 import { Seguranca } from './pages/Seguranca';
+import { TaxaAdesao } from './pages/TaxaAdesao';
 
 // Protected Route Component
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -64,6 +65,24 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+// Route que requer taxa de adesão paga para administradores
+function TaxaAdesaoRoute({ children }: { children: React.ReactNode }) {
+  const { usuario } = useAuth();
+
+  // Se não é administrador, ou é master, permitir acesso
+  if (!usuario || usuario.tipo !== 'administrador') {
+    return <>{children}</>;
+  }
+
+  // Se é administrador e taxa não está paga nem isenta, redirecionar
+  const taxaStatus = (usuario as any).taxaAdesao?.status;
+  if (taxaStatus !== 'pago' && taxaStatus !== 'isento') {
+    return <Navigate to="/taxa-adesao" replace />;
+  }
+
+  return <>{children}</>;
+}
+
 function AppRoutes() {
   return (
     <Routes>
@@ -97,21 +116,43 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       >
+        {/* Dashboard sempre acessível (mesmo com taxa pendente) */}
         <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/caixas" element={<Caixas />} />
-        <Route path="/caixas/novo" element={
-          <RoleRoute allow={["administrador", "master"]}>
-            <NovoCaixa />
-          </RoleRoute>
+
+        {/* Taxa de Adesão - sempre acessível para administradores */}
+        <Route path="/taxa-adesao" element={<TaxaAdesao />} />
+
+        {/* Rotas que requerem taxa de adesão paga */}
+        <Route path="/caixas" element={
+          <TaxaAdesaoRoute>
+            <Caixas />
+          </TaxaAdesaoRoute>
         } />
-        <Route path="/caixas/:id" element={<CaixaDetalhes />} />
+        <Route path="/caixas/novo" element={
+          <TaxaAdesaoRoute>
+            <RoleRoute allow={["administrador", "master"]}>
+              <NovoCaixa />
+            </RoleRoute>
+          </TaxaAdesaoRoute>
+        } />
+        <Route path="/caixas/:id" element={
+          <TaxaAdesaoRoute>
+            <CaixaDetalhes />
+          </TaxaAdesaoRoute>
+        } />
         <Route path="/participantes" element={
-          <RoleRoute allow={["administrador", "master"]}>
-            <Participantes />
-          </RoleRoute>
+          <TaxaAdesaoRoute>
+            <RoleRoute allow={["administrador", "master"]}>
+              <Participantes />
+            </RoleRoute>
+          </TaxaAdesaoRoute>
         } />
         <Route path="/contrato" element={<ContratoViewer />} />
-        <Route path="/carteira" element={<Carteira />} />
+        <Route path="/carteira" element={
+          <TaxaAdesaoRoute>
+            <Carteira />
+          </TaxaAdesaoRoute>
+        } />
         <Route path="/painel-master/split" element={
           <RoleRoute allow={["master"]}>
             <SplitConfig />
@@ -141,9 +182,11 @@ function AppRoutes() {
         <Route path="/seguranca" element={<Seguranca />} />
         <Route path="/notificacoes" element={<Notificacoes />} />
         <Route path="/pagamentos" element={
-          <RoleRoute allow={["administrador", "master"]}>
-            <Pagamentos />
-          </RoleRoute>
+          <TaxaAdesaoRoute>
+            <RoleRoute allow={["administrador", "master"]}>
+              <Pagamentos />
+            </RoleRoute>
+          </TaxaAdesaoRoute>
         } />
         <Route path="/configuracoes" element={<Perfil />} />
         <Route path="/painel-master" element={

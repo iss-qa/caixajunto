@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Check, AlertCircle, CheckCircle, XCircle, Loader2, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Check, AlertCircle, CheckCircle, XCircle, Loader2, AlertTriangle, Building2, Landmark, Eye, EyeOff } from 'lucide-react';
 import { caixasService, bancosService, participantesService, splitConfigService, subcontasService, usuariosService } from '../lib/api';
 import { formatCurrency } from '../lib/utils';
 import { useCaixaConfiguracao } from '../hooks/useCaixaConfiguracao';
@@ -22,6 +22,11 @@ type ExistingSplitConfig = {
   isConfigured?: boolean;
   name?: string;
   dadosBancarios?: {
+    banco: string;
+    agencia: string;
+    conta: string;
+  };
+  dadosBancariosFundoReserva?: {
     banco: string;
     agencia: string;
     conta: string;
@@ -85,7 +90,6 @@ interface ParticipanteOrdem {
   clientSecret?: string;
 }
 
-// Estado para credenciais de cada participante
 interface CredentialsMap {
   [usuarioId: string]: {
     clientId: string;
@@ -95,7 +99,6 @@ interface CredentialsMap {
   };
 }
 
-// Interface para dados bancários
 interface DadosBancarios {
   banco: string;
   agencia: string;
@@ -108,8 +111,19 @@ const calcularValorComIPCA = (valorBase: number, meses: number): number => {
   return valorBase * Math.pow(1 + taxa, meses);
 };
 
-// ID FIXO da empresa principal
-const EMPRESA_PRINCIPAL_SUBCONTA_ID = '693c5c508d48ed94888798a6';
+// IDs FIXOS das empresas (valores de produção)
+const EMPRESA_TAXA_SERVICO_LYTEX_ID = '69379d2f04f6995c13f5d00e';
+const EMPRESA_FUNDO_RESERVA_LYTEX_ID = '697299aa637c542412bcadb6';
+
+// Dados fixos da empresa responsável pela taxa de serviço (CAIXA JUNTO)
+const TAXA_SERVICO_DADOS_FIXOS = {
+  empresa: 'ISS SOFTWARE QUALITY SOLUTIONS (CAIXA JUNTO)',
+  cnpj: '39997807000186',
+  lytexId: EMPRESA_TAXA_SERVICO_LYTEX_ID,
+  banco: '104 - CAIXA ECONOMICA FEDERAL',
+  agencia: '3463',
+  conta: '577975287-3',
+};
 
 export default function SplitConfig() {
   const navigate = useNavigate();
@@ -120,7 +134,6 @@ export default function SplitConfig() {
   const [configError, setConfigError] = useState<string | null>(null);
   const [configSuccess, setConfigSuccess] = useState(false);
   const [adminSubId, setAdminSubId] = useState<string>('');
-  const [pjPrincipalInfo, setPjPrincipalInfo] = useState<LytexAccount | null>(null);
   const [adminInfo, setAdminInfo] = useState<LytexAccount | null>(null);
   const [participantesOrdem, setParticipantesOrdem] = useState<ParticipanteOrdem[]>([]);
   const [existingConfig, setExistingConfig] = useState<ExistingSplitConfig | null>(null);
@@ -128,8 +141,8 @@ export default function SplitConfig() {
   const [credentials, setCredentials] = useState<CredentialsMap>({});
   const [savingCredentials, setSavingCredentials] = useState<{ [key: string]: boolean }>({});
 
-  // Novos estados para dados bancários
-  const [dadosBancarios, setDadosBancarios] = useState<DadosBancarios>({
+  // Estados para dados bancários
+  const [dadosBancariosFundoReserva, setDadosBancariosFundoReserva] = useState<DadosBancarios>({
     banco: '',
     agencia: '',
     conta: '',
@@ -139,12 +152,14 @@ export default function SplitConfig() {
   // Estado para controlar caixas já configurados
   const [configuredCaixas, setConfiguredCaixas] = useState<string[]>([]);
 
-  // Novos estados para administradores
+  // Estados para administradores
   const [administradores, setAdministradores] = useState<any[]>([]);
   const [selectedAdminUserId, setSelectedAdminUserId] = useState<string>('');
   const [adminLytexId, setAdminLytexId] = useState<string>('');
   const [adminCredentials, setAdminCredentials] = useState({ clientId: '', clientSecret: '' });
   const [savingAdminCredentials, setSavingAdminCredentials] = useState(false);
+  const [showAdminSecret, setShowAdminSecret] = useState(false);
+  const [adminCredentialsSaved, setAdminCredentialsSaved] = useState(false);
 
   const selectedCaixa = useMemo(() => caixas.find((c) => c._id === selectedCaixaId), [caixas, selectedCaixaId]);
 
@@ -243,44 +258,11 @@ export default function SplitConfig() {
   }, []);
 
   useEffect(() => {
-    const fetchPrincipalAccount = async () => {
-      try {
-        const resp = await bancosService.getAccounts();
-        const account = getFirstLytexAccount(resp);
-        setPjPrincipalInfo(account);
-
-        // Auto-preencher dados bancários da empresa principal
-        if (account?.bank?.code && account?.agency?.number && account?.account?.number) {
-          const bankName = account.bank.name || '';
-          const bankCode = account.bank.code || '';
-          const agencyNumber = account.agency.number || '';
-          const accountNumber = account.account.number || '';
-          const accountDv = account.account.dv || '';
-
-          setDadosBancarios({
-            banco: `${bankCode}${bankName ? ' - ' + bankName : ''}`,
-            agencia: agencyNumber,
-            conta: `${accountNumber}${accountDv ? '-' + accountDv : ''}`,
-          });
-
-          console.log('✅ Dados bancários preenchidos automaticamente:', {
-            banco: `${bankCode} - ${bankName}`,
-            agencia: agencyNumber,
-            conta: `${accountNumber}-${accountDv}`,
-          });
-        }
-      } catch {
-        void 0;
-      }
-    };
-    fetchPrincipalAccount();
-  }, []);
-
-  useEffect(() => {
     if (selectedCaixaId) {
-      setShowTable(false); // Reset table visibility
-      setDadosBancarios({ banco: '', agencia: '', conta: '' }); // Reset bank data
-      setAdminInfo(null); // Reset admin info
+      setShowTable(false);
+      setDadosBancariosFundoReserva({ banco: '', agencia: '', conta: '' });
+      setAdminInfo(null);
+      setAdminCredentialsSaved(false);
 
       (async () => {
         try {
@@ -292,6 +274,10 @@ export default function SplitConfig() {
             const dadosBancariosRaw = rawConfig.dadosBancarios && typeof rawConfig.dadosBancarios === 'object'
               ? asRecord(rawConfig.dadosBancarios)
               : null;
+
+            const dadosBancariosFundoReservaRaw = rawConfig.dadosBancariosFundoReserva && typeof rawConfig.dadosBancariosFundoReserva === 'object'
+              ? asRecord(rawConfig.dadosBancariosFundoReserva)
+              : dadosBancariosRaw; // Fallback para dados antigos
 
             const data: ExistingSplitConfig = {
               _id: toStringSafe(rawConfig._id),
@@ -310,15 +296,22 @@ export default function SplitConfig() {
                   conta: toStringSafe(dadosBancariosRaw.conta),
                 }
                 : undefined,
+              dadosBancariosFundoReserva: dadosBancariosFundoReservaRaw
+                ? {
+                  banco: toStringSafe(dadosBancariosFundoReservaRaw.banco),
+                  agencia: toStringSafe(dadosBancariosFundoReservaRaw.agencia),
+                  conta: toStringSafe(dadosBancariosFundoReservaRaw.conta),
+                }
+                : undefined,
             };
 
             setExistingConfig(data);
             setAdminSubId(data.adminSubId || '');
             setShowTable(true);
 
-            // Carregar dados bancários se existirem
-            if (data.dadosBancarios) {
-              setDadosBancarios(data.dadosBancarios);
+            // Carregar dados bancários do fundo de reserva se existirem
+            if (data.dadosBancariosFundoReserva) {
+              setDadosBancariosFundoReserva(data.dadosBancariosFundoReserva);
             }
 
             // Buscar info do admin se tiver ID
@@ -387,7 +380,7 @@ export default function SplitConfig() {
                 if (clientId || clientSecret) {
                   credsMap[usuarioIdReal] = {
                     clientId: clientId,
-                    clientSecret: clientSecret === '***' ? '' : clientSecret, // Secret mascarado
+                    clientSecret: clientSecret === '***' ? '' : clientSecret,
                     saved: Boolean(clientId),
                   };
                 }
@@ -434,6 +427,7 @@ export default function SplitConfig() {
         setAdminSubId(adminLytexId);
       }
 
+      setAdminCredentialsSaved(true);
       console.log('✅ Credenciais do administrador salvas com sucesso');
     } catch (e: unknown) {
       console.error('❌ Erro ao salvar credenciais do administrador:', e);
@@ -446,35 +440,32 @@ export default function SplitConfig() {
   // Handler para quando o Lytex ID for modificado
   const handleAdminLytexIdBlur = async () => {
     if (adminLytexId) {
-      // Buscar informações do administrador
       await handleFetchAdminInfo(adminLytexId);
-      // Salvar o Lytex ID
       setAdminSubId(adminLytexId);
-      // Auto-save das credenciais se existirem
       if (selectedAdminUserId) {
         await handleAutoSaveAdminCredentials();
       }
     }
   };
 
-  // Auto-save de dados bancários ao sair do campo
+  // Auto-save de dados bancários do fundo de reserva ao sair do campo
   const handleAutoSaveBankData = async () => {
     if (!selectedCaixaId) return;
-    if (!dadosBancarios.banco && !dadosBancarios.agencia && !dadosBancarios.conta) return;
+    if (!dadosBancariosFundoReserva.banco && !dadosBancariosFundoReserva.agencia && !dadosBancariosFundoReserva.conta) return;
 
     try {
       setSavingBankData(true);
 
       const payload = {
-        taxaServicoSubId: EMPRESA_PRINCIPAL_SUBCONTA_ID,
-        fundoReservaSubId: EMPRESA_PRINCIPAL_SUBCONTA_ID,
+        taxaServicoSubId: EMPRESA_TAXA_SERVICO_LYTEX_ID,
+        fundoReservaSubId: EMPRESA_FUNDO_RESERVA_LYTEX_ID,
         adminSubId: adminSubId || undefined,
         participantesMesOrdem: participantesOrdem.map((p) => p.id),
-        dadosBancarios: dadosBancarios,
+        dadosBancariosFundoReserva: dadosBancariosFundoReserva,
       };
 
       await splitConfigService.saveForCaixa(selectedCaixaId, payload);
-      console.log('✅ Dados bancários salvos automaticamente');
+      console.log('✅ Dados bancários do fundo de reserva salvos automaticamente');
     } catch (e: unknown) {
       console.error('❌ Erro ao auto-salvar dados bancários:', e);
     } finally {
@@ -490,12 +481,12 @@ export default function SplitConfig() {
       setConfigSuccess(false);
 
       const payload = {
-        taxaServicoSubId: EMPRESA_PRINCIPAL_SUBCONTA_ID,
-        fundoReservaSubId: EMPRESA_PRINCIPAL_SUBCONTA_ID,
+        taxaServicoSubId: EMPRESA_TAXA_SERVICO_LYTEX_ID,
+        fundoReservaSubId: EMPRESA_FUNDO_RESERVA_LYTEX_ID,
         adminSubId: adminSubId || undefined,
         participantesMesOrdem: participantesOrdem.map((p) => p.id),
-        dadosBancarios: dadosBancarios.banco || dadosBancarios.agencia || dadosBancarios.conta
-          ? dadosBancarios
+        dadosBancariosFundoReserva: dadosBancariosFundoReserva.banco || dadosBancariosFundoReserva.agencia || dadosBancariosFundoReserva.conta
+          ? dadosBancariosFundoReserva
           : undefined,
       };
 
@@ -507,8 +498,8 @@ export default function SplitConfig() {
           : null;
 
       if (rawSaved) {
-        const dadosBancariosRaw = rawSaved.dadosBancarios && typeof rawSaved.dadosBancarios === 'object'
-          ? asRecord(rawSaved.dadosBancarios)
+        const dadosBancariosFundoReservaRaw = rawSaved.dadosBancariosFundoReserva && typeof rawSaved.dadosBancariosFundoReserva === 'object'
+          ? asRecord(rawSaved.dadosBancariosFundoReserva)
           : null;
 
         setExistingConfig({
@@ -521,11 +512,11 @@ export default function SplitConfig() {
             : [],
           isConfigured: toBooleanSafe(rawSaved.isConfigured),
           name: toStringSafe(rawSaved.name),
-          dadosBancarios: dadosBancariosRaw
+          dadosBancariosFundoReserva: dadosBancariosFundoReservaRaw
             ? {
-              banco: toStringSafe(dadosBancariosRaw.banco),
-              agencia: toStringSafe(dadosBancariosRaw.agencia),
-              conta: toStringSafe(dadosBancariosRaw.conta),
+              banco: toStringSafe(dadosBancariosFundoReservaRaw.banco),
+              agencia: toStringSafe(dadosBancariosFundoReservaRaw.agencia),
+              conta: toStringSafe(dadosBancariosFundoReservaRaw.conta),
             }
             : undefined,
         });
@@ -675,7 +666,7 @@ export default function SplitConfig() {
           </div>
         )}
 
-        {/* Seleção de Caixa e Administrador - MESMA LINHA */}
+        {/* Seleção de Caixa e Administrador */}
         <div className="bg-white rounded-lg shadow-sm p-4 mb-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Seleção de Caixa */}
@@ -710,6 +701,7 @@ export default function SplitConfig() {
                   setAdminLytexId('');
                   setAdminInfo(null);
                   setAdminCredentials({ clientId: '', clientSecret: '' });
+                  setAdminCredentialsSaved(false);
 
                   // Auto-carregar lytexId do administrador selecionado
                   if (adminId) {
@@ -740,6 +732,7 @@ export default function SplitConfig() {
                             clientId: clientId,
                             clientSecret: clientSecret === '***' ? '' : clientSecret,
                           });
+                          setAdminCredentialsSaved(Boolean(clientId));
                         }
                       }
                     } catch (error: any) {
@@ -758,36 +751,80 @@ export default function SplitConfig() {
               </select>
             </div>
           </div>
+        </div>
 
-          {/* Campos adicionais para Lytex ID e Credenciais - aparece após selecionar administrador */}
-          {selectedAdminUserId && (
-            <div className="mt-4 pt-4 border-t border-gray-200">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {/* Lytex ID */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    ID do Lytex (lytextid)
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      placeholder="Digite o ID da subconta"
-                      value={adminLytexId}
-                      onChange={(e) => setAdminLytexId(e.target.value)}
-                      onBlur={handleAdminLytexIdBlur}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm"
-                    />
-                    {savingAdminCredentials && (
-                      <Loader2 size={14} className="absolute right-2 top-1/2 -translate-y-1/2 animate-spin text-green-500" />
-                    )}
-                  </div>
+        {/* Cards de Resumo - MOVIDO PARA CIMA */}
+        {selectedCaixaId && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+            <div className="bg-gradient-to-br from-blue-50 to-blue-100 border-2 border-blue-500 rounded-lg p-4">
+              <p className="text-xs font-bold uppercase text-blue-700 mb-1">
+                Total de Participantes
+              </p>
+              <p className="text-3xl font-bold text-blue-900">
+                {participantesOrdem.length}
+              </p>
+            </div>
+
+            <div className="bg-gradient-to-br from-purple-50 to-purple-100 border-2 border-purple-500 rounded-lg p-4">
+              <p className="text-xs font-bold uppercase text-purple-700 mb-1">
+                Valor Base do Caixa
+              </p>
+              <p className="text-3xl font-bold text-purple-900">
+                {formatCurrency(selectedCaixa?.valorTotal || 0)}
+              </p>
+            </div>
+
+            <div className="bg-gradient-to-br from-green-50 to-green-100 border-2 border-green-500 rounded-lg p-4">
+              <p className="text-xs font-bold uppercase text-green-700 mb-1">
+                Com Subconta Ativa
+              </p>
+              <p className="text-3xl font-bold text-green-900">
+                {comSubconta}/{participantesOrdem.length}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Card de Dados do Administrador */}
+        {selectedAdminUserId && (
+          <div className="bg-white rounded-lg shadow-sm p-5 mb-4 border-2 border-green-500 relative">
+            <div className="absolute top-3 right-3">
+              <span className="px-2 py-1 bg-green-500 text-white text-xs font-bold uppercase rounded-full">
+                Administrador
+              </span>
+            </div>
+
+            <p className="text-xs font-bold uppercase text-gray-600 mb-3">
+              DADOS DO ADMINISTRADOR/GESTOR
+            </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Lytex ID */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  ID do Lytex (lytextid)
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="Digite o ID da subconta"
+                    value={adminLytexId}
+                    onChange={(e) => setAdminLytexId(e.target.value)}
+                    onBlur={handleAdminLytexIdBlur}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm"
+                  />
+                  {savingAdminCredentials && (
+                    <Loader2 size={14} className="absolute right-2 top-1/2 -translate-y-1/2 animate-spin text-green-500" />
+                  )}
                 </div>
+              </div>
 
-                {/* Client ID */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Client ID
-                  </label>
+              {/* Client ID */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Client ID
+                </label>
+                <div className="relative">
                   <input
                     type="text"
                     placeholder="Client ID"
@@ -795,142 +832,208 @@ export default function SplitConfig() {
                     onChange={(e) => setAdminCredentials({ ...adminCredentials, clientId: e.target.value })}
                     onBlur={handleAutoSaveAdminCredentials}
                     disabled={!adminLytexId}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
+                    className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm disabled:bg-gray-100 disabled:cursor-not-allowed ${adminCredentialsSaved ? 'border-green-300 bg-green-50' : 'border-gray-300'
+                      }`}
                   />
+                  {adminCredentialsSaved && adminCredentials.clientId && (
+                    <CheckCircle size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-green-500" />
+                  )}
                 </div>
+              </div>
 
-                {/* Client Secret */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Client Secret
-                  </label>
+              {/* Client Secret */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Client Secret
+                </label>
+                <div className="relative">
                   <input
-                    type="password"
-                    placeholder="Client Secret"
+                    type={showAdminSecret ? 'text' : 'password'}
+                    placeholder={adminCredentialsSaved && !adminCredentials.clientSecret ? '••••••••••••••••' : 'Client Secret'}
                     value={adminCredentials.clientSecret}
                     onChange={(e) => setAdminCredentials({ ...adminCredentials, clientSecret: e.target.value })}
                     onBlur={handleAutoSaveAdminCredentials}
                     disabled={!adminLytexId}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
+                    className={`w-full px-3 py-2 pr-10 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm disabled:bg-gray-100 disabled:cursor-not-allowed ${adminCredentialsSaved ? 'border-green-300 bg-green-50' : 'border-gray-300'
+                      }`}
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowAdminSecret(!showAdminSecret)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    {showAdminSecret ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
                 </div>
+                {adminCredentialsSaved && (
+                  <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
+                    <CheckCircle size={12} />
+                    Credenciais salvas
+                  </p>
+                )}
               </div>
             </div>
-          )}
 
-          {/* Erro de configuração */}
-          {configError && (
-            <div className="mt-3 p-2 bg-red-50 border border-red-200 rounded-lg flex items-start gap-2">
-              <AlertCircle className="text-red-600 flex-shrink-0" size={18} />
-              <span className="text-sm text-red-800">{configError}</span>
-            </div>
-          )}
-        </div>
+            {/* Info do Administrador (exibe após buscar) */}
+            {adminInfo && (
+              <div className="mt-4 pt-4 border-t border-gray-200">
+                <div className="bg-gradient-to-br from-green-50 to-teal-50 rounded-lg p-4">
+                  <h4 className="text-lg font-bold text-gray-900 mb-1">
+                    {adminInfo.owner?.name}
+                  </h4>
+                  <p className="text-sm text-gray-600 mb-2">
+                    CPF/CNPJ: {adminInfo.owner?.cpfCnpj}
+                  </p>
 
-        {/* Empresa Principal + Dados Bancários do Administrador */}
-        <div className="bg-white rounded-lg shadow-sm p-5 mb-4 border-2 border-blue-500 relative">
-          <div className="absolute top-3 right-3">
-            <span className="px-2 py-1 bg-blue-500 text-white text-xs font-bold uppercase rounded-full">
-              Principal
-            </span>
+                  <div className="space-y-1 text-sm text-gray-700">
+                    <p>
+                      <span className="font-medium">Banco:</span> {adminInfo.bank?.code} - {adminInfo.bank?.name}
+                    </p>
+                    <p>
+                      <span className="font-medium">Agência:</span> {adminInfo.agency?.number}-{adminInfo.agency?.dv}
+                    </p>
+                    <p>
+                      <span className="font-medium">Conta:</span> {adminInfo.account?.type} {adminInfo.account?.number}-{adminInfo.account?.dv}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Erro de configuração */}
+            {configError && (
+              <div className="mt-3 p-2 bg-red-50 border border-red-200 rounded-lg flex items-start gap-2">
+                <AlertCircle className="text-red-600 flex-shrink-0" size={18} />
+                <span className="text-sm text-red-800">{configError}</span>
+              </div>
+            )}
           </div>
+        )}
 
-          <p className="text-xs font-bold uppercase text-gray-600 mb-2">
-            EMPRESA RESPONSÁVEL PELA TAXA DE SERVIÇO E FUNDO DE RESERVA
-          </p>
-
-          <div className="bg-gradient-to-br from-blue-50 to-purple-50 rounded-lg p-4">
-            <h3 className="text-xl font-bold text-gray-900 mb-1">
-              {pjPrincipalInfo?.owner?.name || 'ISS SOFTWARE QUALITY SOLUTIONS (CAIXA JUNTO)'}
-            </h3>
-            <p className="text-sm text-gray-600">
-              CNPJ: {pjPrincipalInfo?.owner?.cpfCnpj || '39997807000186'}
-            </p>
-          </div>
-
-          {/* Dados Bancários do Administrador */}
-          <div className="mt-4 pt-4 border-t border-gray-200">
-            <div className="flex items-center gap-2 mb-3">
-              <AlertTriangle className="text-amber-500" size={18} />
-              <span className="text-sm text-amber-700 font-medium">
-                Confirme os dados bancários do administrador antes de salvar. Estes dados serão usados para transferências do bônus de 10%.
+        {/* SEÇÕES SEPARADAS: Taxa de Serviço e Fundo de Reserva */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          {/* TAXA DE SERVIÇO - Dados FIXOS */}
+          <div className="bg-white rounded-lg shadow-sm p-5 border-2 border-blue-500 relative">
+            <div className="absolute top-3 right-3">
+              <span className="px-2 py-1 bg-blue-500 text-white text-xs font-bold uppercase rounded-full flex items-center gap-1">
+                <Building2 size={12} />
+                Taxa Serviço
               </span>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <p className="text-xs font-bold uppercase text-gray-600 mb-3">
+              EMPRESA RESPONSÁVEL PELA TAXA DE SERVIÇO
+            </p>
+
+            <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg p-4 mb-4">
+              <h3 className="text-lg font-bold text-gray-900 mb-1">
+                {TAXA_SERVICO_DADOS_FIXOS.empresa}
+              </h3>
+              <p className="text-sm text-gray-600 mb-2">
+                CNPJ: {TAXA_SERVICO_DADOS_FIXOS.cnpj}
+              </p>
+              <p className="text-xs text-gray-500">
+                ID Lytex: <code className="bg-gray-100 px-1 py-0.5 rounded text-xs">{TAXA_SERVICO_DADOS_FIXOS.lytexId}</code>
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-500 mb-1">Banco</label>
+                <div className="px-3 py-2 bg-gray-100 border border-gray-200 rounded-lg text-sm text-gray-700">
+                  {TAXA_SERVICO_DADOS_FIXOS.banco}
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-500 mb-1">Agência</label>
+                  <div className="px-3 py-2 bg-gray-100 border border-gray-200 rounded-lg text-sm text-gray-700">
+                    {TAXA_SERVICO_DADOS_FIXOS.agencia}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-500 mb-1">Conta Corrente</label>
+                  <div className="px-3 py-2 bg-gray-100 border border-gray-200 rounded-lg text-sm text-gray-700">
+                    {TAXA_SERVICO_DADOS_FIXOS.conta}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* FUNDO DE RESERVA - Dados EDITÁVEIS */}
+          <div className="bg-white rounded-lg shadow-sm p-5 border-2 border-amber-500 relative">
+            <div className="absolute top-3 right-3">
+              <span className="px-2 py-1 bg-amber-500 text-white text-xs font-bold uppercase rounded-full flex items-center gap-1">
+                <Landmark size={12} />
+                Fundo Reserva
+              </span>
+            </div>
+
+            <p className="text-xs font-bold uppercase text-gray-600 mb-3">
+              EMPRESA RESPONSÁVEL FUNDO DE RESERVA
+            </p>
+
+            <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-lg p-4 mb-4">
+              <p className="text-sm text-gray-700 mb-2">
+                Conta para recebimento do fundo de reserva
+              </p>
+              <p className="text-xs text-gray-500">
+                ID Lytex: <code className="bg-gray-100 px-1 py-0.5 rounded text-xs">{EMPRESA_FUNDO_RESERVA_LYTEX_ID}</code>
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 mb-3">
+              <AlertTriangle className="text-amber-500" size={18} />
+              <span className="text-sm text-amber-700 font-medium">
+                Preencha os dados bancários para transferências do fundo.
+              </span>
+            </div>
+
+            <div className="space-y-3">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Banco</label>
                 <div className="relative">
                   <input
                     type="text"
                     placeholder="Ex: 260 - NU PAGAMENTOS - IP"
-                    value={dadosBancarios.banco}
-                    onChange={(e) => setDadosBancarios({ ...dadosBancarios, banco: e.target.value })}
+                    value={dadosBancariosFundoReserva.banco}
+                    onChange={(e) => setDadosBancariosFundoReserva({ ...dadosBancariosFundoReserva, banco: e.target.value })}
                     onBlur={handleAutoSaveBankData}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent text-sm"
                   />
                   {savingBankData && (
-                    <Loader2 size={14} className="absolute right-2 top-1/2 -translate-y-1/2 animate-spin text-blue-500" />
+                    <Loader2 size={14} className="absolute right-2 top-1/2 -translate-y-1/2 animate-spin text-amber-500" />
                   )}
                 </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Agência</label>
-                <input
-                  type="text"
-                  placeholder="Ex: 0001"
-                  value={dadosBancarios.agencia}
-                  onChange={(e) => setDadosBancarios({ ...dadosBancarios, agencia: e.target.value })}
-                  onBlur={handleAutoSaveBankData}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Conta Corrente</label>
-                <input
-                  type="text"
-                  placeholder="Ex: 7146725-9"
-                  value={dadosBancarios.conta}
-                  onChange={(e) => setDadosBancarios({ ...dadosBancarios, conta: e.target.value })}
-                  onBlur={handleAutoSaveBankData}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Agência</label>
+                  <input
+                    type="text"
+                    placeholder="Ex: 0001"
+                    value={dadosBancariosFundoReserva.agencia}
+                    onChange={(e) => setDadosBancariosFundoReserva({ ...dadosBancariosFundoReserva, agencia: e.target.value })}
+                    onBlur={handleAutoSaveBankData}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Conta Corrente</label>
+                  <input
+                    type="text"
+                    placeholder="Ex: 7146725-9"
+                    value={dadosBancariosFundoReserva.conta}
+                    onChange={(e) => setDadosBancariosFundoReserva({ ...dadosBancariosFundoReserva, conta: e.target.value })}
+                    onBlur={handleAutoSaveBankData}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent text-sm"
+                  />
+                </div>
               </div>
             </div>
           </div>
         </div>
-
-        {/* Info do Administrador (exibe após buscar) */}
-        {adminInfo && (
-          <div className="bg-white rounded-lg shadow-sm p-4 mb-4 border-2 border-green-500 relative">
-            <div className="absolute top-2 right-2">
-              <span className="px-2 py-1 bg-green-500 text-white text-xs font-bold uppercase rounded-full">
-                Administrador
-              </span>
-            </div>
-
-            <div className="bg-gradient-to-br from-green-50 to-teal-50 rounded-lg p-4">
-              <h4 className="text-lg font-bold text-gray-900 mb-1">
-                {adminInfo.owner?.name}
-              </h4>
-              <p className="text-sm text-gray-600 mb-2">
-                CPF/CNPJ: {adminInfo.owner?.cpfCnpj}
-              </p>
-
-              <div className="space-y-1 text-sm text-gray-700">
-                <p>
-                  <span className="font-medium">Banco:</span> {adminInfo.bank?.code} - {adminInfo.bank?.name}
-                </p>
-                <p>
-                  <span className="font-medium">Agência:</span> {adminInfo.agency?.number}-{adminInfo.agency?.dv}
-                </p>
-                <p>
-                  <span className="font-medium">Conta:</span> {adminInfo.account?.type} {adminInfo.account?.number}-{adminInfo.account?.dv}
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Botão Salvar */}
         <div className="mb-6">
@@ -946,7 +1049,7 @@ export default function SplitConfig() {
           </button>
         </div>
 
-        {/* Tabela de Contemplação - SOMENTE após salvar */}
+        {/* Tabela de Contemplação */}
         {showTable && existingConfig && participantesOrdem.length > 0 && (
           <div className="bg-white rounded-lg shadow-sm overflow-hidden mb-4">
             <div className="bg-gradient-to-r from-purple-600 to-blue-600 px-4 py-3">
@@ -1088,38 +1191,6 @@ export default function SplitConfig() {
                   })}
                 </tbody>
               </table>
-            </div>
-          </div>
-        )}
-
-        {/* Cards de Resumo - SOMENTE após salvar */}
-        {showTable && existingConfig && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-gradient-to-br from-blue-50 to-blue-100 border-2 border-blue-500 rounded-lg p-4">
-              <p className="text-xs font-bold uppercase text-blue-700 mb-1">
-                Total de Participantes
-              </p>
-              <p className="text-3xl font-bold text-blue-900">
-                {participantesOrdem.length}
-              </p>
-            </div>
-
-            <div className="bg-gradient-to-br from-purple-50 to-purple-100 border-2 border-purple-500 rounded-lg p-4">
-              <p className="text-xs font-bold uppercase text-purple-700 mb-1">
-                Valor Base do Caixa
-              </p>
-              <p className="text-3xl font-bold text-purple-900">
-                {formatCurrency(selectedCaixa?.valorTotal || 0)}
-              </p>
-            </div>
-
-            <div className="bg-gradient-to-br from-green-50 to-green-100 border-2 border-green-500 rounded-lg p-4">
-              <p className="text-xs font-bold uppercase text-green-700 mb-1">
-                Com Subconta Ativa
-              </p>
-              <p className="text-3xl font-bold text-green-900">
-                {comSubconta}/{participantesOrdem.length}
-              </p>
             </div>
           </div>
         )}

@@ -1,5 +1,18 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { authService } from '../lib/api';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
+import { authService, api } from '../lib/api';
+
+interface TaxaAdesao {
+  status: 'pendente' | 'pago' | 'isento';
+  lytexInvoiceId?: string;
+  linkBoleto?: string;
+  linkCheckout?: string;
+  pixQrCode?: string;
+  pixCopiaECola?: string;
+  dataPagamento?: string;
+  isentoPorId?: string;
+  isentoPorNome?: string;
+  dataIsencao?: string;
+}
 
 interface Usuario {
   _id: string;
@@ -16,6 +29,7 @@ interface Usuario {
   cpf?: string;
   lytexSubAccountId?: string;
   contratoAssinado?: boolean;
+  taxaAdesao?: TaxaAdesao;
 }
 
 interface AuthContextType {
@@ -26,6 +40,7 @@ interface AuthContextType {
   register: (data: any) => Promise<void>;
   logout: () => void;
   updateUsuario: (data: Partial<Usuario>) => void;
+  recarregarUsuario: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -78,6 +93,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // Recarrega dados do usuário do servidor (útil após pagamento/isenção de taxa)
+  const recarregarUsuario = useCallback(async () => {
+    if (!usuario?._id) return;
+
+    try {
+      const response = await api.get(`/usuarios/${usuario._id}`);
+      const usuarioAtualizado = response.data;
+      localStorage.setItem('usuario', JSON.stringify(usuarioAtualizado));
+      setUsuario(usuarioAtualizado);
+    } catch (error) {
+      console.error('Erro ao recarregar usuário:', error);
+    }
+  }, [usuario?._id]);
+
   return (
     <AuthContext.Provider
       value={{
@@ -88,6 +117,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         register,
         logout,
         updateUsuario,
+        recarregarUsuario,
       }}
     >
       {children}
