@@ -610,9 +610,9 @@ export function DetalhesPagamento({
       const payload = {
         participante: {
           nome: participante.usuarioId?.nome || 'Participante',
-          cpf: participante.usuarioId?.cpf || '96050176876',
-          email: participante.usuarioId?.email || 'sandbox@example.com',
-          telefone: participante.usuarioId?.telefone || '71999999999',
+          cpf: participante.usuarioId?.cpf || '',
+          email: participante.usuarioId?.email || '',
+          telefone: participante.usuarioId?.telefone || '',
         },
         caixa: {
           nome: caixa.nome,
@@ -633,7 +633,13 @@ export function DetalhesPagamento({
         habilitarBoleto: true,
       }
 
-      logger.log('Gerando nova cobrança', { mes: boleto.mes, valor: boleto.valorTotal })
+      // ✅ VALIDAÇÃO: Verificar se o participante tem CPF cadastrado
+      if (!payload.participante.cpf) {
+        alert(`❌ Erro: O participante ${payload.participante.nome} não possui CPF cadastrado. Por favor, atualize o cadastro antes de gerar a cobrança.`)
+        return
+      }
+
+      logger.log('Gerando nova cobrança', { mes: boleto.mes, valor: boleto.valorTotal, cpf: payload.participante.cpf })
 
       const response = await cobrancasService.gerar(payload)
 
