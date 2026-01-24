@@ -469,7 +469,7 @@ export function DetalhesPagamento({
   // ------------------------------------------------------------------
   // 🔥 LÓGICA DE GERAÇÃO DE COBRANÇA CORRIGIDA E PRIORIZADA
   // ------------------------------------------------------------------
-  const handleGerarCobranca = useCallback(async (boleto: Boleto) => {
+  const handleGerarCobranca = useCallback(async (boleto: Boleto, forceRenew = false) => {
     if (!participante || !caixa) return
 
     setGerandoCobranca(true)
@@ -504,7 +504,7 @@ export function DetalhesPagamento({
         } catch (error) { /* Ignore */ }
       }
 
-      if (cobrancaExistente && cobrancaExistente.pix && !isPixExpired(cobrancaExistente.pix)) {
+      if (!forceRenew && cobrancaExistente && cobrancaExistente.pix && !isPixExpired(cobrancaExistente.pix)) {
         setExpandedMes(boleto.mes)
         setPaymentTab('pix')
         return
@@ -654,6 +654,7 @@ export function DetalhesPagamento({
         dataVencimento: boleto.dataVencimento,
         habilitarPix: true,
         habilitarBoleto: true,
+        forceRenew,
       }
 
       logger.log('Gerando cobrança com payload:', payload)
@@ -787,52 +788,56 @@ export function DetalhesPagamento({
       size="full"
     >
       <div>
-        {/* Header do Participante */}
-        <div className="flex flex-col items-center gap-2 p-4 bg-gray-50 rounded-xl mb-4">
-          <div className="w-full">
-            <p className="font-bold text-gray-900 text-lg mb-2 text-center">{nomeUsuario}</p>
+        {!expandedMes && (
+          <>
+            {/* Header do Participante */}
+            <div className="flex flex-col items-center gap-2 p-4 bg-gray-50 rounded-xl mb-4">
+              <div className="w-full">
+                <p className="font-bold text-gray-900 text-lg mb-2 text-center">{nomeUsuario}</p>
 
-            <div className="flex flex-col gap-1.5 text-sm text-gray-600 pl-2">
-              <div>
-                <span className="font-medium text-gray-500">ID:</span> {participante._id}
-              </div>
-              <div>
-                <span className="font-medium text-gray-500">Caixa:</span> {caixa?.nome}
-              </div>
-              <div>
-                <span className="font-medium text-gray-900">Email:</span> {emailUsuario}
-              </div>
-              <div>
-                <span className="font-medium text-gray-900">Telefone:</span> {telUsuario}
-              </div>
-              <div className="mt-1">
-                <span className="font-medium text-gray-900">Score atual:</span>
-                <span className={cn(
-                  'font-bold ml-1',
-                  scoreUsuario >= 80 ? 'text-green-600' : scoreUsuario >= 60 ? 'text-amber-600' : 'text-red-600'
-                )}>
-                  {scoreUsuario}
-                </span>
+                <div className="flex flex-col gap-1.5 text-sm text-gray-600 pl-2">
+                  <div>
+                    <span className="font-medium text-gray-500">ID:</span> {participante._id}
+                  </div>
+                  <div>
+                    <span className="font-medium text-gray-500">Caixa:</span> {caixa?.nome}
+                  </div>
+                  <div>
+                    <span className="font-medium text-gray-900">Email:</span> {emailUsuario}
+                  </div>
+                  <div>
+                    <span className="font-medium text-gray-900">Telefone:</span> {telUsuario}
+                  </div>
+                  <div className="mt-1">
+                    <span className="font-medium text-gray-900">Score atual:</span>
+                    <span className={cn(
+                      'font-bold ml-1',
+                      scoreUsuario >= 80 ? 'text-green-600' : scoreUsuario >= 60 ? 'text-amber-600' : 'text-red-600'
+                    )}>
+                      {scoreUsuario}
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
-        </div>
 
-        {/* Info de Recebimento */}
-        <div className="p-3 bg-amber-50 rounded-xl mb-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs text-amber-700 font-medium">Data de Recebimento</p>
-              <p className="font-bold text-amber-800">
-                {calcularDataRecebimento(participante.posicao || 0)}
-              </p>
+            {/* Info de Recebimento */}
+            <div className="p-3 bg-amber-50 rounded-xl mb-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-amber-700 font-medium">Data de Recebimento</p>
+                  <p className="font-bold text-amber-800">
+                    {calcularDataRecebimento(participante.posicao || 0)}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs text-amber-700 font-medium">Posição</p>
+                  <p className="font-bold text-amber-800">{participante.posicao}º</p>
+                </div>
+              </div>
             </div>
-            <div className="text-right">
-              <p className="text-xs text-amber-700 font-medium">Posição</p>
-              <p className="font-bold text-amber-800">{participante.posicao}º</p>
-            </div>
-          </div>
-        </div>
+          </>
+        )}
 
         {/* Header de Histórico */}
         <div className="flex items-center justify-between mb-3">
@@ -967,19 +972,34 @@ export function DetalhesPagamento({
                       </Button>
                     ) : paymentTab === 'pix' ? (
                       <div className="space-y-3">
-                        {isPixExpired(cobranca.pix) && (
-                          <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg text-center">
-                            <p className="text-xs text-red-700 mb-2 font-medium">PIX Expirado</p>
-                            <Button size="sm" variant="primary" className="bg-red-500 w-full" onClick={() => handleGerarCobranca(boleto)}>Gerar Novo PIX</Button>
+                        {isPixExpired(cobranca.pix) ? (
+                          <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-center">
+                            <p className="text-sm text-red-700 font-bold mb-1">PIX Expirado</p>
+                            <p className="text-xs text-red-600 mb-3">O código QR expirou. Gere uma nova cobrança.</p>
+                            <Button
+                              size="sm"
+                              variant="primary"
+                              className="bg-red-600 hover:bg-red-700 text-white w-full h-10 shadow-sm"
+                              onClick={() => handleGerarCobranca(boleto, true)}
+                            >
+                              Gerar Novo PIX
+                            </Button>
                           </div>
+                        ) : (
+                          <>
+                            <div className="flex justify-center">
+                              {cobranca.pix?.qrCode ? <div className="bg-white p-3 rounded-lg border shadow-sm"><QRCode value={cobranca.pix.copiaCola} size={180} /></div> : null}
+                            </div>
+                            <div className="flex gap-2">
+                              <div className="flex-1 bg-gray-50 border rounded-lg px-3 py-2 flex items-center">
+                                <p className="text-xs text-gray-600 font-mono truncate w-full select-all">{cobranca.pix?.copiaCola || ''}</p>
+                              </div>
+                              <Button size="sm" variant="secondary" onClick={() => handleCopyPix(boleto.mes)}>
+                                <Copy className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          </>
                         )}
-                        <div className="flex justify-center">
-                          {cobranca.pix?.qrCode ? <div className="bg-white p-3 rounded-lg border"><QRCode value={cobranca.pix.copiaCola} size={150} /></div> : null}
-                        </div>
-                        <div className="flex gap-2">
-                          <input readOnly value={cobranca.pix?.copiaCola || ''} className="flex-1 px-3 py-2 bg-gray-50 border rounded-lg text-xs" />
-                          <Button size="sm" onClick={() => handleCopyPix(boleto.mes)}><Copy className="w-4 h-4" /></Button>
-                        </div>
                       </div>
                     ) : (
                       <div className="space-y-3">

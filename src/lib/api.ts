@@ -248,6 +248,7 @@ export const cobrancasService = {
     dataVencimento: string;
     habilitarPix?: boolean;
     habilitarBoleto?: boolean;
+    forceRenew?: boolean;
   }) => {
     const response = await api.post('/cobrancas/gerar', data);
     return response.data;
