@@ -227,6 +227,14 @@ export const cobrancasService = {
       cpf: string;
       email: string;
       telefone: string;
+      endereco?: {
+        cep?: string;
+        cidade?: string;
+        rua?: string;
+        estado?: string;
+        bairro?: string;
+        numero?: string;
+      };
     };
     caixa: {
       nome: string;
