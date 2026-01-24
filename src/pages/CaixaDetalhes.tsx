@@ -1813,7 +1813,7 @@ ${link}`;
                 Resumo do Seu Caixa
               </h4>
 
-              <div className="grid grid-cols-2 gap-3 mb-3">
+              <div className="flex flex-col md:grid md:grid-cols-2 gap-3 mb-3">
                 <div className="bg-green-50 p-3 rounded-lg border border-green-200">
                   <p className="text-sm text-green-600 font-medium mb-1">Você Recebe</p>
                   <p className="text-2xl font-bold text-green-700">
