@@ -1511,47 +1511,58 @@ ${link}`;
               ? "bg-gradient-to-r from-green-600 to-emerald-600"
               : "bg-gradient-to-r from-green-500 to-green-600"
           )}>
-            <div className="flex items-start justify-between">
-              <div>
-                <div className="flex items-center gap-2 mb-1 flex-wrap">
-                  <h1 className="text-xl md:text-2xl font-bold">{caixa.nome}</h1>
-                  {caixaIniciado && (
-                    <Badge className="bg-white text-green-600">
-                      <Play className="w-3 h-3 mr-1" />
-                      Em andamento
-                    </Badge>
-                  )}
-                  {caixa?.status === 'pausado' && (
-                    <Badge variant="warning" className="bg-white text-amber-600">
-                      Pausado
-                    </Badge>
-                  )}
-                  <span className="text-white/90 text-sm font-medium border-l border-white/30 pl-2 ml-1">
-                    Tipo de Caixa: {caixa.tipo === 'diario' ? 'Diário' : caixa.tipo === 'semanal' ? 'Semanal' : 'Mensal'}
-                  </span>
-                </div>
-                {caixa.adminId?.nome && (
-                  <p className="text-white/80 text-xs mt-1">
-                    Organizado por: {caixa.adminId.nome}
-                  </p>
+            <div className="flex items-start justify-between w-full mb-1">
+              <h1 className="text-xl md:text-2xl font-bold flex-1 mr-2 leading-tight">{caixa.nome}</h1>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {caixaIniciado && (
+                  <Badge className="bg-white text-green-600 border border-green-100 shadow-sm whitespace-nowrap">
+                    <Play className="w-3 h-3 mr-1" />
+                    Em andamento
+                  </Badge>
                 )}
-                <p className="text-white/80 text-sm mt-1">{caixa.descricao || 'Sem descrição'}</p>
-              </div>
-              <div className="flex items-center gap-2">
+                {caixa?.status === 'pausado' && (
+                  <Badge variant="warning" className="bg-white text-amber-600 border border-amber-100 shadow-sm whitespace-nowrap">
+                    Pausado
+                  </Badge>
+                )}
+                {/* Outros badges de status (completo/faltam) movidos para cá para alinhar tudo na direita */}
                 {caixaCompleto && !caixaIniciado && (
-                  <Badge className="bg-green-400/80 text-white">
+                  <Badge className="bg-green-400/90 text-white whitespace-nowrap">
                     <CheckCircle2 className="w-3 h-3 mr-1" />
                     Completo
                   </Badge>
                 )}
                 {participantesFaltando > 0 && (
-                  <Badge variant="danger" className="bg-red-500/80 text-white">
+                  <Badge variant="danger" className="bg-red-500/90 text-white whitespace-nowrap">
                     <AlertTriangle className="w-3 h-3 mr-1" />
                     Faltam {participantesFaltando}
                   </Badge>
                 )}
               </div>
             </div>
+
+            <div className="flex flex-col gap-1 mb-2">
+              <div className="text-white/90 text-sm font-medium flex items-center flex-wrap gap-2">
+                <span className="opacity-80">Tipo de Caixa:</span>
+                <span>{caixa.tipo === 'diario' ? 'Diário' : caixa.tipo === 'semanal' ? 'Semanal' : 'Mensal'}</span>
+                {caixa.adminId?.nome && (
+                  <>
+                    {/* Separador visual apenas se não quebrar linha, mas aqui assumimos nova linha ou continuação fluida */}
+                    <span className="hidden sm:inline opacity-60">|</span>
+                    <div className="flex items-center gap-1">
+                      <span className="opacity-80">Organizado por:</span>
+                      <span>{caixa.adminId.nome}</span>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {caixa.descricao && (
+              <p className="text-white/80 text-sm mt-1 leading-snug">
+                {caixa.descricao.length > 140 ? `${caixa.descricao.substring(0, 140)}...` : caixa.descricao}
+              </p>
+            )}
 
             {/* Progress */}
             <div className="mt-6">
@@ -1666,19 +1677,20 @@ ${link}`;
           <div className="mt-4 p-3 bg-gray-50 rounded-xl flex items-center justify-between">
             <div>
               <p className="text-xs text-gray-500 mb-0.5">Código de Convite</p>
-              <p className="font-mono font-bold text-green-600">{caixa.codigoConvite}</p>
+              <p className="font-mono font-bold text-green-600 text-lg">{caixa.codigoConvite}</p>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-col gap-2">
+              <Button variant="ghost" size="sm" leftIcon={<Share2 className="w-4 h-4" />} onClick={handleShareWhatsApp} className="justify-start h-8 px-2">
+                Compartilhar
+              </Button>
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={handleCopyCode}
                 leftIcon={copied ? <CheckCircle2 className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                className="justify-start h-8 px-2"
               >
                 {copied ? 'Copiado!' : 'Copiar'}
-              </Button>
-              <Button variant="ghost" size="sm" leftIcon={<Share2 className="w-4 h-4" />} onClick={handleShareWhatsApp}>
-                Compartilhar
               </Button>
             </div>
           </div>
@@ -1686,30 +1698,40 @@ ${link}`;
           {/* Pagamentos da Semana/Mês e Ganho do Admin */}
           {participantes.length > 0 && (
             <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-xl">
-              <div className="flex items-center justify-between mb-3">
-                <div>
-                  <p className="text-xs text-blue-600 font-medium">Valor da Parcela</p>
-                  <p className="text-xl font-bold text-blue-700">
-                    {formatCurrency(caixa.valorTotal / caixa.qtdParticipantes)}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p className="text-xs text-gray-500">Total de {caixa.qtdParticipantes} parcelas</p>
-                  <p className="text-sm text-gray-600">
-                    {caixa.tipo === 'diario' ? 'Diárias' : caixa.tipo === 'semanal' ? 'Semanais' : 'Mensais'}
-                  </p>
+              <div>
+                <h3 className="font-bold text-gray-900 mb-4">Resumo de Pagamentos</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-xs text-blue-600 font-medium whitespace-nowrap">Tipo de Caixa</p>
+                    <p className="text-sm font-bold text-blue-700 capitalize">
+                      {caixa.tipo || 'Mensal'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-blue-600 font-medium whitespace-nowrap">Valor da Parcela</p>
+                    <p className="text-sm font-bold text-blue-700">
+                      {formatCurrency(caixa.valorParcela || (caixa.valorTotal / caixa.qtdParticipantes))}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-blue-600 font-medium whitespace-nowrap">Qtd Participantes</p>
+                    <p className="text-sm font-bold text-blue-700">
+                      {caixa.qtdParticipantes}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-blue-600 font-medium whitespace-nowrap">Qtd de Parcelas</p>
+                    <p className="text-sm font-bold text-blue-700">
+                      {caixa.duracaoMeses}
+                    </p>
+                  </div>
                 </div>
               </div>
               {caixaIniciado ? (
                 <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <h3 className="font-semibold text-gray-900">
-                      Resumo de Pagamentos
-                    </h3>
-                    <span className="text-sm text-gray-500">{participantes.length} participantes</span>
-                  </div>
 
-                  <div className="flex gap-3 overflow-x-auto pb-4 pt-1 px-1 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">
+
+                  <div className="flex gap-3 overflow-x-auto pb-4 pt-1 px-1 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent snap-x snap-mandatory">
                     {Array.from({ length: caixa.duracaoMeses }).map((_, idx) => {
                       const mes = idx + 1;
                       const pagosApiSet = new Set<string>();
@@ -1728,7 +1750,7 @@ ${link}`;
 
                       return (
                         <div key={mes} className={cn(
-                          "min-w-[150px] flex-1 p-3 rounded-xl border transition-all",
+                          "min-w-[150px] flex-1 p-3 rounded-xl border transition-all snap-center",
                           isCurrent
                             ? "bg-white border-blue-200 shadow-md ring-1 ring-blue-100 scale-105"
                             : isPast
@@ -1897,134 +1919,126 @@ ${link}`;
           className="mb-6"
         >
           <Card className="bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 border-2 border-green-200/60 shadow-lg">
-            <div className="flex items-start gap-4">
-              <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-600 rounded-full flex items-center justify-center flex-shrink-0 shadow-md">
-                <TrendingUp className="w-6 h-6 text-white" />
-              </div>
-              <div className="flex-1">
-                {recebedorAtual ? (
-                  <>
-                    <h3 className="font-bold text-gray-900 text-lg mb-2 flex items-center gap-2">
-                      <span>{(() => {
-                        // Lógica para Label Dinâmica
+            <div className="flex-1">
+              {recebedorAtual ? (
+                <>
+                  <h3 className="font-bold text-gray-900 text-lg mb-2 flex items-center gap-2">
+                    <div className="flex items-center justify-between w-full mb-2">
+                      <span className="font-bold text-gray-900 text-lg flex-1 mr-2">{(() => {
+                        // Lógica para Label Dinâmica - Refinada: Tudo na mesma linha
+                        let label = '';
+                        let data = '';
+
                         if (caixa?.tipo === 'diario') {
-                          // Se tiver data de vencimento (parcela atual), usa ela + 2 dias
                           if (caixa.dataVencimento) {
                             const vencimento = new Date(caixa.dataVencimento);
-                            // Adiciona 2 dias (1 dia folga + 1 dia contemplação)
                             vencimento.setDate(vencimento.getDate() + 2);
                             return `Participante Contemplado no dia ${vencimento.toLocaleDateString('pt-BR')}`;
                           }
-                          // Fallback se não tiver vencimento
                           return 'Participante Contemplado neste dia';
-                        }
-
-                        if (caixa?.tipo === 'semanal') {
+                        } else if (caixa?.tipo === 'semanal') {
                           return `Participante Contemplado na Semana ${caixa.mesAtual || 1}`;
+                        } else {
+                          const meses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+                            'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+                          if (!caixa?.dataInicio) {
+                            return 'Participante Contemplado este mês';
+                          } else {
+                            const dataInicioStr = caixa.dataInicio;
+                            const parts = dataInicioStr.split('T')[0].split('-');
+                            const month = parseInt(parts[1]) - 1;
+                            const mesAtual = caixa.mesAtual || 1;
+                            const targetMonth = month + (mesAtual - 1);
+                            const mesIndex = targetMonth % 12;
+                            return `Participante Contemplado em ${meses[mesIndex]}`;
+                          }
                         }
-
-                        // Lógica Padrão (Mensal)
-                        const meses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
-                          'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
-
-                        if (!caixa?.dataInicio) return 'Participante Contemplado este mês';
-
-                        const dataInicioStr = caixa.dataInicio;
-                        const parts = dataInicioStr.split('T')[0].split('-');
-                        const year = parseInt(parts[0]);
-                        const month = parseInt(parts[1]) - 1;
-                        const mesAtual = caixa.mesAtual || 1;
-                        const targetMonth = month + (mesAtual - 1);
-                        const mesIndex = targetMonth % 12;
-
-                        return `Participante Contemplado em ${meses[mesIndex]}`;
                       })()}</span>
-                      <Badge className="bg-green-600 text-white text-xs">
-                        <CheckCircle2 className="w-3 h-3 mr-1" />
-                        {caixa?.tipo === 'diario' ? 'Dia' : caixa?.tipo === 'semanal' ? 'Semana' : 'Mês'} {caixa?.mesAtual || 1}
-                      </Badge>
-                    </h3>
 
-                    <div className="bg-white/70 backdrop-blur-sm rounded-xl p-4 border border-green-200/50 shadow-sm">
-                      {/* Recebe este mês */}
-                      <div className="mb-4 pb-4 border-b border-green-200">
-                        <p className="text-xs text-green-600 font-semibold mb-2">Recebe {caixa?.tipo === 'diario' ? 'hoje' : caixa?.tipo === 'semanal' ? 'esta semana' : 'este mês'}</p>
-                        <div className="flex items-center gap-3 mb-2">
-                          <Avatar
-                            name={recebedorAtual.usuarioId.nome}
-                            src={recebedorAtual.usuarioId.fotoUrl}
-                            size="md"
-                          />
-                          <div className="flex-1">
-                            <p className="font-bold text-gray-900 text-lg">{recebedorAtual.usuarioId.nome}</p>
-                            <p className="text-sm text-amber-600 font-medium">
-                              Valor: {formatCurrency(caixa.valorTotal)} • Vencimento: {getVencimentoAtual()}
-                            </p>
+                      {/* Badge simplified: Alinhado a direita, sem icon, apenas Dia X */}
+                      <div className="bg-green-600 text-white text-xs font-bold px-3 py-1 rounded-full whitespace-nowrap">
+                        {caixa?.tipo === 'diario' ? 'Dia' : caixa?.tipo === 'semanal' ? 'Semana' : 'Mês'} {caixa?.mesAtual || 1}
+                      </div>
+                    </div>
+                  </h3>
+
+                  <div className="bg-white/70 backdrop-blur-sm rounded-xl p-4 border border-green-200/50 shadow-sm">
+                    <div className="mb-4 pb-4 border-b border-green-200">
+                      <p className="text-xs text-green-600 font-semibold mb-2">Recebe {caixa?.tipo === 'diario' ? 'hoje' : caixa?.tipo === 'semanal' ? 'esta semana' : 'este mês'}</p>
+                      <div className="flex items-center gap-3 mb-2 w-full">
+                        {/* Avatar removed as requested */}
+
+                        <div className="flex-1">
+                          <p className="font-bold text-gray-900 text-lg mb-1">{recebedorAtual.usuarioId.nome}</p>
+                          <div className="flex flex-col gap-1 text-sm text-amber-600 font-medium">
+                            <span>Valor: {formatCurrency(caixa.valorTotal)}</span>
+                            <span>Vencimento: {getVencimentoAtual()}</span>
                           </div>
                         </div>
                       </div>
+                    </div>
 
-                      <div className="space-y-2 text-sm">
-                        <div className="flex items-start gap-2">
-                          <Calendar className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
-                          <p className="text-gray-700">
-                            A transferência será realizada <span className="font-semibold text-green-700">automaticamente no dia {getVencimentoAtual()}</span>
-                          </p>
-                        </div>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex items-start gap-2">
+                        <Calendar className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
+                        <p className="text-gray-700">
+                          A transferência será realizada <span className="font-semibold text-green-700">automaticamente no dia {getVencimentoAtual()}</span>
+                        </p>
+                      </div>
 
-                        <div className="flex items-start gap-2">
-                          <Mail className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
-                          <p className="text-gray-700">
-                            Comprovante e notificações serão enviados para <span className="font-semibold text-green-700">todos os participantes</span>
-                          </p>
-                        </div>
+                      <div className="flex items-start gap-2">
+                        <Mail className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
+                        <p className="text-gray-700">
+                          Comprovante e notificações serão enviados para <span className="font-semibold text-green-700">todos os participantes</span>
+                        </p>
                       </div>
                     </div>
-                  </>
-                ) : (
-                  <>
-                    <h3 className="font-bold text-gray-900 text-lg mb-2 flex items-center gap-2">
-                      <span>Informações de Contemplação</span>
-                      <Badge className="bg-amber-500 text-white text-xs">
-                        <AlertTriangle className="w-3 h-3 mr-1" />
-                        Aguardando Sorteio
-                      </Badge>
-                    </h3>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <h3 className="font-bold text-gray-900 text-lg mb-2 flex items-center gap-2">
+                    <span>Informações de Contemplação</span>
+                    <Badge className="bg-amber-500 text-white text-xs">
+                      <AlertTriangle className="w-3 h-3 mr-1" />
+                      Aguardando Sorteio
+                    </Badge>
+                  </h3>
 
-                    <div className="bg-white/70 backdrop-blur-sm rounded-xl p-4 border border-green-200/50 shadow-sm">
-                      <div className="space-y-3 text-sm">
-                        <div className="flex items-start gap-2">
-                          <Shuffle className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
-                          <p className="text-gray-700">
-                            As posições dos participantes ainda não foram sorteadas.
-                            {(usuario?.tipo === 'master' || caixa?.adminId?._id === usuario?._id) && (
-                              <span className="font-semibold text-amber-700"> Clique em "Sortear Posições" para definir a ordem de contemplação.</span>
-                            )}
-                          </p>
-                        </div>
+                  <div className="bg-white/70 backdrop-blur-sm rounded-xl p-4 border border-green-200/50 shadow-sm">
+                    <div className="space-y-3 text-sm">
+                      <div className="flex items-start gap-2">
+                        <Shuffle className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
+                        <p className="text-gray-700">
+                          As posições dos participantes ainda não foram sorteadas.
+                          {(usuario?.tipo === 'master' || caixa?.adminId?._id === usuario?._id) && (
+                            <span className="font-semibold text-amber-700"> Clique em "Sortear Posições" para definir a ordem de contemplação.</span>
+                          )}
+                        </p>
+                      </div>
 
-                        <div className="flex items-start gap-2">
-                          <Calendar className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
-                          <p className="text-gray-700">
-                            Após o sorteio, o participante contemplado do mês será exibido aqui com a <span className="font-semibold text-green-700">data de transferência automática</span>
-                          </p>
-                        </div>
+                      <div className="flex items-start gap-2">
+                        <Calendar className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
+                        <p className="text-gray-700">
+                          Após o sorteio, o participante contemplado do mês será exibido aqui com a <span className="font-semibold text-green-700">data de transferência automática</span>
+                        </p>
+                      </div>
 
-                        <div className="flex items-start gap-2">
-                          <Mail className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
-                          <p className="text-gray-700">
-                            Comprovantes e notificações serão enviados para <span className="font-semibold text-green-700">todos os participantes</span> quando houver contemplação
-                          </p>
-                        </div>
+                      <div className="flex items-start gap-2">
+                        <Mail className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
+                        <p className="text-gray-700">
+                          Comprovantes e notificações serão enviados para <span className="font-semibold text-green-700">todos os participantes</span> quando houver contemplação
+                        </p>
                       </div>
                     </div>
-                  </>
-                )}
-              </div>
+                  </div>
+                </>
+              )}
             </div>
           </Card>
         </motion.div>
-      )}
+      )
+      }
 
       {/* Tabs posicionadas acima do Cronograma */}
 
@@ -2223,159 +2237,129 @@ ${link}`;
                         <Card
                           hover={canInteract}
                           onClick={() => {
-                            if (!canInteract) return; // Block click for other participants' cards
+                            if (!canInteract) return;
                             setSelectedParticipante(participante);
                             setShowParticipanteDetail(true);
                           }}
                           className={cn(
                             "transition-all",
-                            !canInteract && "cursor-default opacity-75", // Visual indication of read-only
+                            !canInteract && "cursor-default opacity-75",
                             isPago
-                              ? 'ring-2 ring-blue-500 bg-blue-50'  // ← AZUL quando PAGO
+                              ? 'ring-2 ring-blue-500 bg-blue-50'
                               : participante.posicao === caixa.mesAtual
                                 ? 'ring-2 ring-green-400 bg-green-50/50'
-                                : ''
+                                : '',
+                            // Highlight for logged user card
+                            usuario?.tipo === 'usuario' && isOwnCard && "border-2 border-amber-400 shadow-[0_0_15px_rgba(251,191,36,0.2)] animate-[pulse_2s_cubic-bezier(0.4,0,0.6,1)_infinite]"
                           )}
                         >
-                          <div className="flex items-center gap-3">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                if (!showTrash) return;
-                                e.stopPropagation();
-                                setParticipanteToRemove(participante);
-                                setShowRemoveParticipanteModal(true);
-                              }}
-                              className={cn(
-                                'w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm',
-                                showTrash
-                                  ? 'bg-red-50 text-red-600 hover:bg-red-100 cursor-pointer'
-                                  : isPago
-                                    ? 'bg-blue-500 text-white'
-                                    : participante.posicao === caixa.mesAtual
-                                      ? 'bg-amber-100 text-amber-700'
-                                      : 'bg-gray-100 text-gray-500'
-                              )}
-                            >
-                              {showTrash ? (
-                                <Trash2 className="w-4 h-4" />
-                              ) : (
-                                participante.posicao || '-'
-                              )}
-                            </button>
+                          <div className="flex items-start gap-3">
+                            {/* Removed Avatar and Position Circle, replaced with inline text logic */}
 
-                            <Avatar
-                              name={participante?.usuarioId?.nome || 'Sem nome'}
-                              src={participante?.usuarioId?.fotoUrl}
-                              size="md"
-                            />
+                            {/* Trash button moved safely without visual clutter if needed, or hidden if not needed. 
+                                The user requested removing the green circle with initials. 
+                                We will remove the dedicated button circle and Avatar.
+                            */}
+                            {showTrash && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setParticipanteToRemove(participante);
+                                  setShowRemoveParticipanteModal(true);
+                                }}
+                                className="text-red-500 hover:text-red-700 p-1"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
 
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 flex-wrap">
-                                <p className="font-semibold text-gray-900 truncate">
+                                <p className="font-semibold text-gray-900">
+                                  {/* 4.2 Posicao alinhada ao nome */}
+                                  <span className="mr-1">{participante.posicao}.</span>
+                                  {/* 4.3 Nome completo sem truncar */}
                                   {participante?.usuarioId?.nome || 'Sem nome'}
                                 </p>
 
-                                {/* Badge for own card (participante only) */}
+                                {/* 4.4 Status na mesma linha */}
+                                {isPago ? (
+                                  <span className="text-xs font-bold text-green-700 bg-green-100 px-2 py-0.5 rounded-full border border-green-200">
+                                    EM DIA
+                                  </span>
+                                ) : isAtrasado ? (
+                                  <span className="text-xs font-bold text-red-600 bg-red-100 px-2 py-0.5 rounded-full border border-red-200">
+                                    ATRASADO
+                                  </span>
+                                ) : isVenceHoje ? (
+                                  <span className="text-xs font-bold text-amber-600 bg-amber-100 px-2 py-0.5 rounded-full border border-amber-200">
+                                    VENCE HOJE
+                                  </span>
+                                ) : (
+                                  <span className="text-xs font-bold text-green-700 bg-green-100 px-2 py-0.5 rounded-full border border-green-200">
+                                    EM DIA
+                                  </span>
+                                )}
+
                                 {usuario?.tipo === 'usuario' && isOwnCard && (
-                                  <Badge variant="info" size="sm" className="bg-green-100 text-green-700 border border-green-300">
+                                  <Badge variant="info" size="sm" className="bg-amber-100 text-amber-800 border border-amber-300">
                                     Você
                                   </Badge>
                                 )}
-
-                                {/* ← BADGES EM DIA + PAGO */}
-                                {isPago ? (
-                                  <>
-                                    <Badge variant="success" size="sm" className="bg-white text-green-700 border border-green-200 shadow-sm">
-                                      EM DIA
-                                    </Badge>
-                                    <Badge variant="success" size="sm" className="bg-purple-500 text-white shadow-sm">
-                                      <Wallet className="w-3 h-3 mr-1" />
-                                      Parcela {formatCurrency(caixa.valorParcela || (caixa.valorTotal / caixa.qtdParticipantes))}
-                                    </Badge>
-                                    <Badge variant="success" size="sm" className="bg-blue-500 text-white shadow-sm">
-                                      <CheckCircle2 className="w-3 h-3 mr-1" />
-                                      PAGO
-                                    </Badge>
-                                  </>
-                                ) : isAtrasado ? (
-                                  <>
-                                    <Badge variant="danger" size="sm">
-                                      <AlertTriangle className="w-3 h-3 mr-1" />
-                                      ATRASADO
-                                    </Badge>
-                                    <Badge variant="gray" size="sm" className="bg-gray-100 text-gray-600 shadow-sm">
-                                      <Wallet className="w-3 h-3 mr-1" />
-                                      Parcela {formatCurrency(
-                                        calcularValorComIPCA(
-                                          cronogramaParcela,
-                                          caixa.valorParcela || (caixa.valorTotal / caixa.qtdParticipantes)
-                                        )
-                                      )}
-                                    </Badge>
-                                  </>
-                                ) : isVenceHoje ? (
-                                  <>
-                                    <Badge variant="warning" size="sm">
-                                      <Clock className="w-3 h-3 mr-1" />
-                                      VENCE HOJE
-                                    </Badge>
-                                    <Badge variant="gray" size="sm" className="bg-gray-100 text-gray-600 shadow-sm">
-                                      <Wallet className="w-3 h-3 mr-1" />
-                                      Parcela {formatCurrency(
-                                        calcularValorComIPCA(
-                                          cronogramaParcela,
-                                          caixa.valorParcela || (caixa.valorTotal / caixa.qtdParticipantes)
-                                        )
-                                      )}
-                                    </Badge>
-                                  </>
-                                ) : (
-                                  <>
-                                    <Badge variant="success" size="sm" className="bg-white text-green-700 border border-green-200 shadow-sm">
-                                      EM DIA
-                                    </Badge>
-                                    <Badge variant="gray" size="sm" className="bg-gray-100 text-gray-600 shadow-sm">
-                                      <Wallet className="w-3 h-3 mr-1" />
-                                      Parcela {formatCurrency(
-                                        calcularValorComIPCA(
-                                          cronogramaParcela,
-                                          caixa.valorParcela || (caixa.valorTotal / caixa.qtdParticipantes)
-                                        )
-                                      )}
-                                    </Badge>
-                                  </>
-                                )}
                               </div>
 
-                              <div className="flex items-center gap-3 text-sm text-gray-500 mt-1">
+                              {/* 4.5 Segunda linha: Parcela - Vencimento - Status/Valor */}
+                              <div className="flex items-center gap-2 text-sm text-gray-600 mt-1 flex-wrap">
+                                {/* Parcela Value */}
                                 <span className="flex items-center gap-1">
-                                  <Calendar className="w-3 h-3" />
+                                  <Wallet className="w-3 h-3 text-gray-400" />
+                                  {formatCurrency(
+                                    calcularValorComIPCA(
+                                      cronogramaParcela,
+                                      caixa.valorParcela || (caixa.valorTotal / caixa.qtdParticipantes)
+                                    )
+                                  )}
+                                </span>
+
+                                <span className="text-gray-300">|</span>
+
+                                {/* Date */}
+                                <span className="flex items-center gap-1">
+                                  <Calendar className="w-3 h-3 text-gray-400" />
                                   {getDataVencimentoParcela(cronogramaParcela)}
                                 </span>
-                                <span className="hidden sm:flex items-center gap-1">
-                                  <Phone className="w-3 h-3" />
+
+                                <span className="text-gray-300">|</span>
+
+                                {/* Valor Pago / Status */}
+                                {isPago ? (
+                                  <span className="font-bold text-green-600">
+                                    PAGO {(() => {
+                                      const referenciaMes = cronogramaParcela;
+                                      const base = caixa.valorParcela || (caixa.valorTotal / caixa.qtdParticipantes);
+                                      const fundoReserva = referenciaMes === 1 ? (base / caixa.qtdParticipantes) : 0;
+                                      const ipca = referenciaMes > 1 ? base * TAXA_IPCA_MENSAL : 0;
+                                      const comissaoAdmin = referenciaMes === (caixa.duracaoMeses || caixa.qtdParticipantes) ? (caixa.valorTotal * 0.10) / caixa.qtdParticipantes : 0;
+                                      const total = base + TAXA_SERVICO + fundoReserva + ipca + comissaoAdmin;
+                                      return formatCurrency(total);
+                                    })()}
+                                  </span>
+                                ) : (
+                                  <span className="text-gray-500">
+                                    R$ 0,00
+                                  </span>
+                                )}
+
+                                {/* Phone hidden on mobile */}
+                                <span className="hidden sm:flex items-center gap-1 ml-2 border-l pl-2 border-gray-200">
+                                  <Phone className="w-3 h-3 text-gray-400" />
                                   {participante.usuarioId.telefone}
                                 </span>
                               </div>
                             </div>
 
-                            <div className="text-right block">
-                              <p className="text-xs text-gray-500">Valor Pago</p>
-                              <p className="font-bold text-green-700">
-                                {(() => {
-                                  const referenciaMes = cronogramaParcela;
-                                  const base = caixa.valorParcela || (caixa.valorTotal / caixa.qtdParticipantes);
-                                  const fundoReserva = referenciaMes === 1 ? (base / caixa.qtdParticipantes) : 0;
-                                  const ipca = referenciaMes > 1 ? base * TAXA_IPCA_MENSAL : 0;
-                                  const comissaoAdmin = referenciaMes === (caixa.duracaoMeses || caixa.qtdParticipantes) ? (caixa.valorTotal * 0.10) / caixa.qtdParticipantes : 0;
-                                  const total = base + TAXA_SERVICO + fundoReserva + ipca + comissaoAdmin;
-                                  return formatCurrency(isPago ? total : 0);
-                                })()}
-                              </p>
-                            </div>
-
-                            <ChevronRight className="w-5 h-5 text-gray-400 flex-shrink-0" />
+                            <ChevronRight className="w-5 h-5 text-gray-400 flex-shrink-0 mt-2" />
                           </div>
                         </Card>
                       </motion.div>
@@ -2400,22 +2384,22 @@ ${link}`;
 
             <Card className="mt-6 mb-4 bg-blue-50 border-blue-200">
               <h4 className="font-semibold text-blue-800 mb-2">Composição do Boleto</h4>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
-                <div>
-                  <span className="text-gray-600">Parcela:</span>
-                  <span className="font-medium text-gray-900 ml-1">{formatCurrency(caixa.valorParcela)}</span>
+              <div className="flex flex-col gap-2 text-sm bg-white/50 p-3 rounded-lg">
+                <div className="flex justify-between border-b border-blue-100 pb-1">
+                  <span className="text-gray-600">Parcela</span>
+                  <span className="font-medium text-gray-900">{formatCurrency(caixa.valorParcela)}</span>
                 </div>
-                <div>
-                  <span className="text-gray-600">Taxa serviço:</span>
-                  <span className="font-medium text-gray-900 ml-1">{formatCurrency(TAXA_SERVICO)}</span>
+                <div className="flex justify-between border-b border-blue-100 pb-1">
+                  <span className="text-gray-600">Taxa de Serviço</span>
+                  <span className="font-medium text-gray-900">{formatCurrency(TAXA_SERVICO)}</span>
                 </div>
-                <div>
-                  <span className="text-gray-600">Fundo reserva (1º):</span>
-                  <span className="font-medium text-gray-900 ml-1">{formatCurrency((caixa.valorTotal / caixa.qtdParticipantes) / caixa.qtdParticipantes)}</span>
+                <div className="flex justify-between border-b border-blue-100 pb-1">
+                  <span className="text-gray-600">Fundo de reserva (1º)</span>
+                  <span className="font-medium text-gray-900">{formatCurrency((caixa.valorTotal / caixa.qtdParticipantes) / caixa.qtdParticipantes)}</span>
                 </div>
-                <div>
-                  <span className="text-gray-600">Comissão admin (último):</span>
-                  <span className="font-medium text-gray-900 ml-1">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Comissão admin (último)</span>
+                  <span className="font-medium text-gray-900">
                     {usuario?.tipo === 'usuario'
                       ? formatCurrency((caixa.valorTotal * 0.10) / caixa.qtdParticipantes)
                       : formatCurrency(caixa.valorTotal * 0.10)}
@@ -3212,6 +3196,6 @@ ${link}`;
           </Button>
         </div>
       </Modal>
-    </div>
+    </div >
   );
 }

@@ -788,34 +788,33 @@ export function DetalhesPagamento({
     >
       <div>
         {/* Header do Participante */}
-        <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-xl mb-4">
-          <Avatar
-            name={nomeUsuario}
-            src={fotoUsuario}
-            size="lg"
-          />
-          <div className="flex-1">
-            <p className="font-bold text-gray-900">{nomeUsuario}</p>
-            <div className="flex items-center gap-2 text-xs text-gray-500 mt-1 mb-1">
-              <span>ID: {participante._id}</span>
-              <span>•</span>
-              <span>Caixa: {caixa?.nome}</span>
+        <div className="flex flex-col items-center gap-2 p-4 bg-gray-50 rounded-xl mb-4">
+          <div className="w-full">
+            <p className="font-bold text-gray-900 text-lg mb-2 text-center">{nomeUsuario}</p>
+
+            <div className="flex flex-col gap-1.5 text-sm text-gray-600 pl-2">
+              <div>
+                <span className="font-medium text-gray-500">ID:</span> {participante._id}
+              </div>
+              <div>
+                <span className="font-medium text-gray-500">Caixa:</span> {caixa?.nome}
+              </div>
+              <div>
+                <span className="font-medium text-gray-900">Email:</span> {emailUsuario}
+              </div>
+              <div>
+                <span className="font-medium text-gray-900">Telefone:</span> {telUsuario}
+              </div>
+              <div className="mt-1">
+                <span className="font-medium text-gray-900">Score atual:</span>
+                <span className={cn(
+                  'font-bold ml-1',
+                  scoreUsuario >= 80 ? 'text-green-600' : scoreUsuario >= 60 ? 'text-amber-600' : 'text-red-600'
+                )}>
+                  {scoreUsuario}
+                </span>
+              </div>
             </div>
-            <p className="text-sm text-gray-500">{emailUsuario}</p>
-            <p className="text-sm text-gray-500">{telUsuario}</p>
-          </div>
-          <div className="text-right">
-            <p className="text-xs text-gray-500">Score</p>
-            <p className={cn(
-              'text-2xl font-bold',
-              scoreUsuario >= 80
-                ? 'text-green-600'
-                : scoreUsuario >= 60
-                  ? 'text-amber-600'
-                  : 'text-red-600'
-            )}>
-              {scoreUsuario}
-            </p>
           </div>
         </div>
 
@@ -836,23 +835,25 @@ export function DetalhesPagamento({
         </div>
 
         {/* Header de Histórico */}
-        <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-          <FileText className="w-4 h-4" />
-          Histórico de Pagamentos
+        <div className="flex items-center justify-between mb-3">
+          <h4 className="font-semibold text-gray-900 flex items-center gap-2">
+            <FileText className="w-4 h-4" />
+            <span className="text-sm sm:text-base">Histórico de Pagamentos</span>
+          </h4>
           <Button
             variant="secondary"
             size="sm"
-            leftIcon={<RefreshCw className={cn("w-4 h-4", isRefreshing && "animate-spin")} />}
             onClick={() => loadPaymentDetails(true)}
             disabled={isRefreshing}
-            className="ml-auto"
+            className="h-8 px-2 sm:px-3"
           >
-            {isRefreshing ? 'Atualizando...' : 'Atualizar'}
+            <RefreshCw className={cn("w-4 h-4 sm:mr-2", isRefreshing && "animate-spin")} />
+            <span className="hidden sm:inline">{isRefreshing ? 'Atualizando...' : 'Atualizar'}</span>
           </Button>
-        </h4>
+        </div>
 
         {/* Lista de Boletos */}
-        <div className="space-y-2 max-h-[70vh] overflow-y-auto">
+        <div className="space-y-2 max-h-[75vh] overflow-y-auto pb-20">
           {boletos.map((boleto) => {
             const cobranca = cobrancas.get(boleto.mes)
             const isPago = boleto.status === 'pago'
