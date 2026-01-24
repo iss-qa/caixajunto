@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import QRCode from 'react-qr-code'
 import Barcode from 'react-barcode'
-import { FileText, RefreshCw, ChevronRight, QrCode, Loader2, CheckCircle2, Copy, ExternalLink, Printer } from 'lucide-react'
+import { FileText, RefreshCw, ChevronRight, QrCode, Loader2, CheckCircle2, Copy, ExternalLink, Printer, ClipboardCopy } from 'lucide-react'
 import { Modal } from '../components/ui/Modal'
 import { Avatar } from '../components/ui/Avatar'
 import { Badge } from '../components/ui/Badge'
@@ -118,6 +118,7 @@ export function DetalhesPagamento({
   const [paymentTab, setPaymentTab] = useState<'pix' | 'boleto'>('pix')
   const [copiedPix, setCopiedPix] = useState(false)
   const [copiedBoleto, setCopiedBoleto] = useState(false)
+
   const [gerandoCobranca, setGerandoCobranca] = useState(false)
   const [boletoSelecionado, setBoletoSelecionado] = useState<number | null>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -411,19 +412,7 @@ export function DetalhesPagamento({
     return resultado
   }, [caixa, participante, cobrancas])
 
-  // Handlers (Copy/Print mantidos iguais)
-  const handleCopyPix = useCallback(async (mes: number) => {
-    const cobranca = cobrancas.get(mes)
-    if (!cobranca?.pix?.copiaCola) return
-    try {
-      await navigator.clipboard.writeText(cobranca.pix.copiaCola)
-      setCopiedPix(true)
-      setTimeout(() => setCopiedPix(false), 2000)
-    } catch (error) {
-      alert('Erro ao copiar código PIX')
-    }
-  }, [cobrancas])
-
+  // handleCopyBoleto mantido
   const handleCopyBoleto = useCallback(async (mes: number) => {
     const cobranca = cobrancas.get(mes)
     if (!cobranca?.boleto?.linhaDigitavel) return
@@ -700,6 +689,17 @@ export function DetalhesPagamento({
   }, [participante, caixa, caixaId, participanteId, cobrancas, isPixExpired, normalizarCobranca, onRefreshPagamentos, logger])
 
   // Utilitários
+  const handleCopyPix = useCallback(async (copiaCola?: string) => {
+    if (!copiaCola) return
+    try {
+      await navigator.clipboard.writeText(copiaCola)
+      setCopiedPix(true)
+      setTimeout(() => setCopiedPix(false), 3000)
+    } catch (err) {
+      console.error('Erro ao copiar PIX:', err)
+    }
+  }, [])
+
   const calcularDataRecebimento = useCallback((posicao: number): string => {
     if (!caixa?.dataInicio) return '-'
     const data = new Date(caixa.dataInicio)
@@ -979,24 +979,56 @@ export function DetalhesPagamento({
                             <Button
                               size="sm"
                               variant="primary"
-                              className="bg-red-600 hover:bg-red-700 text-white w-full h-10 shadow-sm"
+                              className={cn(
+                                "w-full h-10 shadow-sm transition-all",
+                                gerandoCobranca ? "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed" : "bg-red-600 hover:bg-red-700 text-white"
+                              )}
                               onClick={() => handleGerarCobranca(boleto, true)}
+                              disabled={gerandoCobranca}
                             >
-                              Gerar Novo PIX
+                              {gerandoCobranca ? (
+                                <>
+                                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                                  Gerando nova cobrança...
+                                </>
+                              ) : (
+                                'Gerar Novo PIX'
+                              )}
                             </Button>
+                            {gerandoCobranca && (
+                              <p className="text-xs text-gray-500 mt-2 text-center animate-pulse">
+                                Aguarde, estamos gerando sua nova cobrança PIX...
+                              </p>
+                            )}
                           </div>
                         ) : (
                           <>
-                            <div className="flex justify-center">
-                              {cobranca.pix?.qrCode ? <div className="bg-white p-3 rounded-lg border shadow-sm"><QRCode value={cobranca.pix.copiaCola} size={180} /></div> : null}
+                            <div className="flex justify-center mb-4">
+                              {cobranca.pix?.qrCode ? <div className="bg-white p-4 rounded-xl border-2 border-dashed border-gray-200 shadow-sm"><QRCode value={cobranca.pix.copiaCola} size={200} /></div> : null}
                             </div>
-                            <div className="flex gap-2">
-                              <div className="flex-1 bg-gray-50 border rounded-lg px-3 py-2 flex items-center">
-                                <p className="text-xs text-gray-600 font-mono truncate w-full select-all">{cobranca.pix?.copiaCola || ''}</p>
-                              </div>
-                              <Button size="sm" variant="secondary" onClick={() => handleCopyPix(boleto.mes)}>
-                                <Copy className="w-4 h-4" />
+
+                            <div className="space-y-3">
+                              <Button
+                                size="md"
+                                variant="ghost"
+                                className={cn(
+                                  "w-full h-12 gap-2 text-base font-medium transition-all duration-300 border-2",
+                                  copiedPix ? "bg-green-50 border-green-500 text-green-700 hover:bg-green-100 hover:text-green-800" : "bg-white border-gray-200 hover:bg-gray-50 hover:border-gray-300 dark:hover:bg-gray-800 shadow-sm"
+                                )}
+                                onClick={() => handleCopyPix(cobranca.pix?.copiaCola)}
+                              >
+                                {copiedPix ? <CheckCircle2 className="w-5 h-5" /> : <ClipboardCopy className="w-5 h-5" />}
+                                {copiedPix ? "Código copiado!" : "Copiar Código PIX"}
                               </Button>
+
+                              {copiedPix && (
+                                <div className="flex justify-center animate-in fade-in slide-in-from-top-2 duration-300">
+                                  <p className="text-sm text-green-600 font-medium flex items-center gap-1.5 bg-green-50 px-3 py-1.5 rounded-full border border-green-100">
+                                    <CheckCircle2 className="w-3.5 h-3.5" />
+                                    Copiado para a área de transferência
+                                  </p>
+                                </div>
+                              )}
                             </div>
                           </>
                         )}
