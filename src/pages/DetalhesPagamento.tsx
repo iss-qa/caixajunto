@@ -262,7 +262,21 @@ export function DetalhesPagamento({
         const mes = Number(c.mesReferencia)
         if (!mes || mes <= 0) continue
 
+        // Se já existe uma cobrança PAGA para este mês, ignorar as demais (mesmo se mais recentes)
+        // Isso garante que se o usuário pagou uma antiga, o status prevalece
+        const existente = novasCobrancas.get(mes)
+        if (existente?.status === 'pago') continue
+
         const isPago = c.status === 'PAGO'
+
+        // Se já existe uma cobrança (que não é PAGA, pois passamos pelo check acima)
+        // e a atual TAMBÉM NÃO É PAGA, ignorar a atual (pois a lista vem ordenada da mais nova para mais antiga)
+        // Assim mantemos a mais recente (primeira encontrada)
+        if (existente && !isPago) continue
+
+        // Se chegamos aqui:
+        // 1. Não existe cobrança para o mês AINDA
+        // 2. OU Existe uma não-paga, e a atual É PAGA (prioridade para pagamento)
 
         const cobranca: CobrancaCompleta = {
           id: c.lytexId || '',
