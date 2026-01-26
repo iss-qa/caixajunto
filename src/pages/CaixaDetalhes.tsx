@@ -1287,13 +1287,23 @@ ${link}`;
 
   const calcularDataRecebimento = (posicao: number): string => {
     if (!caixa?.dataInicio) return '-';
-    const data = new Date(caixa.dataInicio);
+
+    // Parse the date without timezone conversion issues - SAME LOGIC AS getPrimeiraParcelaData
+    const parts = caixa.dataInicio.split('T')[0].split('-');
+    const year = parseInt(parts[0]);
+    const month = parseInt(parts[1]) - 1; // JS months are 0-indexed
+    // For diario/mensal, prefer diaVencimento if available to match the starting day logic
+    const day = (caixa.tipo !== 'semanal' && caixa.diaVencimento) ? caixa.diaVencimento : parseInt(parts[2]);
+
+    const data = new Date(year, month, day);
+
     if (caixa.tipo === 'diario') {
       data.setDate(data.getDate() + (posicao - 1));
     } else if (caixa.tipo === 'semanal') {
       data.setDate(data.getDate() + ((posicao - 1) * 7));
     } else {
       data.setMonth(data.getMonth() + posicao - 1);
+      // Ensure we stick to the correct day of month
       data.setDate(caixa.diaVencimento);
     }
     return formatDate(data.toISOString());
