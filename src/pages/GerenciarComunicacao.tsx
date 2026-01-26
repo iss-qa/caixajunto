@@ -10,7 +10,7 @@ import { Button } from '../components/ui/Button';
 
 const tipoMensagemLabels: Record<string, string> = {
     boas_vindas: 'Boas-vindas',
-    lembrete_pagamento: 'Lembrete de Pagamento',
+    lembrete_pagamento: 'Lembrete - Vencimento próximo',
     confirmacao_pagamento: 'Confirmação de Pagamento',
     alerta_atraso: 'Alerta de Atraso',
     manual: 'Manual',
@@ -364,10 +364,10 @@ export function GerenciarComunicacao() {
                             <option value="">Todos os tipos</option>
                             <option value="boas_vindas">Boas-vindas</option>
                             <option value="caixa_iniciado">Caixa Iniciado</option>
-                            <option value="lembrete_pagamento">Lembrete de Pagamento</option>
+                            <option value="lembrete_pagamento">Lembrete - Vencimento próximo</option>
                             <option value="confirmacao_pagamento">Confirmação de Pagamento</option>
                             <option value="alerta_atraso">Alerta de Atraso</option>
-                            <option value="cobranca">Cobrança</option>
+                            <option value="cobranca">Cobrança Gerada</option>
                             <option value="contemplacao">Participante Contemplado</option>
                             <option value="manual">Manual</option>
                         </select>
