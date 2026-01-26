@@ -31,7 +31,7 @@ const tipoMensagemColors: Record<string, string> = {
 };
 
 export function GerenciarComunicacao() {
-    // ... (rest of the component state)
+    const [mensagens, setMensagens] = useState<MensagemHistorico[]>([]);
 
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
