@@ -16,6 +16,7 @@ const tipoMensagemLabels: Record<string, string> = {
     manual: 'Manual',
     cobranca: 'Cobrança',
     caixa_iniciado: 'Caixa Iniciado',
+    contemplacao: 'Participante Contemplado',
 };
 
 const tipoMensagemColors: Record<string, string> = {
@@ -26,10 +27,12 @@ const tipoMensagemColors: Record<string, string> = {
     manual: 'bg-gray-100 text-gray-700',
     cobranca: 'bg-orange-100 text-orange-700',
     caixa_iniciado: 'bg-emerald-100 text-emerald-700',
+    contemplacao: 'bg-yellow-100 text-yellow-700',
 };
 
 export function GerenciarComunicacao() {
-    const [mensagens, setMensagens] = useState<MensagemHistorico[]>([]);
+    // ... (rest of the component state)
+
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [page, setPage] = useState(1);
@@ -365,6 +368,7 @@ export function GerenciarComunicacao() {
                             <option value="confirmacao_pagamento">Confirmação de Pagamento</option>
                             <option value="alerta_atraso">Alerta de Atraso</option>
                             <option value="cobranca">Cobrança</option>
+                            <option value="contemplacao">Participante Contemplado</option>
                             <option value="manual">Manual</option>
                         </select>
                     </div>
