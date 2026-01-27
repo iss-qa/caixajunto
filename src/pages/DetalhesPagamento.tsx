@@ -408,7 +408,15 @@ export function DetalhesPagamento({
 
       const cobranca = cobrancas.get(parcela)
       const isPago = cobranca?.status === 'pago'
-      const isAtrasado = caixa.status === 'ativo' && !isPago && dataVencimento < new Date()
+
+      // ✅ CORREÇÃO: Comparação APENAS da DATA para definir atraso
+      // Se vence hoje (27/01) e hoje é 27/01, NÃO está atrasado
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      const vencimentoDate = new Date(dataVencimento)
+      vencimentoDate.setHours(0, 0, 0, 0)
+
+      const isAtrasado = caixa.status === 'ativo' && !isPago && vencimentoDate < today
 
       resultado.push({
         mes: parcela,
@@ -777,8 +785,18 @@ export function DetalhesPagamento({
     }
 
     // Se não tem cobrança ou está expirada, gera nova
-    if (!cobrancaExistente || (cobrancaExistente.pix && isPixExpired(cobrancaExistente.pix))) {
-      handleGerarCobranca(boleto)
+    // ✅ AUTO-REPAIR: Se tem cobrança marcada como 'atrasado' no banco/memória
+    // mas a lógica visual diz que NÃO está atrasado (boleto.status !== 'atrasado'),
+    // e hoje é o dia do vencimento ou antes, então força regeneração para corrigir valor.
+    const statusIncorreto = cobrancaExistente &&
+      cobrancaExistente.status === 'atrasado' &&
+      boleto.status !== 'atrasado'
+
+    if (!cobrancaExistente || (cobrancaExistente.pix && isPixExpired(cobrancaExistente.pix)) || statusIncorreto) {
+      if (statusIncorreto) {
+        logger.warn(`⚠️ Cobrança ${boleto.mes} com status incorreto (DB=atrasado, Calc=pendente). Regenerando...`)
+      }
+      handleGerarCobranca(boleto, statusIncorreto) // Passa true para forceRenew se estiver incorreto
     } else {
       setPaymentTab('pix')
     }
