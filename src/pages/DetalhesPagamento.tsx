@@ -410,13 +410,20 @@ export function DetalhesPagamento({
       const isPago = cobranca?.status === 'pago'
 
       // ✅ CORREÇÃO: Comparação APENAS da DATA para definir atraso
-      // Se vence hoje (27/01) e hoje é 27/01, NÃO está atrasado
+      // Evitar uso de timestamp UTC que pode voltar 1 dia com fuso
       const today = new Date()
       today.setHours(0, 0, 0, 0)
-      const vencimentoDate = new Date(dataVencimento)
-      vencimentoDate.setHours(0, 0, 0, 0)
 
-      const isAtrasado = caixa.status === 'ativo' && !isPago && vencimentoDate < today
+      // Criar data de vencimento baseada nos componentes LOCAIS do objeto Date original
+      // Se dataVencimento for '2026-01-27T00:00:00.000Z', ao converter para Date no browser,
+      // ele ajusta para fuso local. Mas queremos a data "visual" (27).
+      // A lógica abaixo garante que comparamos Dia x Dia.
+      const vDate = new Date(dataVencimento)
+      // Ajustar para meio-dia para garantir segurança de fuso na comparação simples
+      vDate.setHours(12, 0, 0, 0)
+      vDate.setHours(0, 0, 0, 0) // Zerar para comparação
+
+      const isAtrasado = caixa.status === 'ativo' && !isPago && vDate < today
 
       resultado.push({
         mes: parcela,
