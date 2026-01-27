@@ -588,6 +588,21 @@ export const recebimentosService = {
       .reduce((acc: number, r: any) => acc + (r.valorTotal || 0), 0);
     return total;
   },
+  // Busca lista completa de recebimentos (para o Gestor)
+  getAll: async (params?: any) => {
+    const response = await api.get('/recebimentos', { params });
+    return response.data;
+  },
+  // Estatísticas gerais (Dashboard Master)
+  getEstatisticas: async () => {
+    const response = await api.get('/recebimentos/estatisticas');
+    return response.data;
+  },
+  // Solicitar saque manualmente
+  solicitarSaque: async (id: string) => {
+    const response = await api.post(`/recebimentos/${id}/solicitar-saque`);
+    return response.data;
+  },
 };
 
 // Regras de Comissão

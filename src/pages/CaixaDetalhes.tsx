@@ -1940,12 +1940,7 @@ ${link}`;
                         let data = '';
 
                         if (caixa?.tipo === 'diario') {
-                          if (caixa.dataVencimento) {
-                            const vencimento = new Date(caixa.dataVencimento);
-                            vencimento.setDate(vencimento.getDate() + 2);
-                            return `Participante Contemplado no dia ${vencimento.toLocaleDateString('pt-BR')}`;
-                          }
-                          return 'Participante Contemplado neste dia';
+                          return `Participante Contemplado no dia ${getVencimentoAtual()}`;
                         } else if (caixa?.tipo === 'semanal') {
                           return `Participante Contemplado na Semana ${caixa.mesAtual || 1}`;
                         } else {

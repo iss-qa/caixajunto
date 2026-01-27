@@ -1,0 +1,466 @@
+import { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
+import {
+    DollarSign,
+    Calendar,
+    Search,
+    CheckCircle2,
+    AlertCircle,
+    Clock,
+    ArrowRight,
+    Filter,
+    Download,
+} from 'lucide-react';
+import { recebimentosService, caixasService } from '../lib/api';
+import { Card } from '../components/ui/Card';
+import { Badge } from '../components/ui/Badge';
+import { Button } from '../components/ui/Button';
+import { CardSkeleton } from '../components/ui/Skeleton';
+import { formatCurrency, cn } from '../lib/utils';
+import { useAuth } from '../contexts/AuthContext';
+
+function WithdrawalModal({
+    visible,
+    onClose,
+    onConfirm,
+    loading,
+    recebimento
+}: {
+    visible: boolean;
+    onClose: () => void;
+    onConfirm: () => void;
+    loading: boolean;
+    recebimento: any;
+}) {
+    if (!visible || !recebimento) return null;
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl"
+            >
+                <div className="p-6">
+                    <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center mb-4 mx-auto">
+                        <AlertCircle className="w-6 h-6 text-amber-600" />
+                    </div>
+
+                    <h3 className="text-xl font-bold text-center text-gray-900 mb-2">
+                        Confirmar Solicitação de Saque
+                    </h3>
+
+                    <p className="text-center text-gray-500 mb-6">
+                        Você está prestes a processar manualmente o saque para:
+                    </p>
+
+                    <div className="bg-gray-50 p-4 rounded-xl space-y-3 mb-6">
+                        <div className="flex justify-between text-sm">
+                            <span className="text-gray-500">Participante:</span>
+                            <span className="font-medium text-gray-900">{recebimento.recebedorId?.nome}</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                            <span className="text-gray-500">Caixa:</span>
+                            <span className="font-medium text-gray-900">{recebimento.caixaId?.nome}</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                            <span className="text-gray-500">Valor:</span>
+                            <span className="font-bold text-green-600">{formatCurrency(recebimento.valorTotal)}</span>
+                        </div>
+                    </div>
+
+                    <div className="flex gap-3">
+                        <Button
+                            variant="secondary"
+                            className="flex-1"
+                            onClick={onClose}
+                            disabled={loading}
+                        >
+                            Cancelar
+                        </Button>
+                        <Button
+                            className="flex-1 bg-amber-600 hover:bg-amber-700"
+                            onClick={onConfirm}
+                            isLoading={loading}
+                        >
+                            Confirmar Saque
+                        </Button>
+                    </div>
+                </div>
+            </motion.div>
+        </div>
+    );
+}
+
+export function GestorContemplacao() {
+    const [loading, setLoading] = useState(true);
+    const [stats, setStats] = useState<any>(null);
+    const [recebimentos, setRecebimentos] = useState<any[]>([]);
+    const [filtros, setFiltros] = useState({
+        caixaId: '',
+        status: '',
+        search: '',
+    });
+    const [caixas, setCaixas] = useState<any[]>([]);
+
+    const [selectedRecebimento, setSelectedRecebimento] = useState<any>(null);
+    const [modalVisible, setModalVisible] = useState(false);
+    const [actionLoading, setActionLoading] = useState(false);
+
+    // State for Caixa Selection
+    const [selectedCaixa, setSelectedCaixa] = useState<any>(null);
+
+    useEffect(() => {
+        loadCaixas();
+    }, []);
+
+    useEffect(() => {
+        // Se selecionou caixa, carrega dados específicos dele
+        if (selectedCaixa) {
+            setFiltros(prev => ({ ...prev, caixaId: selectedCaixa._id }));
+        }
+    }, [selectedCaixa]);
+
+    // Se trocar caixa via dropdown (no dashboard), atualiza estado local também
+    useEffect(() => {
+        if (filtros.caixaId && filtros.caixaId !== selectedCaixa?._id) {
+            const found = caixas.find(c => c._id === filtros.caixaId);
+            if (found) setSelectedCaixa(found);
+        }
+    }, [filtros.caixaId, caixas]);
+
+    useEffect(() => {
+        if (selectedCaixa) { // Only load data if a caixa is selected
+            loadData();
+        }
+    }, [selectedCaixa, filtros.status]); // Depend on selectedCaixa and status filter
+
+    const loadData = async () => {
+        if (!selectedCaixa && !filtros.caixaId) return; // Só carrega se tiver caixa selecionado
+
+        try {
+            setLoading(true);
+            const [statsData, listData] = await Promise.all([
+                // Se a API suportar filtro de stats por caixa, ideal seria passar aqui. 
+                // Por enquanto, mantemos stats gerais ou implementamos endpoint específico no futuro.
+                // Assumindo que getEstatisticas retorna geral, talvez seja melhor filtrar no front ou pedir endpoint novo.
+                // Vamos manter o comportamento atual mas focado no filtro de lista.
+                recebimentosService.getEstatisticas(),
+                recebimentosService.getAll({
+                    caixaId: filtros.caixaId || selectedCaixa._id,
+                    status: filtros.status
+                })
+            ]);
+            setStats(statsData);
+            setRecebimentos(listData.recebimentos);
+        } catch (error) {
+            console.error('Erro ao carregar dados:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const loadCaixas = async () => {
+        try {
+            const data = await caixasService.getAll();
+            setCaixas(data.caixas);
+        } catch (error) {
+            console.error('Erro ao carregar caixas:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleSolicitarSaque = async () => {
+        if (!selectedRecebimento) return;
+
+        try {
+            setActionLoading(true);
+            await recebimentosService.solicitarSaque(selectedRecebimento._id);
+            setModalVisible(false);
+            setSelectedRecebimento(null);
+            await loadData();
+            alert("Solicitação de saque enviada com sucesso!");
+        } catch (error) {
+            console.error("Erro ao solicitar saque:", error);
+            alert("Erro ao processar solicitação.");
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
+    const filteredRecebimentos = recebimentos.filter(r =>
+        !filtros.search ||
+        r.recebedorId?.nome.toLowerCase().includes(filtros.search.toLowerCase()) ||
+        r.caixaId?.nome.toLowerCase().includes(filtros.search.toLowerCase())
+    );
+
+    const getStatusBadge = (status: string) => {
+        switch (status) {
+            case 'concluido': return <Badge variant="success">Pago</Badge>;
+            case 'pendente': return <Badge variant="warning">Pendente</Badge>;
+            case 'agendado': return <Badge variant="info">Agendado</Badge>;
+            case 'processando': return <Badge variant="warning">Processando</Badge>;
+            case 'falha': return <Badge variant="danger">Falha</Badge>;
+            default: return <Badge variant="gray">{status}</Badge>;
+        }
+    };
+
+    if (loading && !stats && !selectedCaixa) { // Adjusted loading condition for initial caixa selection
+        return (
+            <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
+                <div className="grid grid-cols-4 gap-4">
+                    {[1, 2, 3, 4].map(i => <CardSkeleton key={i} />)}
+                </div>
+                <CardSkeleton />
+            </div>
+        );
+    }
+
+    // VIEW: LISTA DE CAIXAS (Step 1)
+    if (!selectedCaixa) {
+        return (
+            <div className="max-w-7xl mx-auto px-4 py-8">
+                <div className="mb-8">
+                    <h1 className="text-2xl font-bold text-gray-900">Gestor de Contemplação</h1>
+                    <p className="text-gray-500">Selecione um caixa para gerenciar</p>
+                </div>
+
+                {loading && caixas.length === 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {[1, 2, 3, 4, 5, 6].map(i => <CardSkeleton key={i} />)}
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {caixas.map(caixa => (
+                            <Card
+                                key={caixa._id}
+                                className="cursor-pointer hover:shadow-lg transition-all border-l-4 border-l-primary-500 hover:-translate-y-1 group"
+                                onClick={() => setSelectedCaixa(caixa)}
+                            >
+                                <div className="flex justify-between items-start mb-4">
+                                    <div className="p-2 bg-primary-100 rounded-lg group-hover:bg-primary-600 transition-colors">
+                                        <DollarSign className="w-6 h-6 text-primary-600 group-hover:text-white" />
+                                    </div>
+                                    <Badge variant={caixa.status === 'ativo' ? 'success' : 'gray'}>
+                                        {caixa.status}
+                                    </Badge>
+                                </div>
+                                <h3 className="text-lg font-bold text-gray-900 mb-1">{caixa.nome}</h3>
+                                <p className="text-sm text-gray-500 mb-4 line-clamp-2">
+                                    {caixa.descricao || 'Sem descrição'}
+                                </p>
+
+                                <div className="pt-4 border-t border-gray-100 flex justify-between items-center text-sm">
+                                    <span className="text-gray-500">
+                                        {caixa.tipo} • {formatCurrency(caixa.valorTotal || 0)}
+                                    </span>
+                                    <ArrowRight className="w-4 h-4 text-primary-500" />
+                                </div>
+                            </Card>
+                        ))}
+                    </div>
+                )}
+            </div>
+        );
+    }
+
+    // VIEW: DASHBOARD (Step 2)
+    return (
+        <div className="max-w-7xl mx-auto px-4 py-8">
+            {/* Header com botão Voltar */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+                <div className="flex items-center gap-3">
+                    <Button variant="ghost" size="sm" onClick={() => setSelectedCaixa(null)}>
+                        <ArrowRight className="w-5 h-5 rotate-180" />
+                    </Button>
+                    <div>
+                        <h1 className="text-2xl font-bold text-gray-900">{selectedCaixa.nome}</h1>
+                        <p className="text-gray-500">Gestão de Contemplados e Saques</p>
+                    </div>
+                </div>
+                <div className="flex gap-2">
+                    <Button size="sm" onClick={loadData}>Atualizar</Button>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                <Card className="bg-white border-l-4 border-l-blue-500">
+                    <div className="flex justify-between items-start">
+                        <div>
+                            <p className="text-sm font-medium text-gray-500">Total em Caixa</p>
+                            <h3 className="text-2xl font-bold text-gray-900 mt-1">
+                                {formatCurrency(stats?.valorTotalPendente + stats?.valorTotalLiberado || 0)}
+                            </h3>
+                        </div>
+                        <div className="p-2 bg-blue-50 rounded-lg">
+                            <DollarSign className="w-5 h-5 text-blue-600" />
+                        </div>
+                    </div>
+                </Card>
+
+                <Card className="bg-white border-l-4 border-l-amber-500">
+                    <div className="flex justify-between items-start">
+                        <div>
+                            <p className="text-sm font-medium text-gray-500">Pagamentos Pendentes</p>
+                            <h3 className="text-2xl font-bold text-gray-900 mt-1">
+                                {formatCurrency(stats?.valorTotalPendente || 0)}
+                            </h3>
+                            <p className="text-xs text-amber-600 mt-1">{stats?.pendentes} aguardando</p>
+                        </div>
+                        <div className="p-2 bg-amber-50 rounded-lg">
+                            <Clock className="w-5 h-5 text-amber-600" />
+                        </div>
+                    </div>
+                </Card>
+
+                <Card className="bg-white border-l-4 border-l-green-500">
+                    <div className="flex justify-between items-start">
+                        <div>
+                            <p className="text-sm font-medium text-gray-500">Total Pago</p>
+                            <h3 className="text-2xl font-bold text-gray-900 mt-1">
+                                {formatCurrency(stats?.valorTotalLiberado || 0)}
+                            </h3>
+                            <p className="text-xs text-green-600 mt-1">{stats?.liberados} concluídos</p>
+                        </div>
+                        <div className="p-2 bg-green-50 rounded-lg">
+                            <CheckCircle2 className="w-5 h-5 text-green-600" />
+                        </div>
+                    </div>
+                </Card>
+
+                <Card className="bg-white border-l-4 border-l-gray-500">
+                    <div className="flex justify-between items-start">
+                        <div>
+                            <p className="text-sm font-medium text-gray-500">Total Contemplações</p>
+                            <h3 className="text-2xl font-bold text-gray-900 mt-1">
+                                {stats?.totalRecebimentos || 0}
+                            </h3>
+                        </div>
+                        <div className="p-2 bg-gray-50 rounded-lg">
+                            <Calendar className="w-5 h-5 text-gray-600" />
+                        </div>
+                    </div>
+                </Card>
+            </div>
+
+            <Card>
+                <div className="flex flex-col md:flex-row gap-4 mb-6">
+                    <div className="flex-1 relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                        <input
+                            type="text"
+                            placeholder="Buscar por participante ou caixa..."
+                            className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
+                            value={filtros.search}
+                            onChange={(e) => setFiltros({ ...filtros, search: e.target.value })}
+                        />
+                    </div>
+                    <div className="flex gap-2">
+                        <select
+                            className="px-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
+                            value={filtros.caixaId}
+                            onChange={(e) => setFiltros({ ...filtros, caixaId: e.target.value })}
+                        >
+                            <option value="">Todos os Caixas</option>
+                            {caixas.map(c => <option key={c._id} value={c._id}>{c.nome}</option>)}
+                        </select>
+                        <select
+                            className="px-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
+                            value={filtros.status}
+                            onChange={(e) => setFiltros({ ...filtros, status: e.target.value })}
+                        >
+                            <option value="">Todos Status</option>
+                            <option value="pendente">Pendente</option>
+                            <option value="agendado">Agendado</option>
+                            <option value="processando">Processando</option>
+                            <option value="concluido">Pago</option>
+                            <option value="falha">Falha</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div className="overflow-x-auto">
+                    <table className="w-full">
+                        <thead>
+                            <tr className="border-b border-gray-100 text-left">
+                                <th className="pb-3 text-xs font-semibold text-gray-500 uppercase">Caixa</th>
+                                <th className="pb-3 text-xs font-semibold text-gray-500 uppercase">Participante</th>
+                                <th className="pb-3 text-xs font-semibold text-gray-500 uppercase">Parcela</th>
+                                <th className="pb-3 text-xs font-semibold text-gray-500 uppercase">Data Pagamento</th>
+                                <th className="pb-3 text-xs font-semibold text-gray-500 uppercase">Valor</th>
+                                <th className="pb-3 text-xs font-semibold text-gray-500 uppercase">Status</th>
+                                <th className="pb-3 text-xs font-semibold text-gray-500 uppercase text-right">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-50">
+                            {filteredRecebimentos.map((item) => (
+                                <tr key={item._id} className="group hover:bg-gray-50 transition-colors">
+                                    <td className="py-4">
+                                        <span className="font-medium text-gray-900">{item.caixaId?.nome}</span>
+                                    </td>
+                                    <td className="py-4">
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-8 h-8 rounded-full bg-primary-100 flex items-center justify-center text-primary-700 font-bold text-xs">
+                                                {item.recebedorId?.nome?.charAt(0)}
+                                            </div>
+                                            <span className="text-gray-700">{item.recebedorId?.nome}</span>
+                                        </div>
+                                    </td>
+                                    <td className="py-4">
+                                        <span className="text-gray-600">{item.mesReferencia}/{item.totalMeses || '?'}</span>
+                                    </td>
+                                    <td className="py-4">
+                                        <span className="text-gray-600">
+                                            {new Date(item.dataPrevista).toLocaleDateString()}
+                                        </span>
+                                    </td>
+                                    <td className="py-4">
+                                        <span className="font-semibold text-gray-900">
+                                            {formatCurrency(item.valorTotal)}
+                                        </span>
+                                    </td>
+                                    <td className="py-4">
+                                        {getStatusBadge(item.status)}
+                                    </td>
+                                    <td className="py-4 text-right">
+                                        {item.status !== 'concluido' && item.status !== 'processando' && (
+                                            <Button
+                                                size="sm"
+                                                className="bg-green-600 hover:bg-green-700 text-white"
+                                                onClick={() => {
+                                                    setSelectedRecebimento(item);
+                                                    setModalVisible(true);
+                                                }}
+                                            >
+                                                Solicitar Saque
+                                            </Button>
+                                        )}
+                                        {item.status === 'concluido' && (
+                                            <span className="text-sm text-gray-400">Concluído</span>
+                                        )}
+                                    </td>
+                                </tr>
+                            ))}
+                            {filteredRecebimentos.length === 0 && (
+                                <tr>
+                                    <td colSpan={7} className="py-8 text-center text-gray-500">
+                                        Nenhum registro encontrado.
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </Card>
+
+            <WithdrawalModal
+                visible={modalVisible}
+                onClose={() => setModalVisible(false)}
+                onConfirm={handleSolicitarSaque}
+                loading={actionLoading}
+                recebimento={selectedRecebimento}
+            />
+        </div>
+    );
+}

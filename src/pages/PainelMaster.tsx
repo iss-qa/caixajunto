@@ -356,6 +356,20 @@ export function PainelMaster() {
             <Button onClick={() => (window.location.href = '/painel-master/comissoes')}>Abrir</Button>
           </div>
         </Card>
+
+        {/* Gestor de Contemplação */}
+        <Card className="bg-gradient-to-br from-pink-50 to-pink-100/50 border-pink-200/50">
+          <div className="flex items-center justify-between mb-2">
+            <div className="w-10 h-10 bg-pink-500 rounded-xl flex items-center justify-center">
+              <DollarSign className="w-5 h-5 text-white" />
+            </div>
+          </div>
+          <p className="text-base font-semibold text-gray-900 mb-1">Gestor de Contemplação</p>
+          <p className="text-xs text-gray-500">Gerenciar pagamentos e saques de contemplados</p>
+          <div className="mt-3">
+            <Button onClick={() => (window.location.href = '/painel-master/contemplacao')}>Abrir</Button>
+          </div>
+        </Card>
       </motion.div>
 
       {/* Second Row - Charts and Stats */}

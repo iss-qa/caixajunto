@@ -21,6 +21,7 @@ import GerenciarSplit from './pages/GerenciarSplit';
 import { GerenciarComunicacao } from './pages/GerenciarComunicacao';
 import { GerenciarAdministradores } from './pages/GerenciarAdministradores';
 import { GerenciarComissoes } from './pages/GerenciarComissoes';
+import { GestorContemplacao } from './pages/GestorContemplacao';
 import { Seguranca } from './pages/Seguranca';
 import { TaxaAdesao } from './pages/TaxaAdesao';
 
@@ -176,6 +177,11 @@ function AppRoutes() {
         <Route path="/painel-master/comissoes" element={
           <RoleRoute allow={["master"]}>
             <GerenciarComissoes />
+          </RoleRoute>
+        } />
+        <Route path="/painel-master/contemplacao" element={
+          <RoleRoute allow={["master"]}>
+            <GestorContemplacao />
           </RoleRoute>
         } />
         <Route path="/perfil" element={<Perfil />} />
