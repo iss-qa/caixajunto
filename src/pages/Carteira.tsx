@@ -56,6 +56,8 @@ const WalletDashboard = () => {
     vencimento: string;
     mesAtual: number;
     mesNome: string;
+    tipoCaixa?: string;
+    totalParcelas?: number;
   } | null>(null);
   const [loadingContemplated, setLoadingContemplated] = useState(false);
 
