@@ -556,8 +556,8 @@ const WalletDashboard = () => {
 
       if (caixaDetails.tipo === 'diario' || caixaDetails.tipo === 'semanal') {
         let dInicioStr = '';
-        if (caixaDetails.dataInicio instanceof Date) {
-          dInicioStr = caixaDetails.dataInicio.toISOString();
+        if ((caixaDetails.dataInicio as any) instanceof Date) {
+          dInicioStr = (caixaDetails.dataInicio as any).toISOString();
         } else {
           dInicioStr = String(caixaDetails.dataInicio || '');
         }

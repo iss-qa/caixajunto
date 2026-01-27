@@ -1456,9 +1456,9 @@ ${link}`;
 
     if (caixa.tipo === 'diario' || caixa.tipo === 'semanal') {
       let dInicioStr = '';
-      if (caixa.dataInicio instanceof Date) {
+      if ((caixa.dataInicio as any) instanceof Date) {
         // @ts-ignore
-        dInicioStr = caixa.dataInicio.toISOString();
+        dInicioStr = (caixa.dataInicio as any).toISOString();
       } else {
         dInicioStr = String(caixa.dataInicio || '');
       }
