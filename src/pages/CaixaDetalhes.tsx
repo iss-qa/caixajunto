@@ -1430,24 +1430,6 @@ ${link}`;
   const caixaIniciado = caixa?.status === 'ativo';
 
 
-  if (loading) {
-    return (
-      <div className="max-w-4xl mx-auto px-4 py-6 space-y-4">
-        <CardSkeleton />
-        <CardSkeleton />
-        <CardSkeleton />
-      </div>
-    );
-  }
-
-  if (!caixa) {
-    return (
-      <div className="max-w-4xl mx-auto px-4 py-6">
-        <p className="text-center text-gray-500">Caixa não encontrado</p>
-      </div>
-    );
-  }
-
   // Find the contemplated participant for the current month
   // FIX: Dynamic Mes Logic (copied from Carteira.tsx)
   const calculatedMes = useMemo(() => {
@@ -1497,6 +1479,25 @@ ${link}`;
     const posicao = Number(p.posicao);
     return posicao === calculatedMes;
   });
+
+
+  if (loading) {
+    return (
+      <div className="max-w-4xl mx-auto px-4 py-6 space-y-4">
+        <CardSkeleton />
+        <CardSkeleton />
+        <CardSkeleton />
+      </div>
+    );
+  }
+
+  if (!caixa) {
+    return (
+      <div className="max-w-4xl mx-auto px-4 py-6">
+        <p className="text-center text-gray-500">Caixa não encontrado</p>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-6">
