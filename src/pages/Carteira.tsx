@@ -573,8 +573,18 @@ const WalletDashboard = () => {
       console.log(`🎯 Contemplado encontrado: ${contemplado.usuarioId?.nome || contemplado.nome}`);
 
       // Calcular data de vencimento baseado no tipo do caixa
-      const dataInicio = new Date(caixaDetails.dataInicio);
-      let vencimento = new Date(dataInicio);
+      // Calcular data de vencimento baseado no tipo do caixa
+      // FIX TIMEZONE: Parse date components manually to avoid GMT-3 shift
+      const dataInicioRaw = String(caixaDetails.dataInicio || '');
+      // If ISO format YYYY-MM-DD...
+      let vencimento: Date;
+
+      if (dataInicioRaw.includes('T')) {
+        vencimento = new Date(dataInicioRaw);
+      } else {
+        // Force simple date to be treated as local noon to avoid "previous day" shift on display
+        vencimento = new Date(dataInicioRaw + 'T12:00:00');
+      }
 
       if (caixaDetails.tipo === 'semanal') {
         // Para caixas semanais, adicionar semanas
