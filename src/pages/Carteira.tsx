@@ -550,10 +550,39 @@ const WalletDashboard = () => {
       // Buscar detalhes completos do caixa
       const caixaDetails = await caixasService.getById(activeCaixa.caixaId._id);
 
-      // Obter mês/período atual
-      const mesAtual = caixaDetails.mesAtual || 1;
+      // FIX DASHBOARD: Recalcular mesAtual dinamicamente se for diário/semanal
+      // O backend pode estar desatualizado (falta de cron), então confiamos na data.
+      let mesAtual = caixaDetails.mesAtual || 1;
 
-      console.log(`📅 Mês atual do caixa: ${mesAtual}`);
+      if (caixaDetails.tipo === 'diario' || caixaDetails.tipo === 'semanal') {
+        const dInicioStr = caixaDetails.dataInicio || '';
+        if (dInicioStr) {
+          // Parse Noon-safe
+          let start = dInicioStr.includes('T') ? new Date(dInicioStr) : new Date(dInicioStr + 'T12:00:00');
+          if (start.getHours() === 21 || start.getHours() === 0) start.setHours(12, 0, 0, 0);
+
+          const now = new Date();
+          now.setHours(12, 0, 0, 0);
+
+          // Diff em dias
+          const diffTime = now.getTime() - start.getTime();
+          const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+          if (diffDays >= 0) {
+            if (caixaDetails.tipo === 'diario') {
+              mesAtual = diffDays + 1;
+            } else {
+              mesAtual = Math.floor(diffDays / 7) + 1;
+            }
+            // Cap at totalParcelas
+            if (caixaDetails.duracaoMeses && mesAtual > caixaDetails.duracaoMeses) {
+              mesAtual = caixaDetails.duracaoMeses;
+            }
+          }
+        }
+      }
+
+      console.log(`📅 Mês atual do caixa (Calculado): ${mesAtual}`);
 
       // Buscar todos os participantes do caixa
       const participantes = await participantesService.getByCaixa(caixaDetails._id);
@@ -565,9 +594,27 @@ const WalletDashboard = () => {
       const contemplado = partsList.find((p: any) => p.posicao === mesAtual);
 
       if (!contemplado) {
-        console.log('⚠️ Nenhum contemplado encontrado para este mês');
-        setContemplatedInfo(null);
-        return;
+        // Fallback: se calculamos um mês que não tem participante (ex: erro de calc), tenta o do backend
+        const fallbackContemplado = partsList.find((p: any) => p.posicao === (caixaDetails.mesAtual || 1));
+        if (fallbackContemplado) {
+          console.log('⚠️ Contemplado calculado não encontrado, usando fallback do backend');
+          setContemplatedInfo({
+            // ... preencheremos depois, mas por agora retornamos null para simplificar ou usamos o fallback na lógica principal?
+            // Vamos apenas reverter mesAtual se falhar
+          } as any);
+          // Melhor estratégia: Se não achou com calculado, reverte mesAtual para o do backend e busca de novo
+          mesAtual = caixaDetails.mesAtual || 1;
+          const c2 = partsList.find((p: any) => p.posicao === mesAtual);
+          if (!c2) {
+            console.log('⚠️ Nenhum contemplado encontrado (nem backend nem calculado)');
+            setContemplatedInfo(null);
+            return;
+          }
+        } else {
+          console.log('⚠️ Nenhum contemplado encontrado para este mês');
+          setContemplatedInfo(null);
+          return;
+        }
       }
 
       console.log(`🎯 Contemplado encontrado: ${contemplado.usuarioId?.nome || contemplado.nome}`);
@@ -941,7 +988,9 @@ const WalletDashboard = () => {
 
                 {/* Card do participante */}
                 <div className="bg-white/50 rounded-xl p-4 mb-4">
-                  <p className="text-green-600 text-sm font-medium mb-2">Recebe este mês</p>
+                  <p className="text-green-600 text-sm font-medium mb-2">
+                    {contemplatedInfo.tipoCaixa === 'diario' ? 'Recebe hoje' : 'Recebe este mês'}
+                  </p>
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 bg-gray-600 rounded-full flex items-center justify-center text-white font-bold text-sm">
                       {contemplatedInfo.participanteNome.substring(0, 2).toUpperCase()}

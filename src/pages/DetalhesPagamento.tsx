@@ -380,9 +380,27 @@ export function DetalhesPagamento({
   // Cálculo de boletos (Mantido igual)
   const boletos = useMemo(() => {
     if (!caixa || !participante) return []
-
     const resultado: Boleto[] = []
-    const dataBase = caixa.dataInicio ? new Date(caixa.dataInicio) : new Date()
+
+    // FIX TIMEZONE: Parse manual da dataInicio para evitar shift para dia anterior
+    let dataInicioStr = caixa.dataInicio || ''
+    // Garantir formato ISO ou adicionar hora se for só data
+    if (dataInicioStr && !dataInicioStr.includes('T')) {
+      dataInicioStr += 'T12:00:00'
+    } else if (dataInicioStr) {
+      // Se vier com hora (ex: 00:00:00.000Z), forçar 12:00
+      try {
+        const d = new Date(dataInicioStr)
+        d.setUTCHours(12, 0, 0, 0)
+        dataInicioStr = d.toISOString()
+      } catch (e) { /* fallback */ }
+    }
+
+    // Se caixa.dataInicio for undefined, usa new Date()
+    const dataBase = dataInicioStr ? new Date(dataInicioStr) : new Date()
+    // Forçar 12:00 local para segurança
+    dataBase.setHours(12, 0, 0, 0)
+
     const isSemanal = caixa.tipo === 'semanal'
     const valorParcelaReal = caixa.valorTotal / caixa.qtdParticipantes
     const numParcelas = caixa.qtdParticipantes
