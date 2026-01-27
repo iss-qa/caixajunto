@@ -415,6 +415,11 @@ export const subcontasService = {
     const response = await api.get('/subcontas/me/wallet');
     return response.data;
   },
+  // Obtém transações da carteira do participante
+  getMyWalletTransactions: async () => {
+    const response = await api.get('/subcontas/me/wallet/transactions');
+    return response.data;
+  },
   // Atualiza subconta com dados bancários (PUT)
   updateBankAccount: async (lytexId: string, data: {
     name: string;

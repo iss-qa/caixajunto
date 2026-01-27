@@ -46,6 +46,14 @@ const WalletDashboard = () => {
   const [lytexTransactionsError, setLytexTransactionsError] = useState<string | null>(null);
   const [lytexPage, setLytexPage] = useState(1);
   const [lytexHasMore, setLytexHasMore] = useState(false);
+  const [lastPaymentDetails, setLastPaymentDetails] = useState<{
+    amount: number;
+    releasedAt: string;
+    bankName: string;
+    agency: string;
+    account: string;
+    accountDv: string;
+  } | null>(null);
 
   // Estados para participante - caixas e contemplado
   const [participantCaixas, setParticipantCaixas] = useState<any[]>([]);
@@ -488,21 +496,66 @@ const WalletDashboard = () => {
     if (!usuario?._id) return;
 
     try {
-      console.log('💰 Buscando saldo pago do usuário...');
-      const data = await recebimentosService.getMyRecebimentos();
-      const recebimentos = data.recebimentos || data || [];
+      console.log('💰 Buscando saldo pago do usuário e detalhes de transações...');
 
-      // Calcular total de saques concluídos
-      const totalPago = recebimentos
-        .filter((r: any) => r.status === 'concluido')
-        .reduce((acc: number, r: any) => acc + (r.valorTotal || 0), 0);
+      // 1. Buscar transações da carteira via Lytex
+      const response = await subcontasService.getMyWalletTransactions();
 
-      console.log(`✅ Total pago encontrado: R$ ${totalPago.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`);
+      if (response.success && response.data && Array.isArray(response.data.transactions)) {
+        const transactions = response.data.transactions;
+        console.log(`📊 ${transactions.length} transações encontradas na carteira.`);
 
-      setAccountData((prev) => ({
-        ...prev,
-        paidBalance: totalPago,
-      }));
+        // Filtrar transações de transferência bancária liberadas
+        const transfers = transactions.filter((t: any) =>
+          t.category === 'bank_transfer' &&
+          t.withdrawSolicitation?.status === 'released'
+        );
+
+        console.log(`✅ ${transfers.length} saques liberados encontrados.`);
+
+        // Calcular total pago (amount vem negativo, converter para positivo)
+        const totalPago = transfers.reduce((acc: number, t: any) => acc + Math.abs(t.amount || 0), 0) / 100;
+
+        setAccountData((prev) => ({
+          ...prev,
+          paidBalance: totalPago,
+        }));
+
+        // Pegar a última transferência para exibir detalhes
+        if (transfers.length > 0) {
+          // Ordenar por data (assumindo que createdAt ou releasedAt sirva)
+          // Lytex normalmente retorna ordenado, mas garantindo
+          const lastTransfer = transfers[0]; // Assumindo que a API retorna o mais recente primeiro, senão ordenaríamos
+
+          if (lastTransfer) {
+            console.log('📝 Detalhes do último saque:', lastTransfer);
+            setLastPaymentDetails({
+              amount: Math.abs(lastTransfer.amount || 0) / 100,
+              releasedAt: lastTransfer.withdrawSolicitation?.releasedAt || lastTransfer.createdAt,
+              bankName: lastTransfer.bankName || 'Banco', // Se a API retornar bankName na raiz ou dentro de bankAccount
+              agency: lastTransfer.agencyNumber || '',
+              account: lastTransfer.accountNumber || '',
+              accountDv: lastTransfer.accountDv || '',
+            });
+          }
+        }
+      } else {
+        // Fallback para lógica antiga se falhar a busca de transações
+        const data = await recebimentosService.getMyRecebimentos();
+        const recebimentos = data.recebimentos || data || [];
+
+        const totalPago = recebimentos
+          .filter((r: any) => r.status === 'concluido')
+          .reduce((acc: number, r: any) => acc + (r.valorTotal || 0), 0);
+
+        console.log(`✅ Total pago encontrado (fallback): R$ ${totalPago.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`);
+
+        setAccountData((prev) => ({
+          ...prev,
+          paidBalance: totalPago,
+        }));
+      }
+
     } catch (error) {
       console.error('❌ Erro ao buscar saldo pago:', error);
     }
@@ -1060,25 +1113,65 @@ const WalletDashboard = () => {
               <p className="text-blue-200 text-xs mt-1">Aguardando confirmação</p>
             </div>
 
-            {/* Saldo Bloqueado */}
-            <div className="bg-white/10 backdrop-blur rounded-xl p-4">
-              <p className="text-blue-100 text-xs mb-1">Saldo Bloqueado</p>
-              <p className="text-2xl font-bold">
-                {showBalance ? formatCurrency(accountData.blockedBalance) : 'R$ ••••••'}
-              </p>
-              <p className="text-blue-200 text-xs mt-1">
-                Taxas futuras: {showBalance ? formatCurrency(accountData.futureTaxes) : 'R$ •••'}
-              </p>
+            {/* Saldo Pago - NOVO */}
+            <div className="bg-[#1e40af]/30 rounded-xl p-4 border border-[#1e40af]/20 backdrop-blur-sm hover:border-[#3b82f6]/40 transition-colors">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="p-1.5 rounded-lg bg-[#059669]/20 text-[#10b981]">
+                  <Wallet size={16} />
+                </span>
+                <span className="text-sm font-medium text-slate-300">
+                  Saldo Pago
+                </span>
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-white tracking-tight">
+                  {showBalance
+                    ? formatCurrency(accountData.paidBalance || 0)
+                    : '••••••'}
+                </div>
+                <p className="text-xs text-slate-400 mt-1 font-medium">
+                  Total de saques recebidos
+                </p>
+              </div>
             </div>
 
-            {/* Saldo Pago - NOVO */}
-            <div className="bg-green-500/20 backdrop-blur rounded-xl p-4 border border-green-400/30">
-              <p className="text-green-100 text-xs mb-1">💰 Saldo Pago</p>
-              <p className="text-2xl font-bold text-green-100">
-                {showBalance ? formatCurrency(accountData.paidBalance || 0) : 'R$ ••••••'}
-              </p>
-              <p className="text-green-200 text-xs mt-1">Total de saques recebidos</p>
-            </div>
+            {/* NOVO: Card de Detalhes do Último Pagamento */}
+            {lastPaymentDetails && (
+              <div className="col-span-1 md:col-span-2 lg:col-span-4 mt-4 bg-[#1e40af]/30 rounded-xl p-4 border border-[#1e40af]/20 backdrop-blur-sm">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="p-1.5 rounded-lg bg-[#3b82f6]/20 text-[#3b82f6]">
+                      <Check size={16} />
+                    </span>
+                    <span className="text-sm font-medium text-slate-300">
+                      Último Pagamento Realizado
+                    </span>
+                  </div>
+                  <div className="text-xs text-slate-400 bg-slate-800/50 px-2 py-1 rounded-md">
+                    {lastPaymentDetails.releasedAt ? formatDate(lastPaymentDetails.releasedAt) : ''}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+                  <div>
+                    <p className="text-xs text-slate-400 mb-1">Valor Transferido</p>
+                    <div className="text-xl font-bold text-white">
+                      {showBalance ? formatCurrency(lastPaymentDetails.amount) : '••••••'}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col justify-center">
+                    <p className="text-xs text-slate-400 mb-1">Conta de Destino</p>
+                    <div className="text-sm text-slate-200 font-medium flex flex-col gap-0.5">
+                      <span>{lastPaymentDetails.bankName}</span>
+                      <span className="text-xs text-slate-400">
+                        Ag: {lastPaymentDetails.agency} • Conta: {lastPaymentDetails.account}-{lastPaymentDetails.accountDv}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Data de Recebimento */}
