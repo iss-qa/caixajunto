@@ -1292,8 +1292,10 @@ ${link}`;
     const parts = caixa.dataInicio.split('T')[0].split('-');
     const year = parseInt(parts[0]);
     const month = parseInt(parts[1]) - 1; // JS months are 0-indexed
-    // For diario/mensal, prefer diaVencimento if available to match the starting day logic
-    const day = (caixa.tipo !== 'semanal' && caixa.diaVencimento) ? caixa.diaVencimento : parseInt(parts[2]);
+    // ⚠️ FIX: For 'diario', use the explicit start day from dataInicio, ignore diaVencimento override
+    const day = (caixa.tipo === 'diario' || caixa.tipo === 'semanal')
+      ? parseInt(parts[2])
+      : (caixa.diaVencimento || parseInt(parts[2]));
 
     const data = new Date(year, month, day);
 
@@ -1317,9 +1319,12 @@ ${link}`;
     const parts = dataInicioStr.split('T')[0].split('-');
     const year = parseInt(parts[0]);
     const month = parseInt(parts[1]) - 1; // JS months are 0-indexed
-    const day = caixa.diaVencimento || parseInt(parts[2]);
+    // ⚠️ FIX: For 'diario', use the explicit start day from dataInicio, ignore diaVencimento override
+    const day = (caixa.tipo === 'diario' || caixa.tipo === 'semanal')
+      ? parseInt(parts[2])
+      : (caixa.diaVencimento || parseInt(parts[2]));
 
-    const atual = Math.max(1, caixa.mesAtual || 1);
+    const atual = Math.max(1, calculatedMes || caixa.mesAtual || 1);
 
     if (caixa.tipo === 'diario') {
       const baseDate = new Date(year, month, day);
@@ -1372,10 +1377,14 @@ ${link}`;
     if (!caixa?.dataInicio) return '-';
 
     // Parse the date without timezone conversion issues
+    // Parse the date without timezone conversion issues
     const parts = caixa.dataInicio.split('T')[0].split('-');
     const year = parseInt(parts[0]);
     const month = parseInt(parts[1]) - 1; // JS months are 0-indexed
-    const day = caixa.diaVencimento || parseInt(parts[2]);
+    // ⚠️ FIX: For 'diario', use the explicit start day from dataInicio, ignore diaVencimento override
+    const day = (caixa.tipo === 'diario' || caixa.tipo === 'semanal')
+      ? parseInt(parts[2])
+      : (caixa.diaVencimento || parseInt(parts[2]));
 
     if (caixa.tipo === 'diario') {
       const baseDate = new Date(year, month, day);
@@ -1440,11 +1449,53 @@ ${link}`;
   }
 
   // Find the contemplated participant for the current month
+  // FIX: Dynamic Mes Logic (copied from Carteira.tsx)
+  const calculatedMes = useMemo(() => {
+    if (!caixa) return 1;
+    let current = caixa.mesAtual || 1;
+
+    if (caixa.tipo === 'diario' || caixa.tipo === 'semanal') {
+      let dInicioStr = '';
+      if (caixa.dataInicio instanceof Date) {
+        // @ts-ignore
+        dInicioStr = caixa.dataInicio.toISOString();
+      } else {
+        dInicioStr = String(caixa.dataInicio || '');
+      }
+      console.log('🔍 [DEBUG] Details Date Parse:', { raw: caixa.dataInicio, str: dInicioStr });
+
+      const datePart = dInicioStr.split('T')[0];
+
+      if (datePart && datePart.includes('-')) {
+        const [ano, mes, dia] = datePart.split('-').map(Number);
+        // Use NOON to avoid timezone shifts
+        const start = new Date(ano, mes - 1, dia, 12, 0, 0, 0);
+        const now = new Date();
+        now.setHours(12, 0, 0, 0);
+
+        const diffTime = now.getTime() - start.getTime();
+        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+        if (diffDays >= 0) {
+          if (caixa.tipo === 'diario') {
+            current = diffDays + 1;
+          } else {
+            current = Math.floor(diffDays / 7) + 1;
+          }
+          if (caixa.duracaoMeses && current > caixa.duracaoMeses) {
+            current = caixa.duracaoMeses;
+          }
+        }
+      }
+    }
+    return current;
+  }, [caixa]);
+
+  // Find the contemplated participant for the current month
   const recebedorAtual = participantes.find((p) => {
     // Handle both number and string comparisons
     const posicao = Number(p.posicao);
-    const mesAtual = Number(caixa?.mesAtual || 1);
-    return posicao === mesAtual;
+    return posicao === calculatedMes;
   });
 
   return (
@@ -1940,9 +1991,14 @@ ${link}`;
                         let data = '';
 
                         if (caixa?.tipo === 'diario') {
-                          return `Participante Contemplado no dia ${getVencimentoAtual()}`;
+                          // Check if 'today' matches the displayed date
+                          const hoje = new Date().toLocaleDateString('pt-BR');
+                          const venc = getVencimentoAtual();
+                          return venc === hoje
+                            ? `Participante Contemplado no dia ${venc} (HOJE)`
+                            : `Participante Contemplado no dia ${venc}`;
                         } else if (caixa?.tipo === 'semanal') {
-                          return `Participante Contemplado na Semana ${caixa.mesAtual || 1}`;
+                          return `Participante Contemplado na Semana ${calculatedMes || caixa.mesAtual || 1}`;
                         } else {
                           const meses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
                             'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
@@ -1952,7 +2008,7 @@ ${link}`;
                             const dataInicioStr = caixa.dataInicio;
                             const parts = dataInicioStr.split('T')[0].split('-');
                             const month = parseInt(parts[1]) - 1;
-                            const mesAtual = caixa.mesAtual || 1;
+                            const mesAtual = calculatedMes || caixa.mesAtual || 1;
                             const targetMonth = month + (mesAtual - 1);
                             const mesIndex = targetMonth % 12;
                             return `Participante Contemplado em ${meses[mesIndex]}`;
@@ -1960,16 +2016,25 @@ ${link}`;
                         }
                       })()}</span>
 
-                      {/* Badge simplified: Alinhado a direita, sem icon, apenas Dia X */}
+                      {/* Badge simplified */}
                       <div className="bg-green-600 text-white text-xs font-bold px-3 py-1 rounded-full whitespace-nowrap">
-                        {caixa?.tipo === 'diario' ? 'Dia' : caixa?.tipo === 'semanal' ? 'Semana' : 'Mês'} {caixa?.mesAtual || 1}
+                        {caixa?.tipo === 'diario' ? 'Dia' : caixa?.tipo === 'semanal' ? 'Semana' : 'Mês'} {calculatedMes || caixa?.mesAtual || 1}
                       </div>
                     </div>
                   </h3>
 
                   <div className="bg-white/70 backdrop-blur-sm rounded-xl p-4 border border-green-200/50 shadow-sm">
                     <div className="mb-4 pb-4 border-b border-green-200">
-                      <p className="text-xs text-green-600 font-semibold mb-2">Recebe {caixa?.tipo === 'diario' ? 'hoje' : caixa?.tipo === 'semanal' ? 'esta semana' : 'este mês'}</p>
+                      <p className="text-xs text-green-600 font-semibold mb-2">
+                        {(() => {
+                          if (caixa?.tipo === 'diario') {
+                            const hoje = new Date().toLocaleDateString('pt-BR');
+                            const venc = getVencimentoAtual();
+                            return venc === hoje ? 'Recebe HOJE' : `Recebe dia ${venc}`;
+                          }
+                          return caixa?.tipo === 'semanal' ? 'Recebe esta semana' : 'Recebe este mês';
+                        })()}
+                      </p>
                       <div className="flex items-center gap-3 mb-2 w-full">
                         {/* Avatar removed as requested */}
 

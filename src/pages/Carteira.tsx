@@ -555,7 +555,14 @@ const WalletDashboard = () => {
       let mesAtual = caixaDetails.mesAtual || 1;
 
       if (caixaDetails.tipo === 'diario' || caixaDetails.tipo === 'semanal') {
-        const dInicioStr = String(caixaDetails.dataInicio || '');
+        let dInicioStr = '';
+        if (caixaDetails.dataInicio instanceof Date) {
+          dInicioStr = caixaDetails.dataInicio.toISOString();
+        } else {
+          dInicioStr = String(caixaDetails.dataInicio || '');
+        }
+        console.log('🔍 [DEBUG] Date Parse:', { raw: caixaDetails.dataInicio, str: dInicioStr });
+
         const datePart = dInicioStr.split('T')[0]; // "2026-01-26"
 
         if (datePart && datePart.includes('-')) {
@@ -593,27 +600,22 @@ const WalletDashboard = () => {
       console.log(`👥 Total de participantes no caixa: ${partsList.length}`);
 
       // Encontrar quem está contemplado neste mês
-      const contemplado = partsList.find((p: any) => p.posicao === mesAtual);
+      // FIX TYPE MISMATCH: Ensure generic check for string/number types
+      let contemplado = partsList.find((p: any) => Number(p.posicao) === mesAtual);
 
       if (!contemplado) {
         // Fallback: se calculamos um mês que não tem participante (ex: erro de calc), tenta o do backend
-        const fallbackContemplado = partsList.find((p: any) => p.posicao === (caixaDetails.mesAtual || 1));
-        if (fallbackContemplado) {
-          console.log('⚠️ Contemplado calculado não encontrado, usando fallback do backend');
-          setContemplatedInfo({
-            // ... preencheremos depois, mas por agora retornamos null para simplificar ou usamos o fallback na lógica principal?
-            // Vamos apenas reverter mesAtual se falhar
-          } as any);
-          // Melhor estratégia: Se não achou com calculado, reverte mesAtual para o do backend e busca de novo
-          mesAtual = caixaDetails.mesAtual || 1;
-          const c2 = partsList.find((p: any) => p.posicao === mesAtual);
-          if (!c2) {
-            console.log('⚠️ Nenhum contemplado encontrado (nem backend nem calculado)');
-            setContemplatedInfo(null);
-            return;
-          }
-        } else {
-          console.log('⚠️ Nenhum contemplado encontrado para este mês');
+        const mesBackend = Number(caixaDetails.mesAtual || 1);
+        const fallbackContemplado = partsList.find((p: any) => Number(p.posicao) === mesBackend);
+
+        if (fallbackContemplado && mesBackend !== mesAtual) {
+          console.log(`⚠️ Contemplado calculado (Mês ${mesAtual}) não encontrado. Revertendo para backend (Mês ${mesBackend})`);
+          mesAtual = mesBackend;
+          contemplado = fallbackContemplado;
+        }
+
+        if (!contemplado) {
+          console.log('⚠️ Nenhum contemplado encontrado (nem backend nem calculado)');
           setContemplatedInfo(null);
           return;
         }
@@ -985,7 +987,9 @@ const WalletDashboard = () => {
                 {/* Card do participante */}
                 <div className="bg-white/50 rounded-xl p-4 mb-4">
                   <p className="text-green-600 text-sm font-medium mb-2">
-                    {contemplatedInfo.tipoCaixa === 'diario' ? 'Recebe hoje' : 'Recebe este mês'}
+                    {contemplatedInfo.tipoCaixa === 'diario'
+                      ? (contemplatedInfo.vencimento === new Date().toLocaleDateString('pt-BR') ? 'Recebe hoje' : `Recebe em ${contemplatedInfo.vencimento}`)
+                      : 'Recebe este mês'}
                   </p>
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 bg-gray-600 rounded-full flex items-center justify-center text-white font-bold text-sm">
