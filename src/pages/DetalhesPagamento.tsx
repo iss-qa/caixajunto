@@ -382,24 +382,18 @@ export function DetalhesPagamento({
     if (!caixa || !participante) return []
     const resultado: Boleto[] = []
 
-    // FIX TIMEZONE: Parse manual da dataInicio para evitar shift para dia anterior
-    let dataInicioStr = caixa.dataInicio || ''
-    // Garantir formato ISO ou adicionar hora se for só data
-    if (dataInicioStr && !dataInicioStr.includes('T')) {
-      dataInicioStr += 'T12:00:00'
-    } else if (dataInicioStr) {
-      // Se vier com hora (ex: 00:00:00.000Z), forçar 12:00
-      try {
-        const d = new Date(dataInicioStr)
-        d.setUTCHours(12, 0, 0, 0)
-        dataInicioStr = d.toISOString()
-      } catch (e) { /* fallback */ }
-    }
+    // FIX TIMEZONE ROBUST: String Parsing
+    const dataIso = String(caixa.dataInicio || '')
+    const datePart = dataIso.split('T')[0] // "2026-01-26"
 
-    // Se caixa.dataInicio for undefined, usa new Date()
-    const dataBase = dataInicioStr ? new Date(dataInicioStr) : new Date()
-    // Forçar 12:00 local para segurança
-    dataBase.setHours(12, 0, 0, 0)
+    let dataBase: Date
+    if (datePart && datePart.includes('-')) {
+      const [ano, mes, dia] = datePart.split('-').map(Number)
+      dataBase = new Date(ano, mes - 1, dia, 12, 0, 0, 0)
+    } else {
+      dataBase = new Date()
+      dataBase.setHours(12, 0, 0, 0)
+    }
 
     const isSemanal = caixa.tipo === 'semanal'
     const valorParcelaReal = caixa.valorTotal / caixa.qtdParticipantes
@@ -750,17 +744,15 @@ export function DetalhesPagamento({
   const calcularDataRecebimento = useCallback((posicao: number): string => {
     if (!caixa?.dataInicio) return '-'
 
-    // FIX TIMEZONE: Parse manual para garantir que não volte o dia
-    // Se dataInicio "2026-01-26" vier, new Date() vira 25/01 21:00
-    // Vamos adicionar T12:00:00 se não tiver hora
-    let dataInicioStr = caixa.dataInicio
-    if (!dataInicioStr.includes('T')) {
-      dataInicioStr += 'T12:00:00'
-    }
+    // FIX TIMEZONE ROBUST: String Parsing
+    const dataIso = String(caixa.dataInicio)
+    const datePart = dataIso.split('T')[0] // "2026-01-26"
 
-    const data = new Date(dataInicioStr)
-    // Garantia extra: Setar para meio-dia
-    data.setHours(12, 0, 0, 0)
+    if (!datePart) return '-'
+    const [ano, mes, dia] = datePart.split('-').map(Number)
+
+    // Criar data localmente no meio-dia para evitar problemas de fuso
+    const data = new Date(ano, mes - 1, dia, 12, 0, 0, 0)
 
     if (caixa.tipo === 'diario') {
       data.setDate(data.getDate() + (posicao - 1))

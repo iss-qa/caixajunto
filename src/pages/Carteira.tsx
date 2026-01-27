@@ -555,11 +555,13 @@ const WalletDashboard = () => {
       let mesAtual = caixaDetails.mesAtual || 1;
 
       if (caixaDetails.tipo === 'diario' || caixaDetails.tipo === 'semanal') {
-        const dInicioStr = caixaDetails.dataInicio || '';
-        if (dInicioStr) {
-          // Parse Noon-safe
-          let start = dInicioStr.includes('T') ? new Date(dInicioStr) : new Date(dInicioStr + 'T12:00:00');
-          if (start.getHours() === 21 || start.getHours() === 0) start.setHours(12, 0, 0, 0);
+        const dInicioStr = String(caixaDetails.dataInicio || '');
+        const datePart = dInicioStr.split('T')[0]; // "2026-01-26"
+
+        if (datePart && datePart.includes('-')) {
+          const [ano, mes, dia] = datePart.split('-').map(Number);
+          // Start at Noon Local
+          const start = new Date(ano, mes - 1, dia, 12, 0, 0, 0);
 
           const now = new Date();
           now.setHours(12, 0, 0, 0);
@@ -623,20 +625,14 @@ const WalletDashboard = () => {
       // Calcular data de vencimento baseado no tipo do caixa
       // FIX TIMEZONE: Parse date components manually to avoid GMT-3 shift
       const dataInicioRaw = String(caixaDetails.dataInicio || '');
-      // If ISO format YYYY-MM-DD...
-      let vencimento: Date;
+      // Use string splitting to get safe YYYY, MM, DD
+      const datePartCalc = dataInicioRaw.split('T')[0];
+      let vencimento = new Date();
 
-      if (dataInicioRaw.includes('T')) {
-        vencimento = new Date(dataInicioRaw);
+      if (datePartCalc && datePartCalc.includes('-')) {
+        const [ano, mes, dia] = datePartCalc.split('-').map(Number);
+        vencimento = new Date(ano, mes - 1, dia, 12, 0, 0, 0);
       } else {
-        // Force simple date to be treated as local noon to avoid "previous day" shift on display
-        vencimento = new Date(dataInicioRaw + 'T12:00:00');
-      }
-
-      // FIX: Normalizar para meio-dia para evitar problemas de fuso horário
-      // Se a data vier do backend como 00:00 UTC, o new Date() vai converter para 21:00 do dia anterior
-      // Para corrigir, setamos horas para 12:00 (que vira 09:00 no Brasil, mesmo dia)
-      if (vencimento.getHours() === 21 || vencimento.getHours() === 0) {
         vencimento.setHours(12, 0, 0, 0);
       }
 
