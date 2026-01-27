@@ -66,6 +66,7 @@ const WalletDashboard = () => {
     mesNome: string;
     tipoCaixa?: string;
     totalParcelas?: number;
+    dataTransferencia?: string;
   } | null>(null);
   const [loadingContemplated, setLoadingContemplated] = useState(false);
 
@@ -713,10 +714,20 @@ const WalletDashboard = () => {
       } else {
         // Para caixas mensais, adicionar meses
         vencimento.setMonth(vencimento.getMonth() + (mesAtual - 1));
-        // Ajustar para o dia de vencimento configurado
         const diaVencimento = caixaDetails.diaVencimento || vencimento.getDate();
         vencimento.setDate(diaVencimento);
       }
+
+      // 💡 Calcular data de transferência (+1 dia úteis/corridos?)
+      // O requisito diz "1 dia após o vencimento"
+      const dataTransferencia = new Date(vencimento);
+      dataTransferencia.setDate(dataTransferencia.getDate() + 1);
+      const dataTransferenciaFormatada = dataTransferencia.toLocaleDateString('pt-BR', {
+        weekday: 'long',
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+      });
 
       const meses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
         'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
@@ -726,6 +737,7 @@ const WalletDashboard = () => {
         participanteNome: contemplado.usuarioId?.nome || contemplado.nome || 'Participante',
         valor: caixaDetails.valorTotal,
         vencimento: vencimento.toLocaleDateString('pt-BR'),
+        dataTransferencia: dataTransferenciaFormatada,
         mesAtual,
         mesNome: meses[vencimento.getMonth()],
         tipoCaixa: caixaDetails.tipo || 'mensal', // mensal, semanal, diario
@@ -1075,7 +1087,7 @@ const WalletDashboard = () => {
                   <div className="flex items-center gap-2 text-gray-600">
                     <Calendar className="w-4 h-4 text-gray-500" />
                     <span className="text-sm">
-                      A transferência será realizada <strong className="text-green-600">automaticamente no dia {contemplatedInfo.vencimento}</strong>
+                      A transferência será realizada <strong className="text-green-600">automaticamente no dia {contemplatedInfo.dataTransferencia}</strong>
                     </span>
                   </div>
                   <div className="flex items-center gap-2 text-gray-600">

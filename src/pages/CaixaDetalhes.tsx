@@ -1311,6 +1311,46 @@ ${link}`;
     return formatDate(data.toISOString());
   };
 
+  const getDataTransferencia = (): string => {
+    if (!caixa?.dataInicio) return '-';
+
+    // Mesma lógica do getVencimentoAtual para calcular a data base de vencimento
+    const dataInicioStr = caixa.dataInicio;
+    const parts = dataInicioStr.split('T')[0].split('-');
+    const year = parseInt(parts[0]);
+    const month = parseInt(parts[1]) - 1;
+    const day = (caixa.tipo === 'diario' || caixa.tipo === 'semanal')
+      ? parseInt(parts[2])
+      : (caixa.diaVencimento || parseInt(parts[2]));
+
+    const atual = Math.max(1, calculatedMes || caixa.mesAtual || 1);
+    let vencimentoData: Date;
+
+    if (caixa.tipo === 'diario') {
+      const baseDate = new Date(year, month, day);
+      baseDate.setDate(baseDate.getDate() + (atual - 1));
+      vencimentoData = baseDate;
+    } else if (caixa.tipo === 'semanal') {
+      const baseDate = new Date(year, month, day);
+      baseDate.setDate(baseDate.getDate() + ((atual - 1) * 7));
+      vencimentoData = baseDate;
+    } else {
+      const targetMonth = month + (atual - 1);
+      vencimentoData = new Date(year, targetMonth, day);
+    }
+
+    // Adicionar 1 dia para a transferência
+    vencimentoData.setDate(vencimentoData.getDate() + 1);
+
+    // Formatar com dia da semana
+    return vencimentoData.toLocaleDateString('pt-BR', {
+      weekday: 'long',
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    });
+  };
+
   const getVencimentoAtual = (): string => {
     if (!caixa?.dataInicio) return '-';
 
@@ -2053,7 +2093,7 @@ ${link}`;
                       <div className="flex items-start gap-2">
                         <Calendar className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
                         <p className="text-gray-700">
-                          A transferência será realizada <span className="font-semibold text-green-700">automaticamente no dia {getVencimentoAtual()}</span>
+                          A transferência será realizada <span className="font-semibold text-green-700">automaticamente no dia {getDataTransferencia()}</span>
                         </p>
                       </div>
 
