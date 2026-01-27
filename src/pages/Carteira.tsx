@@ -586,6 +586,13 @@ const WalletDashboard = () => {
         vencimento = new Date(dataInicioRaw + 'T12:00:00');
       }
 
+      // FIX: Normalizar para meio-dia para evitar problemas de fuso horário
+      // Se a data vier do backend como 00:00 UTC, o new Date() vai converter para 21:00 do dia anterior
+      // Para corrigir, setamos horas para 12:00 (que vira 09:00 no Brasil, mesmo dia)
+      if (vencimento.getHours() === 21 || vencimento.getHours() === 0) {
+        vencimento.setHours(12, 0, 0, 0);
+      }
+
       if (caixaDetails.tipo === 'semanal') {
         // Para caixas semanais, adicionar semanas
         vencimento.setDate(vencimento.getDate() + (mesAtual - 1) * 7);

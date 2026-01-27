@@ -731,7 +731,19 @@ export function DetalhesPagamento({
 
   const calcularDataRecebimento = useCallback((posicao: number): string => {
     if (!caixa?.dataInicio) return '-'
-    const data = new Date(caixa.dataInicio)
+
+    // FIX TIMEZONE: Parse manual para garantir que não volte o dia
+    // Se dataInicio "2026-01-26" vier, new Date() vira 25/01 21:00
+    // Vamos adicionar T12:00:00 se não tiver hora
+    let dataInicioStr = caixa.dataInicio
+    if (!dataInicioStr.includes('T')) {
+      dataInicioStr += 'T12:00:00'
+    }
+
+    const data = new Date(dataInicioStr)
+    // Garantia extra: Setar para meio-dia
+    data.setHours(12, 0, 0, 0)
+
     if (caixa.tipo === 'diario') {
       data.setDate(data.getDate() + (posicao - 1))
     } else if (caixa.tipo === 'semanal') {
@@ -740,7 +752,8 @@ export function DetalhesPagamento({
       data.setMonth(data.getMonth() + posicao - 1)
       data.setDate(caixa.diaVencimento)
     }
-    return formatDate(data.toISOString())
+    // Formatar manualmente para evitar conversão UTC na exibição
+    return data.toLocaleDateString('pt-BR')
   }, [caixa])
 
   const formatLinhaDigitavel = useCallback((linha: string): string => {
