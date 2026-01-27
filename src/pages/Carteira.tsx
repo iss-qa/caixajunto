@@ -577,6 +577,9 @@ const WalletDashboard = () => {
       if (caixaDetails.tipo === 'semanal') {
         // Para caixas semanais, adicionar semanas
         vencimento.setDate(vencimento.getDate() + (mesAtual - 1) * 7);
+      } else if (caixaDetails.tipo === 'diario') {
+        // Para caixas diários, adicionar dias
+        vencimento.setDate(vencimento.getDate() + (mesAtual - 1));
       } else {
         // Para caixas mensais, adicionar meses
         vencimento.setMonth(vencimento.getMonth() + (mesAtual - 1));
@@ -595,6 +598,8 @@ const WalletDashboard = () => {
         vencimento: vencimento.toLocaleDateString('pt-BR'),
         mesAtual,
         mesNome: meses[vencimento.getMonth()],
+        tipoCaixa: caixaDetails.tipo || 'mensal', // mensal, semanal, diario
+        totalParcelas: caixaDetails.duracaoMeses || 0,
       };
 
       console.log('✅ Informações do contemplado:', infoContemplado);
@@ -896,13 +901,22 @@ const WalletDashboard = () => {
 
               <div className="flex-1">
                 {/* Título com badge do mês */}
+                {/* Título com badge do mês */}
                 <div className="flex items-center gap-3 mb-4">
                   <h2 className="text-xl font-bold text-gray-800">
-                    Participante Contemplado em {contemplatedInfo.mesNome}
+                    {contemplatedInfo.tipoCaixa === 'diario'
+                      ? `Participante Contemplado no dia ${contemplatedInfo.vencimento}`
+                      : contemplatedInfo.tipoCaixa === 'semanal'
+                        ? `Participante Contemplado na semana ${contemplatedInfo.mesAtual}/${contemplatedInfo.totalParcelas}`
+                        : `Participante Contemplado em ${contemplatedInfo.mesNome}`}
                   </h2>
                   <span className="bg-green-500 text-white text-xs font-semibold px-3 py-1 rounded-full flex items-center gap-1">
                     <Clock className="w-3 h-3" />
-                    Mês {contemplatedInfo.mesAtual}
+                    {contemplatedInfo.tipoCaixa === 'diario'
+                      ? `Dia ${String(contemplatedInfo.mesAtual).padStart(2, '0')}`
+                      : contemplatedInfo.tipoCaixa === 'semanal'
+                        ? `Semana ${String(contemplatedInfo.mesAtual).padStart(2, '0')}`
+                        : `Mês ${String(contemplatedInfo.mesAtual).padStart(2, '0')}`}
                   </span>
                 </div>
 
