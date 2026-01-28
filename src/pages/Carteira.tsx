@@ -1047,7 +1047,7 @@ const WalletDashboard = () => {
                 <div className="flex items-center gap-3 mb-4">
                   <h2 className="text-xl font-bold text-gray-800">
                     {contemplatedInfo.tipoCaixa === 'diario'
-                      ? `Participante Contemplado no dia ${contemplatedInfo.vencimento}`
+                      ? `Contemplação prevista após ${contemplatedInfo.vencimento}`
                       : contemplatedInfo.tipoCaixa === 'semanal'
                         ? `Participante Contemplado na semana ${contemplatedInfo.mesAtual}/${contemplatedInfo.totalParcelas}`
                         : `Participante Contemplado em ${contemplatedInfo.mesNome}`}
@@ -1084,12 +1084,20 @@ const WalletDashboard = () => {
 
                 {/* Informações de transferência */}
                 <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-gray-600">
-                    <Calendar className="w-4 h-4 text-gray-500" />
-                    <span className="text-sm">
-                      A transferência será realizada <strong className="text-green-600">automaticamente no dia {contemplatedInfo.dataTransferencia}</strong>
-                    </span>
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-start gap-3 shadow-sm">
+                    <div className="bg-green-100 p-2 rounded-full text-green-700 mt-0.5">
+                      <Calendar className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-green-900 font-bold text-sm uppercase tracking-wide mb-1">
+                        Agendamento Confirmado
+                      </h4>
+                      <p className="text-gray-700 text-sm leading-relaxed">
+                        A transferência será realizada automaticamente no dia <span className="font-bold text-green-700 bg-green-100 px-1 rounded">{contemplatedInfo.dataTransferencia}</span>.
+                      </p>
+                    </div>
                   </div>
+
                   <div className="flex items-center gap-2 text-gray-600">
                     <Mail className="w-4 h-4 text-gray-500" />
                     <span className="text-sm">
