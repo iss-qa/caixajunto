@@ -418,7 +418,7 @@ export function GestorContemplacao() {
                             <tr className="border-b border-gray-100 text-left">
                                 <th className="pb-3 text-xs font-semibold text-gray-500 uppercase">Caixa</th>
                                 <th className="pb-3 text-xs font-semibold text-gray-500 uppercase">Participante</th>
-                                <th className="pb-3 text-xs font-semibold text-gray-500 uppercase">Parcela</th>
+                                <th className="pb-3 text-xs font-semibold text-gray-500 uppercase">Ponto</th>
                                 <th className="pb-3 text-xs font-semibold text-gray-500 uppercase">Data Pagamento</th>
                                 <th className="pb-3 text-xs font-semibold text-gray-500 uppercase">Valor</th>
                                 <th className="pb-3 text-xs font-semibold text-gray-500 uppercase">Status</th>
@@ -440,7 +440,7 @@ export function GestorContemplacao() {
                                         </div>
                                     </td>
                                     <td className="py-4">
-                                        <span className="text-gray-600">{item.mesReferencia}/{item.totalMeses || '?'}</span>
+                                        <span className="text-gray-600">{item.mesReferencia}/{item.caixaId?.duracaoEmMeses || 4}</span>
                                     </td>
                                     <td className="py-4">
                                         <span className="text-gray-600">
