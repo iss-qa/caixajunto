@@ -109,6 +109,10 @@ export const caixasService = {
     const response = await api.get('/caixas/estatisticas');
     return response.data;
   },
+  fixContemplacao: async (id: string, posicao: number) => {
+    const response = await api.post(`/caixas/${id}/fix-contemplacao/${posicao}`);
+    return response.data;
+  },
 };
 
 // Participantes

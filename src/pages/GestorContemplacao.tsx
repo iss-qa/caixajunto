@@ -206,6 +206,26 @@ export function GestorContemplacao() {
         }
     };
 
+    const [fixModalVisible, setFixModalVisible] = useState(false);
+    const [fixPosicao, setFixPosicao] = useState('');
+
+    const handleFixContemplacao = async () => {
+        if (!selectedCaixa || !fixPosicao) return;
+        try {
+            setActionLoading(true);
+            await caixasService.fixContemplacao(selectedCaixa._id, parseInt(fixPosicao, 10));
+            alert(`Contemplação gerada com sucesso para posição ${fixPosicao}!`);
+            setFixModalVisible(false);
+            setFixPosicao('');
+            await loadData();
+        } catch (error) {
+            console.error("Erro ao gerar contemplação:", error);
+            alert("Erro ao gerar contemplação manual.");
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
     if (loading && !stats && !selectedCaixa) { // Adjusted loading condition for initial caixa selection
         return (
             <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
@@ -280,6 +300,13 @@ export function GestorContemplacao() {
                     </div>
                 </div>
                 <div className="flex gap-2">
+                    <Button
+                        size="sm"
+                        variant="warning"
+                        onClick={() => setFixModalVisible(true)}
+                    >
+                        🔧 Gerar Contemplação Manual
+                    </Button>
                     <Button size="sm" onClick={loadData}>Atualizar</Button>
                 </div>
             </div>
@@ -424,16 +451,21 @@ export function GestorContemplacao() {
                                         {getStatusBadge(item.status)}
                                     </td>
                                     <td className="py-4 text-right">
-                                        {item.status !== 'concluido' && item.status !== 'processando' && (
+                                        {item.status !== 'concluido' && (
                                             <Button
                                                 size="sm"
-                                                className="bg-green-600 hover:bg-green-700 text-white"
+                                                className={cn(
+                                                    "text-white",
+                                                    item.status === 'falha' ? "bg-red-600 hover:bg-red-700" :
+                                                        item.status === 'agendado' ? "bg-blue-600 hover:bg-blue-700" :
+                                                            "bg-green-600 hover:bg-green-700"
+                                                )}
                                                 onClick={() => {
                                                     setSelectedRecebimento(item);
                                                     setModalVisible(true);
                                                 }}
                                             >
-                                                Solicitar Saque
+                                                {item.status === 'falha' ? 'Tentar Novamente' : 'Solicitar Saque'}
                                             </Button>
                                         )}
                                         {item.status === 'concluido' && (
@@ -461,6 +493,44 @@ export function GestorContemplacao() {
                 loading={actionLoading}
                 recebimento={selectedRecebimento}
             />
+
+            {/* Modal de Contemplação Manual */}
+            {fixModalVisible && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl"
+                    >
+                        <div className="p-6">
+                            <h3 className="text-lg font-bold text-gray-900 mb-4">Gerar Contemplação Manual</h3>
+                            <p className="text-sm text-gray-500 mb-4">
+                                Insira a Posição (número) que deveria ter sido contemplada.
+                            </p>
+                            <input
+                                type="number"
+                                placeholder="Ex: 2"
+                                className="w-full px-4 py-2 border border-gray-200 rounded-xl mb-6"
+                                value={fixPosicao}
+                                onChange={(e) => setFixPosicao(e.target.value)}
+                            />
+                            <div className="flex gap-3">
+                                <Button variant="secondary" className="flex-1" onClick={() => setFixModalVisible(false)}>
+                                    Cancelar
+                                </Button>
+                                <Button
+                                    className="flex-1"
+                                    onClick={handleFixContemplacao}
+                                    disabled={!fixPosicao || actionLoading}
+                                    isLoading={actionLoading}
+                                >
+                                    Gerar
+                                </Button>
+                            </div>
+                        </div>
+                    </motion.div>
+                </div>
+            )}
         </div>
     );
 }
