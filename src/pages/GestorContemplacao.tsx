@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import {
     DollarSign,
@@ -290,6 +290,19 @@ export function GestorContemplacao() {
         );
     }
 
+    const derivedStats = useMemo(() => {
+        const concluidos = recebimentos.filter(r => r.status === 'concluido');
+        const naoConcluidos = recebimentos.filter(r => r.status !== 'concluido');
+        return {
+            totalContemplacoes: concluidos.length,
+            totalPago: concluidos.reduce((acc, curr) => acc + (curr.valorTotal || 0), 0),
+            pendentes: naoConcluidos.length,
+            valorPendente: naoConcluidos.reduce((acc, curr) => acc + (curr.valorTotal || 0), 0),
+            valorFundoReserva: selectedCaixa?.valorParcela || 0,
+            valorDevolucao: (selectedCaixa?.valorParcela || 0) / ((selectedCaixa?.qtParticipantes || 0) + 1)
+        };
+    }, [recebimentos, selectedCaixa]);
+
     // VIEW: DASHBOARD (Step 2)
     return (
         <div className="max-w-7xl mx-auto px-4 py-8">
@@ -320,10 +333,13 @@ export function GestorContemplacao() {
                 <Card className="bg-white border-l-4 border-l-blue-500">
                     <div className="flex justify-between items-start">
                         <div>
-                            <p className="text-sm font-medium text-gray-500">Total em Caixa</p>
+                            <p className="text-sm font-medium text-gray-500">Fundo de Reserva</p>
                             <h3 className="text-2xl font-bold text-gray-900 mt-1">
-                                {formatCurrency(stats?.valorTotalPendente + stats?.valorTotalLiberado || 0)}
+                                {formatCurrency(derivedStats.valorFundoReserva)}
                             </h3>
+                            <p className="text-xs text-blue-600 mt-1">
+                                Devolução: {formatCurrency(derivedStats.valorDevolucao)}
+                            </p>
                         </div>
                         <div className="p-2 bg-blue-50 rounded-lg">
                             <DollarSign className="w-5 h-5 text-blue-600" />
@@ -336,9 +352,9 @@ export function GestorContemplacao() {
                         <div>
                             <p className="text-sm font-medium text-gray-500">Pagamentos Pendentes</p>
                             <h3 className="text-2xl font-bold text-gray-900 mt-1">
-                                {formatCurrency(stats?.valorTotalPendente || 0)}
+                                {formatCurrency(derivedStats.valorPendente)}
                             </h3>
-                            <p className="text-xs text-amber-600 mt-1">{stats?.pendentes} aguardando</p>
+                            <p className="text-xs text-amber-600 mt-1">{derivedStats.pendentes} aguardando</p>
                         </div>
                         <div className="p-2 bg-amber-50 rounded-lg">
                             <Clock className="w-5 h-5 text-amber-600" />
@@ -351,9 +367,9 @@ export function GestorContemplacao() {
                         <div>
                             <p className="text-sm font-medium text-gray-500">Total Pago</p>
                             <h3 className="text-2xl font-bold text-gray-900 mt-1">
-                                {formatCurrency(stats?.valorTotalLiberado || 0)}
+                                {formatCurrency(derivedStats.totalPago)}
                             </h3>
-                            <p className="text-xs text-green-600 mt-1">{stats?.liberados} concluídos</p>
+                            <p className="text-xs text-green-600 mt-1">{derivedStats.totalContemplacoes} concluídos</p>
                         </div>
                         <div className="p-2 bg-green-50 rounded-lg">
                             <CheckCircle2 className="w-5 h-5 text-green-600" />
@@ -366,7 +382,7 @@ export function GestorContemplacao() {
                         <div>
                             <p className="text-sm font-medium text-gray-500">Total Contemplações</p>
                             <h3 className="text-2xl font-bold text-gray-900 mt-1">
-                                {stats?.totalRecebimentos || 0}
+                                {derivedStats.totalContemplacoes}
                             </h3>
                         </div>
                         <div className="p-2 bg-gray-50 rounded-lg">
@@ -433,10 +449,7 @@ export function GestorContemplacao() {
                                     </td>
                                     <td className="py-4">
                                         <div className="flex items-center gap-2">
-                                            <div className="w-8 h-8 rounded-full bg-primary-100 flex items-center justify-center text-primary-700 font-bold text-xs">
-                                                {item.recebedorId?.nome?.charAt(0)}
-                                            </div>
-                                            <span className="text-gray-700">{item.recebedorId?.nome}</span>
+                                            <span className="text-gray-700 font-medium">{item.recebedorId?.nome}</span>
                                         </div>
                                     </td>
                                     <td className="py-4">
@@ -456,7 +469,7 @@ export function GestorContemplacao() {
                                         {getStatusBadge(item.status)}
                                     </td>
                                     <td className="py-4 text-right">
-                                        {item.status !== 'concluido' && (
+                                        {item.status !== 'concluido' && item.status !== 'processando' && (
                                             <Button
                                                 size="sm"
                                                 className={cn(
@@ -472,6 +485,9 @@ export function GestorContemplacao() {
                                             >
                                                 {item.status === 'falha' ? 'Tentar Novamente' : 'Solicitar Saque'}
                                             </Button>
+                                        )}
+                                        {item.status === 'processando' && (
+                                            <span className="text-sm text-amber-600 font-medium">Processando...</span>
                                         )}
                                         {item.status === 'concluido' && (
                                             <span className="text-sm text-gray-400">Concluído</span>
