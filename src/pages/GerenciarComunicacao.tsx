@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { MessageSquare, Calendar, User, FileText, CheckCircle2, XCircle, Clock, Search, Filter, RefreshCw, Send, BookOpen } from 'lucide-react';
+import { MessageSquare, Calendar, User, FileText, CheckCircle2, XCircle, Clock, Search, Filter, RefreshCw, Send, BookOpen, Activity } from 'lucide-react';
 import { comunicacaoService, type MensagemHistorico } from '../lib/api/comunicacao.service';
 import { caixasService, participantesService } from '../lib/api';
 import { formatDate } from '../lib/utils';
@@ -286,6 +286,13 @@ export function GerenciarComunicacao() {
         }
     };
 
+    const handleOpenQueues = () => {
+        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+        // Remove /api suffix to get root URL, then append /admin/queues
+        const queueUrl = apiUrl.replace(/\/api\/?$/, '') + '/admin/queues';
+        window.open(queueUrl, '_blank');
+    };
+
     return (
         <div className="max-w-7xl mx-auto px-4 py-6">
             {/* Header */}
@@ -307,7 +314,16 @@ export function GerenciarComunicacao() {
                 </div>
             </motion.div>
 
-            <div className="flex justify-end mb-6">
+            <div className="flex justify-end mb-6 gap-3">
+                <Button
+                    variant="primary"
+                    className="bg-blue-600 hover:bg-blue-700 text-white border-none"
+                    leftIcon={<Activity className="w-4 h-4" />}
+                    onClick={handleOpenQueues}
+                >
+                    Monitorar Filas
+                </Button>
+
                 <Button
                     variant="secondary"
                     className="border-red-500 text-red-600 hover:bg-red-50 bg-white"
