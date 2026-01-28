@@ -64,6 +64,7 @@ interface MasterDashboardData {
     totalCaixasAtivos: number;
     valorTotalMovimentado: number;
     receitaPotencial: number;
+    receitaEfetiva: number;
   };
 }
 
@@ -132,6 +133,7 @@ export function PainelMaster() {
           totalCaixasAtivos: 89,
           valorTotalMovimentado: 892500,
           receitaPotencial: 66600,
+          receitaEfetiva: 45000,
         },
       });
     } finally {
@@ -285,6 +287,19 @@ export function PainelMaster() {
             {formatCurrency(data?.resumo.receitaPotencial || 0)}
           </p>
           <p className="text-xs text-gray-500 mt-1">Receita Potencial</p>
+        </Card>
+
+        {/* Receita Efetiva (NOVO) */}
+        <Card className="bg-gradient-to-br from-emerald-50 to-emerald-100/50 border-emerald-200/50">
+          <div className="flex items-center justify-between mb-2">
+            <div className="w-10 h-10 bg-emerald-500 rounded-xl flex items-center justify-center">
+              <DollarSign className="w-5 h-5 text-white" />
+            </div>
+          </div>
+          <p className="text-2xl md:text-3xl font-bold text-gray-900">
+            {formatCurrency(data?.resumo.receitaEfetiva || 0)}
+          </p>
+          <p className="text-xs text-gray-500 mt-1">Receita Efetiva</p>
         </Card>
 
         {/* Split de Pagamentos */}

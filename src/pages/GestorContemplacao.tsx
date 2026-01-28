@@ -110,6 +110,19 @@ export function GestorContemplacao() {
     // State for Caixa Selection
     const [selectedCaixa, setSelectedCaixa] = useState<any>(null);
 
+    const derivedStats = useMemo(() => {
+        const concluidos = recebimentos.filter(r => r.status === 'concluido');
+        const naoConcluidos = recebimentos.filter(r => r.status !== 'concluido');
+        return {
+            totalContemplacoes: concluidos.length,
+            totalPago: concluidos.reduce((acc, curr) => acc + (curr.valorTotal || 0), 0),
+            pendentes: naoConcluidos.length,
+            valorPendente: naoConcluidos.reduce((acc, curr) => acc + (curr.valorTotal || 0), 0),
+            valorFundoReserva: selectedCaixa?.valorParcela || 0,
+            valorDevolucao: (selectedCaixa?.valorParcela || 0) / ((selectedCaixa?.qtdParticipantes || 0) + 1)
+        };
+    }, [recebimentos, selectedCaixa]);
+
     useEffect(() => {
         loadCaixas();
     }, []);
@@ -290,18 +303,7 @@ export function GestorContemplacao() {
         );
     }
 
-    const derivedStats = useMemo(() => {
-        const concluidos = recebimentos.filter(r => r.status === 'concluido');
-        const naoConcluidos = recebimentos.filter(r => r.status !== 'concluido');
-        return {
-            totalContemplacoes: concluidos.length,
-            totalPago: concluidos.reduce((acc, curr) => acc + (curr.valorTotal || 0), 0),
-            pendentes: naoConcluidos.length,
-            valorPendente: naoConcluidos.reduce((acc, curr) => acc + (curr.valorTotal || 0), 0),
-            valorFundoReserva: selectedCaixa?.valorParcela || 0,
-            valorDevolucao: (selectedCaixa?.valorParcela || 0) / ((selectedCaixa?.qtParticipantes || 0) + 1)
-        };
-    }, [recebimentos, selectedCaixa]);
+
 
     // VIEW: DASHBOARD (Step 2)
     return (
