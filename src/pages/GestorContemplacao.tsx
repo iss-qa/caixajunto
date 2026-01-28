@@ -176,11 +176,16 @@ export function GestorContemplacao() {
 
         try {
             setActionLoading(true);
-            await recebimentosService.solicitarSaque(selectedRecebimento._id);
-            setModalVisible(false);
-            setSelectedRecebimento(null);
-            await loadData();
-            alert("Solicitação de saque enviada com sucesso!");
+            const response = await recebimentosService.solicitarSaque(selectedRecebimento._id);
+
+            if (response.success) {
+                setModalVisible(false);
+                setSelectedRecebimento(null);
+                await loadData();
+                alert("Solicitação de saque enviada com sucesso!");
+            } else {
+                alert(`Falha ao solicitar saque: ${response.message || 'Erro desconhecido'}`);
+            }
         } catch (error) {
             console.error("Erro ao solicitar saque:", error);
             alert("Erro ao processar solicitação.");
