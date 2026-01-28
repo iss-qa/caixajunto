@@ -2036,8 +2036,8 @@ ${link}`;
                           const hoje = new Date().toLocaleDateString('pt-BR');
                           const venc = getVencimentoAtual();
                           return venc === hoje
-                            ? `Participante Contemplado no dia ${venc} (HOJE)`
-                            : `Participante Contemplado no dia ${venc}`;
+                            ? `Contemplação prevista após ${venc}`
+                            : `Contemplação prevista após ${venc}`;
                         } else if (caixa?.tipo === 'semanal') {
                           return `Participante Contemplado na Semana ${calculatedMes || caixa.mesAtual || 1}`;
                         } else {
@@ -2090,11 +2090,18 @@ ${link}`;
                     </div>
 
                     <div className="space-y-2 text-sm">
-                      <div className="flex items-start gap-2">
-                        <Calendar className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
-                        <p className="text-gray-700">
-                          A transferência será realizada <span className="font-semibold text-green-700">automaticamente no dia {getDataTransferencia()}</span>
-                        </p>
+                      <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-start gap-3 shadow-sm">
+                        <div className="bg-green-100 p-2 rounded-full text-green-700 mt-0.5">
+                          <Calendar className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <h4 className="text-green-900 font-bold text-sm uppercase tracking-wide mb-1">
+                            Agendamento Confirmado
+                          </h4>
+                          <p className="text-gray-700 text-sm leading-relaxed">
+                            A transferência será realizada automaticamente no dia <span className="font-bold text-green-700 bg-green-100 px-1 rounded">{getDataTransferencia()}</span>.
+                          </p>
+                        </div>
                       </div>
 
                       <div className="flex items-start gap-2">
