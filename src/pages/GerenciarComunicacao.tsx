@@ -272,7 +272,7 @@ export function GerenciarComunicacao() {
             });
 
             if (result.success) {
-                alert(`✅ ${result.enviados} mensagem(ns) enviada(s) com sucesso!`);
+                alert(`✅ ${result.enviados} mensagem(ns) agendada(s) para envio com sucesso!`);
                 setShowManualModal(false);
                 loadHistorico(); // Recarregar lista
             } else {
