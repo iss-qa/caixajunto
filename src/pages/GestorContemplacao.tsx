@@ -302,7 +302,7 @@ export function GestorContemplacao() {
                 <div className="flex gap-2">
                     <Button
                         size="sm"
-                        variant="warning"
+                        className="bg-amber-500 hover:bg-amber-600 text-white"
                         onClick={() => setFixModalVisible(true)}
                     >
                         🔧 Gerar Contemplação Manual
