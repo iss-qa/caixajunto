@@ -11,7 +11,7 @@ import {
     Filter,
     Download,
 } from 'lucide-react';
-import { recebimentosService, caixasService } from '../lib/api';
+import { recebimentosService, caixasService, participantesService } from '../lib/api';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
@@ -142,11 +142,25 @@ export function GestorContemplacao() {
         }
     }, [filtros.caixaId, caixas]);
 
+    const [participantesLista, setParticipantesLista] = useState<any[]>([]);
+
     useEffect(() => {
-        if (selectedCaixa) { // Only load data if a caixa is selected
+        if (selectedCaixa) {
             loadData();
+            loadParticipantes();
         }
-    }, [selectedCaixa, filtros.status]); // Depend on selectedCaixa and status filter
+    }, [selectedCaixa, filtros.status]);
+
+    const loadParticipantes = async () => {
+        if (!selectedCaixa) return;
+        try {
+            const data = await participantesService.getByCaixa(selectedCaixa._id);
+            // Verifica se retornou array direto ou objeto com chave participantes
+            setParticipantesLista(Array.isArray(data) ? data : data.participantes || []);
+        } catch (error) {
+            console.error('Erro ao carregar participantes:', error);
+        }
+    };
 
     const loadData = async () => {
         if (!selectedCaixa && !filtros.caixaId) return; // Só carrega se tiver caixa selecionado
@@ -533,21 +547,32 @@ export function GestorContemplacao() {
                         <div className="p-6">
                             <h3 className="text-lg font-bold text-gray-900 mb-4">Gerar Contemplação Manual</h3>
                             <p className="text-sm text-gray-500 mb-4">
-                                Insira a Posição (número) que deveria ter sido contemplada.
+                                Selecione o participante que será contemplado manualmente.
                             </p>
-                            <input
-                                type="number"
-                                placeholder="Ex: 2"
-                                className="w-full px-4 py-2 border border-gray-200 rounded-xl mb-6"
+
+                            <select
+                                className="w-full px-4 py-2 border border-gray-200 rounded-xl mb-6 bg-white"
                                 value={fixPosicao}
                                 onChange={(e) => setFixPosicao(e.target.value)}
-                            />
+                            >
+                                <option value="">Selecione o participante...</option>
+                                {participantesLista
+                                    .filter(p => p.status !== 'inativo') // Opcional: filtrar apenas ativos
+                                    .sort((a, b) => (a.posicao || 999) - (b.posicao || 999)) // Ordenar por posição
+                                    .map(p => (
+                                        <option key={p._id} value={p.posicao} disabled={!p.posicao}>
+                                            {p.posicao ? `#${p.posicao} - ` : '(S/ Pos) - '}{p.usuarioId?.nome || p.nome || 'Participante'}
+                                        </option>
+                                    ))
+                                }
+                            </select>
+
                             <div className="flex gap-3">
                                 <Button variant="secondary" className="flex-1" onClick={() => setFixModalVisible(false)}>
                                     Cancelar
                                 </Button>
                                 <Button
-                                    className="flex-1"
+                                    className="flex-1 bg-amber-600 hover:bg-amber-700"
                                     onClick={handleFixContemplacao}
                                     disabled={!fixPosicao || actionLoading}
                                     isLoading={actionLoading}

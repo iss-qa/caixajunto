@@ -115,6 +115,38 @@ const WalletDashboard = () => {
   // Lista de caixas que o admin gerencia
   const [caixasGerenciados, setCaixasGerenciados] = useState<Array<{ _id: string; nome: string; status?: string; dataFim?: string }>>([]);
 
+  // Subaccount Creation Eligibility
+  const [canCreateSubAccount, setCanCreateSubAccount] = useState(false);
+  const [checkingEligibility, setCheckingEligibility] = useState(true);
+
+  useEffect(() => {
+    const checkEligibility = async () => {
+      if (!usuario) return;
+
+      // Admins/Master always allowed to create subaccount without caixa link
+      if (usuario.tipo !== 'usuario') {
+        setCanCreateSubAccount(true);
+        setCheckingEligibility(false);
+        return;
+      }
+
+      // For users, check if they are linked to any caixa
+      setCheckingEligibility(true);
+      try {
+        const data = await participantesService.getByUsuario(usuario._id);
+        const list = Array.isArray(data) ? data : data?.participacoes || [];
+        setCanCreateSubAccount(list.length > 0);
+      } catch (error) {
+        console.error('Error checking eligibility:', error);
+        setCanCreateSubAccount(false);
+      } finally {
+        setCheckingEligibility(false);
+      }
+    };
+
+    checkEligibility();
+  }, [usuario]);
+
   const fetchWallet = async () => {
     try {
       setWalletError(null);
@@ -1410,21 +1442,57 @@ const WalletDashboard = () => {
           </div>
         </div>
 
-        <SubAccountCreation
-          usuario={usuario}
-          updateUsuario={updateUsuario}
-          onSuccess={() => {
-            setHasSubAccount(true);
-            setSuccessMessage('Subconta criada com sucesso! ✅');
-            setShowSuccessModal(true);
-            setTimeout(() => {
-              setShowSuccessModal(false);
-              // window.location.reload(); // Removido para permitir fluxo de Onboarding
-            }, 2000);
-          }}
-          setOnboardingUrl={setOnboardingUrl}
-          setShowOnboardingModal={setShowOnboardingModal}
-        />
+        {checkingEligibility ? (
+          <div className="p-12 flex justify-center items-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+          </div>
+        ) : !canCreateSubAccount ? (
+          <div className="max-w-2xl mx-auto px-6 py-16">
+            <div className="bg-white border border-gray-200 rounded-2xl p-8 shadow-sm text-center">
+              <div className="w-20 h-20 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                <AlertCircle className="w-10 h-10 text-amber-600" />
+              </div>
+
+              <h2 className="text-2xl font-bold text-gray-900 mb-4">
+                Você precisa ser vinculado a um caixa para continuar.
+              </h2>
+
+              <div className="bg-blue-50 border border-blue-100 rounded-xl p-6 text-left max-w-lg mx-auto">
+                <h3 className="text-blue-900 font-bold mb-3 flex items-center gap-2">
+                  📋 Próximo passo:
+                </h3>
+                <p className="text-blue-800 mb-2">
+                  Entre em contato com o administrador e solicite sua inclusão em um caixa.
+                </p>
+                <p className="text-blue-800 font-medium">
+                  Após isso, você poderá criar sua subconta e acessar sua carteira.
+                </p>
+              </div>
+
+              <button
+                onClick={() => navigate('/dashboard')}
+                className="mt-8 w-full max-w-sm text-gray-600 hover:text-gray-800 px-6 py-3 rounded-xl font-medium transition-colors border border-gray-200 hover:border-gray-300"
+              >
+                Voltar para Home
+              </button>
+            </div>
+          </div>
+        ) : (
+          <SubAccountCreation
+            usuario={usuario}
+            updateUsuario={updateUsuario}
+            onSuccess={() => {
+              setHasSubAccount(true);
+              setSuccessMessage('Subconta criada com sucesso! ✅');
+              setShowSuccessModal(true);
+              setTimeout(() => {
+                setShowSuccessModal(false);
+              }, 2000);
+            }}
+            setOnboardingUrl={setOnboardingUrl}
+            setShowOnboardingModal={setShowOnboardingModal}
+          />
+        )}
       </div>
     );
   }
