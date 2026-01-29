@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { useGoogleReCaptcha } from 'react-google-recaptcha-v3';
 import { motion } from 'framer-motion';
 import { Users, Mail, Lock, Eye, EyeOff, Phone, User, ArrowRight, CheckCircle, AlertCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -13,6 +14,7 @@ export function Registro() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { register } = useAuth();
+  const { executeRecaptcha } = useGoogleReCaptcha();
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
@@ -35,17 +37,32 @@ export function Registro() {
     e.preventDefault();
     setError('');
 
-    if (form.senha.length < 6) {
-      setError('A senha deve ter pelo menos 6 caracteres');
+    // Validação de senha forte (Backend Policy)
+    const passwordRegex = /((?=.*\d)|(?=.*\W+))(?![.\n])(?=.*[A-Z])(?=.*[a-z]).*$/;
+    if (form.senha.length < 8) {
+      setError('A senha deve ter pelo menos 8 caracteres');
+      return;
+    }
+    if (!passwordRegex.test(form.senha)) {
+      setError('A senha deve conter letra maiúscula, minúscula e número/símbolo');
       return;
     }
 
     try {
       setLoading(true);
+
+      // Execute reCAPTCHA
+      let token = '';
+      if (executeRecaptcha) {
+        token = await executeRecaptcha('register');
+        console.log('reCAPTCHA Token:', token);
+      }
+
       // Remove máscara do telefone antes de enviar
       const formData = {
         ...form,
         telefone: unformatPhone(form.telefone),
+        recaptchaToken: token,
       };
       await register(formData);
 
@@ -197,7 +214,7 @@ export function Registro() {
             <Input
               label="Senha"
               type={showPassword ? 'text' : 'password'}
-              placeholder="Mínimo 6 caracteres"
+              placeholder="Mínimo 8 caracteres (Maiúscula + Número)"
               value={form.senha}
               onChange={(e) => setForm({ ...form, senha: e.target.value })}
               leftIcon={<Lock className="w-4 h-4" />}

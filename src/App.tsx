@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { GoogleReCaptchaProvider } from 'react-google-recaptcha-v3';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { UIProvider } from './contexts/UIContext';
 import { Layout } from './components/layout/Layout';
@@ -230,7 +231,17 @@ function App() {
     <BrowserRouter>
       <AuthProvider>
         <UIProvider>
-          <AppRoutes />
+          <GoogleReCaptchaProvider
+            reCaptchaKey="6Ld_VVosAAAAAJ6G8aLZ4yG6szQh-7h_hPPgBgNz"
+            scriptProps={{
+              async: false,
+              defer: false,
+              appendTo: 'head',
+              nonce: undefined,
+            }}
+          >
+            <AppRoutes />
+          </GoogleReCaptchaProvider>
         </UIProvider>
       </AuthProvider>
     </BrowserRouter>
