@@ -452,10 +452,15 @@ export function GestorContemplacao() {
                                     <td className="py-4">
                                         <div className="flex items-center gap-2">
                                             <span className="text-gray-700 font-medium">{item.recebedorId?.nome}</span>
+                                            {!item.participanteId && <Badge variant="info">Admin</Badge>}
                                         </div>
                                     </td>
                                     <td className="py-4">
-                                        <span className="text-gray-600">{item.mesReferencia}/{item.caixaId?.duracaoEmMeses || 4}</span>
+                                        {!item.participanteId ? (
+                                            <Badge variant="warning">Comissão</Badge>
+                                        ) : (
+                                            <span className="text-gray-600">{item.mesReferencia}/{item.caixaId?.duracaoEmMeses || 4}</span>
+                                        )}
                                     </td>
                                     <td className="py-4">
                                         <span className="text-gray-600">

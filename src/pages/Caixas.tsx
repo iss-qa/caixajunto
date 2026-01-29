@@ -132,6 +132,7 @@ export function Caixas() {
                 ...c,
                 qtdParticipantes: fullCaixa.qtdParticipantes,
                 duracaoMeses: fullCaixa.duracaoMeses,
+                tipo: fullCaixa.tipo,
                 participantesAtivos,  // Use manually counted value
               };
             } catch (error) {
@@ -513,12 +514,12 @@ export function Caixas() {
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex-1">
                       <h3 className="font-semibold text-gray-900 mb-1" data-testid={`caixa-nome-${caixa._id}`}>{caixa.nome}</h3>
-                      <div className="space-y-1">
+                      <div className="flex items-baseline gap-1 mt-1">
                         <p className="text-lg font-bold text-green-600" data-testid={`caixa-valor-${caixa._id}`}>
                           {formatCurrency(caixa.valorTotal)}
                         </p>
-                        <p className="text-xs text-gray-600" data-testid={`caixa-parcela-info-${caixa._id}`}>
-                          {caixa.duracaoMeses}x de {formatCurrency(caixa.valorParcela)}
+                        <p className="text-xs text-gray-500 font-medium" data-testid={`caixa-parcela-info-${caixa._id}`}>
+                          - {caixa.duracaoMeses}x de {formatCurrency(caixa.valorParcela)}
                         </p>
                       </div>
                       {caixa.adminNome && (

@@ -1023,6 +1023,63 @@ const WalletDashboard = () => {
     }
   }, [usuario]);
 
+  // Admin Contemplation Status state
+  const [adminRequirements, setAdminRequirements] = useState<{
+    [key: string]: {
+      caixaNome: string;
+      participantes: { nome: string; status: string; pago: boolean }[];
+      isReady: boolean;
+      allPaid: boolean;
+    }
+  }>({});
+
+  useEffect(() => {
+    const fetchAdminRequirements = async () => {
+      if ((usuario?.tipo !== 'administrador' && usuario?.tipo !== 'master') || caixasGerenciados.length === 0) {
+        return;
+      }
+
+      const requirements: any = {};
+
+      for (const caixa of caixasGerenciados) {
+        if (caixa.status !== 'ativo') continue;
+
+        try {
+          // Busca recebimentos do caixa
+          const resp = await recebimentosService.getAll({ caixaId: caixa._id, limit: 100 });
+          const recs = resp.recebimentos || [];
+
+          // Filtra apenas participantes (exclui o próprio admin/comissão)
+          const participantesRecs = recs.filter((r: any) => r.participanteId);
+
+          if (participantesRecs.length === 0) continue;
+
+          // Mapeia status
+          const statusList = participantesRecs.map((r: any) => ({
+            nome: r.recebedorId?.nome || r.nomeParticipante || 'Participante',
+            status: r.status,
+            pago: r.status === 'concluido'
+          }));
+
+          const allPaid = statusList.every((p: any) => p.pago);
+
+          requirements[caixa._id] = {
+            caixaNome: caixa.nome,
+            participantes: statusList,
+            isReady: allPaid,
+            allPaid: allPaid
+          };
+        } catch (error) {
+          console.error(`Erro ao buscar requisitos para caixa ${caixa.nome}`, error);
+        }
+      }
+
+      setAdminRequirements(requirements);
+    };
+
+    fetchAdminRequirements();
+  }, [caixasGerenciados, usuario]);
+
   const OverviewTab = () => {
     // Calcular a próxima data de recebimento baseado nos caixas gerenciados
     const proximoRecebimento = caixasGerenciados
@@ -1234,6 +1291,50 @@ const WalletDashboard = () => {
             </div>
           )}
         </div>
+
+        {/* ADMIN REQUIREMENTS CHECKLIST */}
+        {(usuario?.tipo === 'administrador' || usuario?.tipo === 'master') && Object.keys(adminRequirements).length > 0 && (
+          <div className="space-y-4">
+            <h3 className="text-lg font-bold text-gray-800">Requisitos para Contemplação (Admin)</h3>
+            {Object.keys(adminRequirements).map((caixaId) => {
+              const req = adminRequirements[caixaId];
+              return (
+                <div key={caixaId} className="bg-white border rounded-2xl p-6 shadow-sm">
+                  <div className="flex justify-between items-center mb-4">
+                    <h4 className="font-bold text-gray-800">{req.caixaNome}</h4>
+                    {req.isReady ? (
+                      <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold border border-green-200">
+                        Requisitos Atingidos ✅
+                      </span>
+                    ) : (
+                      <span className="bg-amber-100 text-amber-700 px-3 py-1 rounded-full text-xs font-bold border border-amber-200">
+                        Aguardando Requisitos ⏳
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="space-y-2 mb-4">
+                    {req.participantes.map((p, idx) => (
+                      <div key={idx} className="flex justify-between items-center text-sm border-b border-gray-50 last:border-0 py-2">
+                        <span className="text-gray-600">{p.nome}</span>
+                        <span className={p.pago ? "text-green-600 font-medium flex items-center gap-1" : "text-amber-500 font-medium flex items-center gap-1"}>
+                          {p.pago ? <Check size={14} /> : <Clock size={14} />}
+                          {p.pago ? 'OK' : 'Pendente'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className={`p-3 rounded-lg text-sm text-center font-medium ${req.isReady ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>
+                    {req.isReady
+                      ? "Parabéns, você está apto para receber a comissão!"
+                      : "Você ainda não está apto para receber pelo caixa, aguarde os requisitos serem atendidos."}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     );
   };
