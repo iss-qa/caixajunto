@@ -4,7 +4,6 @@ import {
   Users,
   Wallet,
   TrendingUp,
-  TrendingDown,
   DollarSign,
   Shield,
   BarChart3,
@@ -16,12 +15,10 @@ import {
   Calendar,
   CheckCircle2,
   Clock,
-  AlertTriangle,
-  XCircle,
   MessageSquare,
   UserCheck,
 } from 'lucide-react';
-import { dashboardService, usuariosService, caixasService } from '../lib/api';
+import { dashboardService } from '../lib/api';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
@@ -103,6 +100,10 @@ export function PainelMaster() {
   const [loading, setLoading] = useState(true);
   const [periodoSelecionado, setPeriodoSelecionado] = useState<'7d' | '30d' | '90d' | 'all'>('30d');
 
+  // State for collapsible sections
+  const [showFinanceiro, setShowFinanceiro] = useState(false);
+  const [showGestao, setShowGestao] = useState(false);
+
   useEffect(() => {
     loadDashboard();
   }, [periodoSelecionado]);
@@ -114,7 +115,7 @@ export function PainelMaster() {
       setData(response);
     } catch (error) {
       console.error('Erro ao carregar dashboard master:', error);
-      // Mock data
+      // Mock data adjusted for testing
       setData({
         usuarios: {
           total: 1250,
@@ -149,13 +150,13 @@ export function PainelMaster() {
           totalUsuarios: 1250,
           totalCaixasAtivos: 89,
           valorTotalMovimentado: 892500,
-          receitaPotencialBruta: 66600, // Updated from receitaPotencial
-          receitaPotencialLiquida: 60000, // New mock
-          receitaBrutaAdmins: 8500, // New mock
-          receitaLiquidaAdmins: 8000, // New mock
-          custosLytexCriacaoSubconta: 1500, // New mock
-          custosLytexManutencao: 500, // New mock
-          totalCustosLytexSubcontas: 2000, // New mock
+          receitaPotencialBruta: 66600,
+          receitaPotencialLiquida: 60000,
+          receitaBrutaAdmins: 8500,
+          receitaLiquidaAdmins: 8000,
+          custosLytexCriacaoSubconta: 1500,
+          custosLytexManutencao: 500,
+          totalCustosLytexSubcontas: 2000,
           receitaEfetiva: 45000,
         },
       });
@@ -171,15 +172,13 @@ export function PainelMaster() {
   if (loading) {
     return (
       <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {[1, 2, 3, 4].map((i) => (
-            <CardSkeleton key={i} />
-          ))}
-        </div>
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
           {[1, 2, 3].map((i) => (
             <CardSkeleton key={i} />
           ))}
+        </div>
+        <div className="grid md:grid-cols-2 gap-4">
+          <CardSkeleton /> <CardSkeleton />
         </div>
       </div>
     );
@@ -199,7 +198,6 @@ export function PainelMaster() {
           <p className="text-sm text-gray-500">Visão geral do sistema Juntix</p>
         </div>
         <div className="flex items-center gap-3">
-          {/* Período */}
           <div className="flex gap-1 p-1 bg-gray-100 rounded-xl">
             {[
               { value: '7d', label: '7 dias' },
@@ -232,416 +230,255 @@ export function PainelMaster() {
         </div>
       </motion.div>
 
-      {/* Main Stats */}
-      <motion.div variants={itemVariants} className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      {/* Row 1: Main Stats (Condensed) */}
+      <motion.div variants={itemVariants} className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         {/* Total Usuários */}
-        <Card className="bg-gradient-to-br from-violet-50 to-violet-100/50 border-violet-200/50">
-          <div className="flex items-center justify-between mb-2">
-            <div className="w-10 h-10 bg-violet-500 rounded-xl flex items-center justify-center">
-              <Users className="w-5 h-5 text-white" />
+        <Card className="bg-white border-violet-100">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-violet-100 rounded-xl flex items-center justify-center">
+              <Users className="w-6 h-6 text-violet-600" />
             </div>
-            <Badge variant="success" size="sm" className="bg-green-100 text-green-700">
-              +12%
-            </Badge>
-          </div>
-          <p className="text-2xl md:text-3xl font-bold text-gray-900">
-            {data?.usuarios.total.toLocaleString()}
-          </p>
-          <p className="text-xs text-gray-500 mt-1">Total de Usuários</p>
-          <div className="mt-2 pt-2 border-t border-violet-200/50">
-            <div className="flex justify-between text-xs">
-              <span className="text-gray-500">Ativos</span>
-              <span className="font-medium text-gray-700">{taxaAtivacao}%</span>
+            <div>
+              <p className="text-sm text-gray-500 font-medium">Total de Usuários</p>
+              <div className="flex items-baseline gap-2">
+                <p className="text-2xl font-bold text-gray-900">{data?.usuarios.total.toLocaleString()}</p>
+                <Badge variant="success" size="sm" className="bg-green-50 text-green-700">+12%</Badge>
+              </div>
             </div>
           </div>
         </Card>
 
         {/* Caixas Ativos */}
-        <Card className="bg-gradient-to-br from-green-50 to-green-100/50 border-green-200/50">
-          <div className="flex items-center justify-between mb-2">
-            <div className="w-10 h-10 bg-green-500 rounded-xl flex items-center justify-center">
-              <Wallet className="w-5 h-5 text-white" />
+        <Card className="bg-white border-green-100">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
+              <Activity className="w-6 h-6 text-green-600" />
             </div>
-            <Badge variant="success" size="sm" className="bg-green-100 text-green-700">
-              +8%
-            </Badge>
-          </div>
-          <p className="text-2xl md:text-3xl font-bold text-gray-900">
-            {data?.caixas.ativos}
-          </p>
-          <p className="text-xs text-gray-500 mt-1">Caixas Ativos</p>
-          <div className="mt-2 pt-2 border-t border-green-200/50">
-            <div className="flex justify-between text-xs">
-              <span className="text-gray-500">Conclusão</span>
-              <span className="font-medium text-green-700">{taxaConclusao}%</span>
-            </div>
-          </div>
-        </Card>
-
-        {/* Volume Transacionado */}
-        <Card className="bg-gradient-to-br from-blue-50 to-blue-100/50 border-blue-200/50">
-          <div className="flex items-center justify-between mb-2">
-            <div className="w-10 h-10 bg-blue-500 rounded-xl flex items-center justify-center">
-              <DollarSign className="w-5 h-5 text-white" />
-            </div>
-            <div className="flex items-center text-green-600 text-xs font-medium">
-              <ArrowUpRight className="w-3 h-3" />
-              23%
-            </div>
-          </div>
-          <p className="text-2xl md:text-3xl font-bold text-gray-900">
-            {formatCurrency(data?.caixas.valorTotalMovimentado || 0)}
-          </p>
-          <p className="text-xs text-gray-500 mt-1">Volume Movimentado</p>
-        </Card>
-
-        {/* Receita Potencial Bruta */}
-        <Card className="bg-gradient-to-br from-amber-50 to-amber-100/50 border-amber-200/50">
-          <div className="flex items-center justify-between mb-2">
-            <div className="w-10 h-10 bg-amber-500 rounded-xl flex items-center justify-center">
-              <TrendingUp className="w-5 h-5 text-white" />
-            </div>
-            <div className="flex items-center text-green-600 text-xs font-medium">
-              <ArrowUpRight className="w-3 h-3" />
-              18%
-            </div>
-          </div>
-          <p className="text-2xl md:text-3xl font-bold text-gray-900">
-            {formatCurrency(data?.resumo.receitaPotencialBruta || 0)}
-          </p>
-          <div className="flex items-center mt-1">
-            <p className="text-xs text-gray-500">Receita Potencial Bruta</p>
-            <InfoTooltip text="Total Parcelas x Taxa de Serviço (R$ 10,00)" />
-          </div>
-        </Card>
-
-        {/* Receita Potencial Líquida */}
-        <Card className="bg-gradient-to-br from-amber-50 to-amber-100/50 border-amber-200/50">
-          <div className="flex items-center justify-between mb-2">
-            <div className="w-10 h-10 bg-amber-600 rounded-xl flex items-center justify-center">
-              <TrendingUp className="w-5 h-5 text-white" />
-            </div>
-          </div>
-          <p className="text-2xl md:text-3xl font-bold text-gray-900">
-            {formatCurrency(data?.resumo.receitaPotencialLiquida || 0)}
-          </p>
-          <div className="flex items-center mt-1">
-            <p className="text-xs text-gray-500">Receita Potencial Líquida</p>
-            <InfoTooltip text="Receita Bruta - Custo Lytex (R$ 0,59 por boleto)" />
-          </div>
-        </Card>
-
-        {/* Receita Efetiva */}
-        <Card className="bg-gradient-to-br from-emerald-50 to-emerald-100/50 border-emerald-200/50">
-          <div className="flex items-center justify-between mb-2">
-            <div className="w-10 h-10 bg-emerald-500 rounded-xl flex items-center justify-center">
-              <DollarSign className="w-5 h-5 text-white" />
-            </div>
-          </div>
-          <p className="text-2xl md:text-3xl font-bold text-center text-gray-900">
-            {formatCurrency(data?.resumo.receitaEfetiva || 0)}
-          </p>
-          <div className="flex items-center justify-center mt-1">
-            <p className="text-xs text-gray-500">Receita Efetiva (Projetada)</p>
-            <InfoTooltip text="Receita Líquida Juntix + Receita Adm - Custos Subconta" />
-          </div>
-        </Card>
-
-        {/* Receita Admins (Bruta & Liquida) */}
-        <Card className="bg-gradient-to-br from-cyan-50 to-cyan-100/50 border-cyan-200/50">
-          <div className="flex items-center justify-between mb-2">
-            <div className="w-8 h-8 bg-cyan-500 rounded-lg flex items-center justify-center">
-              <Users className="w-4 h-4 text-white" />
-            </div>
-            <InfoTooltip text="Taxa Adesão R$ 100,00 por Admin" />
-          </div>
-          <div className="space-y-2">
             <div>
-              <p className="text-lg font-bold text-gray-900">{formatCurrency(data?.resumo.receitaBrutaAdmins || 0)}</p>
-              <p className="text-[10px] text-gray-500">Receita Bruta Adm</p>
-            </div>
-            <div className="pt-1 border-t border-cyan-200">
-              <p className="text-lg font-bold text-cyan-700">{formatCurrency(data?.resumo.receitaLiquidaAdmins || 0)}</p>
-              <p className="text-[10px] text-cyan-600">Receita Líquida Adm (-Lytex 0.59)</p>
-            </div>
-          </div>
-        </Card>
-
-        {/* Custos Lytex */}
-        <Card className="bg-gradient-to-br from-pink-50 to-pink-100/50 border-pink-200/50">
-          <div className="flex items-center justify-between mb-2">
-            <div className="w-8 h-8 bg-pink-500 rounded-lg flex items-center justify-center">
-              <Activity className="w-4 h-4 text-white" />
-            </div>
-            <InfoTooltip text="Custos Operacionais Lytex" />
-          </div>
-          <div className="space-y-1">
-            <div className="flex justify-between">
-              <span className="text-[10px] text-gray-500">Criação Subcontas</span>
-              <span className="text-xs font-bold text-pink-700">{formatCurrency(data?.resumo.custosLytexCriacaoSubconta || 0)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-[10px] text-gray-500">Manutenção Mensal</span>
-              <span className="text-xs font-bold text-pink-700">{formatCurrency(data?.resumo.custosLytexManutencao || 0)}</span>
-            </div>
-            <div className="pt-1 mt-1 border-t border-pink-200 flex justify-between">
-              <span className="text-[10px] font-bold text-gray-700">Total Custos</span>
-              <span className="text-xs font-bold text-pink-900">{formatCurrency(data?.resumo.totalCustosLytexSubcontas || 0)}</span>
+              <p className="text-sm text-gray-500 font-medium">Caixas Ativos</p>
+              <div className="flex items-baseline gap-2">
+                <p className="text-2xl font-bold text-gray-900">{data?.caixas.ativos}</p>
+                <Badge variant="success" size="sm" className="bg-green-50 text-green-700">+8%</Badge>
+              </div>
             </div>
           </div>
         </Card>
 
-        {/* Split de Pagamentos */}
-        <Card className="bg-gradient-to-br from-indigo-50 to-indigo-100/50 border-indigo-200/50">
-          <div className="flex items-center justify-between mb-2">
-            <div className="w-10 h-10 bg-indigo-500 rounded-xl flex items-center justify-center">
-              <PieChart className="w-5 h-5 text-white" />
+        {/* Caixas Concluídos */}
+        <Card className="bg-white border-blue-100">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
+              <CheckCircle2 className="w-6 h-6 text-blue-600" />
             </div>
-          </div>
-          <p className="text-base font-semibold text-gray-900 mb-1">Configurar Split</p>
-          <p className="text-xs text-gray-500">Defina percentuais e visualize a distribuição</p>
-          <div className="mt-3">
-            <Button onClick={() => (window.location.href = '/painel-master/split')}>Abrir</Button>
-          </div>
-        </Card>
-
-        {/* Gerenciar Split */}
-        <Card className="bg-gradient-to-br from-teal-50 to-teal-100/50 border-teal-200/50">
-          <div className="flex items-center justify-between mb-2">
-            <div className="w-10 h-10 bg-teal-500 rounded-xl flex items-center justify-center">
-              <BarChart3 className="w-5 h-5 text-white" />
+            <div>
+              <p className="text-sm text-gray-500 font-medium">Caixas Concluídos</p>
+              <div className="flex items-baseline gap-2">
+                <p className="text-2xl font-bold text-gray-900">{data?.caixas.finalizados}</p>
+                <Badge variant="neutral" size="sm" className="bg-gray-100 text-gray-600">{taxaConclusao}%</Badge>
+              </div>
             </div>
-          </div>
-          <p className="text-base font-semibold text-gray-900 mb-1">Gerenciar Split</p>
-          <p className="text-xs text-gray-500">Visualize distribuição e acompanhe contemplados</p>
-          <div className="mt-3">
-            <Button onClick={() => (window.location.href = '/painel-master/split/gerenciar')}>Abrir</Button>
-          </div>
-        </Card>
-
-        {/* Gerenciar Comunicação */}
-        <Card className="bg-gradient-to-br from-purple-50 to-purple-100/50 border-purple-200/50">
-          <div className="flex items-center justify-between mb-2">
-            <div className="w-10 h-10 bg-purple-500 rounded-xl flex items-center justify-center">
-              <MessageSquare className="w-5 h-5 text-white" />
-            </div>
-          </div>
-          <p className="text-base font-semibold text-gray-900 mb-1">Gerenciar Comunicação</p>
-          <p className="text-xs text-gray-500">Histórico de disparos e automações</p>
-          <div className="mt-3">
-            <Button onClick={() => (window.location.href = '/painel-master/comunicacao')}>Abrir</Button>
-          </div>
-        </Card>
-
-        {/* Gerenciar Administradores */}
-        <Card className="bg-gradient-to-br from-cyan-50 to-cyan-100/50 border-cyan-200/50">
-          <div className="flex items-center justify-between mb-2">
-            <div className="w-10 h-10 bg-cyan-500 rounded-xl flex items-center justify-center">
-              <UserCheck className="w-5 h-5 text-white" />
-            </div>
-          </div>
-          <p className="text-base font-semibold text-gray-900 mb-1">Gerenciar Administradores</p>
-          <p className="text-xs text-gray-500">Aprovar ou recusar novos administradores</p>
-          <div className="mt-3">
-            <Button onClick={() => (window.location.href = '/painel-master/administradores')}>Abrir</Button>
-          </div>
-        </Card>
-
-        {/* Regras de Comissão */}
-        <Card className="bg-gradient-to-br from-orange-50 to-orange-100/50 border-orange-200/50">
-          <div className="flex items-center justify-between mb-2">
-            <div className="w-10 h-10 bg-orange-500 rounded-xl flex items-center justify-center">
-              <TrendingUp className="w-5 h-5 text-white" />
-            </div>
-          </div>
-          <p className="text-base font-semibold text-gray-900 mb-1">Regras de Comissão</p>
-          <p className="text-xs text-gray-500">Configurar taxas dinâmicas por performance</p>
-          <div className="mt-3">
-            <Button onClick={() => (window.location.href = '/painel-master/comissoes')}>Abrir</Button>
-          </div>
-        </Card>
-
-        {/* Gestor de Contemplação */}
-        <Card className="bg-gradient-to-br from-pink-50 to-pink-100/50 border-pink-200/50">
-          <div className="flex items-center justify-between mb-2">
-            <div className="w-10 h-10 bg-pink-500 rounded-xl flex items-center justify-center">
-              <DollarSign className="w-5 h-5 text-white" />
-            </div>
-          </div>
-          <p className="text-base font-semibold text-gray-900 mb-1">Gestor de Contemplação</p>
-          <p className="text-xs text-gray-500">Gerenciar pagamentos e saques de contemplados</p>
-          <div className="mt-3">
-            <Button onClick={() => (window.location.href = '/painel-master/contemplacao')}>Abrir</Button>
           </div>
         </Card>
       </motion.div>
 
-      {/* Second Row - Charts and Stats */}
-      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-        {/* Status dos Caixas */}
-        <motion.div variants={itemVariants}>
-          <Card>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-gray-900">Status dos Caixas</h3>
-              <PieChart className="w-5 h-5 text-gray-400" />
-            </div>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full bg-green-500" />
-                  <span className="text-sm text-gray-600">Ativos</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="font-semibold">{data?.caixas.ativos}</span>
-                  <span className="text-xs text-gray-400">
-                    ({((data?.caixas.ativos || 0) / (data?.caixas.total || 1) * 100).toFixed(0)}%)
-                  </span>
-                </div>
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full bg-amber-500" />
-                  <span className="text-sm text-gray-600">Aguardando</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="font-semibold">{data?.caixas.aguardando}</span>
-                  <span className="text-xs text-gray-400">
-                    ({((data?.caixas.aguardando || 0) / (data?.caixas.total || 1) * 100).toFixed(0)}%)
-                  </span>
-                </div>
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full bg-blue-500" />
-                  <span className="text-sm text-gray-600">Finalizados</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="font-semibold">{data?.caixas.finalizados}</span>
-                  <span className="text-xs text-gray-400">
-                    ({taxaConclusao}%)
-                  </span>
-                </div>
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full bg-red-500" />
-                  <span className="text-sm text-gray-600">Cancelados</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="font-semibold">{data?.caixas.cancelados}</span>
-                  <span className="text-xs text-gray-400">
-                    ({taxaCancelamento}%)
-                  </span>
-                </div>
-              </div>
-            </div>
+      {/* Row 2: Grouped Sections */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
 
-            {/* Visual Progress */}
-            <div className="mt-4 h-3 bg-gray-100 rounded-full overflow-hidden flex">
-              <div
-                className="h-full bg-green-500"
-                style={{ width: `${(data?.caixas.ativos || 0) / (data?.caixas.total || 1) * 100}%` }}
-              />
-              <div
-                className="h-full bg-amber-500"
-                style={{ width: `${(data?.caixas.aguardando || 0) / (data?.caixas.total || 1) * 100}%` }}
-              />
-              <div
-                className="h-full bg-blue-500"
-                style={{ width: `${(data?.caixas.finalizados || 0) / (data?.caixas.total || 1) * 100}%` }}
-              />
-              <div
-                className="h-full bg-red-500"
-                style={{ width: `${(data?.caixas.cancelados || 0) / (data?.caixas.total || 1) * 100}%` }}
-              />
+        {/* Section: Dados Financeiros */}
+        <motion.div variants={itemVariants} className="space-y-4">
+          <Card
+            className="cursor-pointer hover:shadow-md transition-shadow bg-gradient-to-r from-gray-900 to-gray-800 text-white border-none"
+            onClick={() => setShowFinanceiro(!showFinanceiro)}
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="w-10 h-10 bg-white/10 rounded-lg flex items-center justify-center backdrop-blur-sm">
+                  <DollarSign className="w-5 h-5 text-emerald-400" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold">Dados Financeiros</h3>
+                  <p className="text-sm text-gray-300">Clique para visualizar métricas financeiras</p>
+                </div>
+              </div>
+              <div className={cn("transition-transform duration-300", showFinanceiro ? "rotate-180" : "")}>
+                <ArrowDownRight className="w-5 h-5 text-gray-400" />
+              </div>
             </div>
           </Card>
+
+          {showFinanceiro && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              className="grid grid-cols-1 sm:grid-cols-2 gap-4"
+            >
+              {/* Volume Movimentado */}
+              <Card className="bg-white border-l-4 border-l-blue-500">
+                <div className="flex justify-between items-start mb-2">
+                  <p className="text-xs text-gray-500 font-medium uppercase">Volume Movimentado</p>
+                  <InfoTooltip text="Soma de todos os valores de cobranças PAGAS em caixas Ativos ou Concluídos" />
+                </div>
+                <p className="text-xl font-bold text-gray-900">{formatCurrency(data?.caixas.valorTotalMovimentado || 0)}</p>
+              </Card>
+
+              {/* Receita Potencial Bruta */}
+              <Card className="bg-white border-l-4 border-l-amber-500">
+                <div className="flex justify-between items-start mb-2">
+                  <p className="text-xs text-gray-500 font-medium uppercase">Rec. Potencial Bruta</p>
+                  <InfoTooltip text="Total Parcelas x Taxa de Serviço (R$ 10,00)" />
+                </div>
+                <p className="text-xl font-bold text-gray-900">{formatCurrency(data?.resumo.receitaPotencialBruta || 0)}</p>
+              </Card>
+
+              {/* Receita Potencial Líquida */}
+              <Card className="bg-white border-l-4 border-l-amber-600">
+                <div className="flex justify-between items-start mb-2">
+                  <p className="text-xs text-gray-500 font-medium uppercase">Rec. Potencial Líquida</p>
+                  <InfoTooltip text="Receita Bruta - Custo Lytex (R$ 0,59/boleto)" />
+                </div>
+                <p className="text-xl font-bold text-gray-900">{formatCurrency(data?.resumo.receitaPotencialLiquida || 0)}</p>
+              </Card>
+
+              {/* Receita Efetiva */}
+              <Card className="bg-white border-l-4 border-l-emerald-500">
+                <div className="flex justify-between items-start mb-2">
+                  <p className="text-xs text-gray-500 font-medium uppercase">Receita Efetiva</p>
+                  <InfoTooltip text="Rec. Líquida + Rec. Adm - Custos Subconta" />
+                </div>
+                <p className="text-xl font-bold text-emerald-600">{formatCurrency(data?.resumo.receitaEfetiva || 0)}</p>
+              </Card>
+
+              {/* Receita Adm */}
+              <Card className="bg-white border-l-4 border-l-cyan-500 col-span-1 sm:col-span-2">
+                <div className="flex justify-between items-start mb-2">
+                  <p className="text-xs text-gray-500 font-medium uppercase">Receita Adm (Pagantes)</p>
+                  <InfoTooltip text="Receita de adesão de admins não isentos" />
+                </div>
+                <div className="flex justify-between items-end">
+                  <div>
+                    <p className="text-xs text-gray-400">Bruta</p>
+                    <p className="text-lg font-bold text-gray-900">{formatCurrency(data?.resumo.receitaBrutaAdmins || 0)}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-gray-400">Líquida (-Lytex)</p>
+                    <p className="text-lg font-bold text-cyan-600">{formatCurrency(data?.resumo.receitaLiquidaAdmins || 0)}</p>
+                  </div>
+                </div>
+              </Card>
+
+              {/* Custos Lytex */}
+              <Card className="bg-white border-l-4 border-l-pink-500 col-span-1 sm:col-span-2">
+                <div className="flex justify-between items-start mb-2">
+                  <p className="text-xs text-gray-500 font-medium uppercase">Custos Subcontas Lytex</p>
+                  <InfoTooltip text="Criação (R$10) e Manutenção (R$2/mês)" />
+                </div>
+                <div className="flex justify-between text-sm mb-1">
+                  <span className="text-gray-500">Criação</span>
+                  <span className="font-medium">{formatCurrency(data?.resumo.custosLytexCriacaoSubconta || 0)}</span>
+                </div>
+                <div className="flex justify-between text-sm border-b border-gray-100 pb-1 mb-1">
+                  <span className="text-gray-500">Manutenção</span>
+                  <span className="font-medium">{formatCurrency(data?.resumo.custosLytexManutencao || 0)}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="font-bold text-pink-700">Total</span>
+                  <span className="font-bold text-pink-700">{formatCurrency(data?.resumo.totalCustosLytexSubcontas || 0)}</span>
+                </div>
+              </Card>
+            </motion.div>
+          )}
         </motion.div>
 
-        {/* Tipos de Usuários */}
-        <motion.div variants={itemVariants}>
-          <Card>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-gray-900">Tipos de Usuários</h3>
-              <Users className="w-5 h-5 text-gray-400" />
-            </div>
-            <div className="space-y-4">
-              <div>
-                <div className="flex justify-between text-sm mb-1">
-                  <span className="text-gray-600">Participantes</span>
-                  <span className="font-semibold">{data?.usuarios.usuarios}</span>
+        {/* Section: Gestão de Caixas */}
+        <motion.div variants={itemVariants} className="space-y-4">
+          <Card
+            className="cursor-pointer hover:shadow-md transition-shadow bg-white border-l-4 border-violet-500"
+            onClick={() => setShowGestao(!showGestao)}
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="w-10 h-10 bg-violet-100 rounded-lg flex items-center justify-center">
+                  <BarChart3 className="w-5 h-5 text-violet-600" />
                 </div>
-                <ProgressBar
-                  value={data?.usuarios.usuarios || 0}
-                  max={data?.usuarios.total || 1}
-                  color="primary"
-                  size="sm"
-                />
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900">Gestão de Caixas</h3>
+                  <p className="text-sm text-gray-500">Administração e configurações</p>
+                </div>
               </div>
-              <div>
-                <div className="flex justify-between text-sm mb-1">
-                  <span className="text-gray-600">Administradores</span>
-                  <span className="font-semibold">{data?.usuarios.administradores}</span>
-                </div>
-                <ProgressBar
-                  value={data?.usuarios.administradores || 0}
-                  max={data?.usuarios.total || 1}
-                  color="success"
-                  size="sm"
-                />
-              </div>
-              <div>
-                <div className="flex justify-between text-sm mb-1">
-                  <span className="text-gray-600">Masters</span>
-                  <span className="font-semibold">{data?.usuarios.masters}</span>
-                </div>
-                <ProgressBar
-                  value={data?.usuarios.masters || 0}
-                  max={data?.usuarios.total || 1}
-                  color="warning"
-                  size="sm"
-                />
+              <div className={cn("transition-transform duration-300", showGestao ? "rotate-180" : "")}>
+                <ArrowDownRight className="w-5 h-5 text-gray-400" />
               </div>
             </div>
           </Card>
-        </motion.div>
 
-        {/* Fundo Garantidor */}
-        <motion.div variants={itemVariants}>
-          <Card className="bg-gradient-to-br from-emerald-50 to-emerald-100/30 border-emerald-200/50">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-gray-900">Fundo Garantidor</h3>
-              <Shield className="w-5 h-5 text-emerald-500" />
-            </div>
-            <div className="space-y-3">
-              <div className="p-3 bg-white/60 rounded-xl">
-                <p className="text-xs text-gray-500 mb-1">Saldo Disponível</p>
-                <p className="text-2xl font-bold text-emerald-600">
-                  {formatCurrency(data?.fundoGarantidor.saldoGeral || 0)}
-                </p>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="p-2 bg-white/40 rounded-lg">
-                  <p className="text-xs text-gray-500">Entradas</p>
-                  <p className="font-semibold text-green-600">
-                    {formatCurrency(data?.fundoGarantidor.totalEntradas || 0)}
-                  </p>
-                </div>
-                <div className="p-2 bg-white/40 rounded-lg">
-                  <p className="text-xs text-gray-500">Saídas</p>
-                  <p className="font-semibold text-red-600">
-                    {formatCurrency(data?.fundoGarantidor.totalSaidas || 0)}
-                  </p>
-                </div>
-              </div>
-              <div className="p-2 bg-white/40 rounded-lg">
-                <p className="text-xs text-gray-500">Lucro (Fundos não utilizados)</p>
-                <p className="font-semibold text-emerald-600">
-                  {formatCurrency(data?.fundoGarantidor.totalLucros || 0)}
-                </p>
-              </div>
-            </div>
-          </Card>
+          {showGestao && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              className="grid grid-cols-2 gap-3"
+            >
+              {/* Configurar Split */}
+              <Button
+                variant="outline"
+                className="h-auto py-3 flex flex-col items-center gap-2 hover:bg-violet-50 hover:border-violet-200 hover:text-violet-700 transition-colors"
+                onClick={() => (window.location.href = '/painel-master/split')}
+              >
+                <PieChart className="w-5 h-5" />
+                <span className="text-xs font-semibold">Configurar Split</span>
+              </Button>
+
+              {/* Gerenciar Split */}
+              <Button
+                variant="outline"
+                className="h-auto py-3 flex flex-col items-center gap-2 hover:bg-violet-50 hover:border-violet-200 hover:text-violet-700 transition-colors"
+                onClick={() => (window.location.href = '/painel-master/split/gerenciar')}
+              >
+                <BarChart3 className="w-5 h-5" />
+                <span className="text-xs font-semibold">Gerenciar Split</span>
+              </Button>
+
+              {/* Gerenciar Comunicação */}
+              <Button
+                variant="outline"
+                className="h-auto py-3 flex flex-col items-center gap-2 hover:bg-violet-50 hover:border-violet-200 hover:text-violet-700 transition-colors"
+                onClick={() => (window.location.href = '/painel-master/comunicacao')}
+              >
+                <MessageSquare className="w-5 h-5" />
+                <span className="text-xs font-semibold">Comunicação</span>
+              </Button>
+
+              {/* Gerenciar Admins */}
+              <Button
+                variant="outline"
+                className="h-auto py-3 flex flex-col items-center gap-2 hover:bg-violet-50 hover:border-violet-200 hover:text-violet-700 transition-colors"
+                onClick={() => (window.location.href = '/painel-master/administradores')}
+              >
+                <UserCheck className="w-5 h-5" />
+                <span className="text-xs font-semibold">Administradores</span>
+              </Button>
+
+              {/* Contemplação */}
+              <Button
+                variant="outline"
+                className="h-auto py-3 flex flex-col items-center gap-2 hover:bg-violet-50 hover:border-violet-200 hover:text-violet-700 transition-colors"
+                onClick={() => (window.location.href = '/painel-master/contemplacao')}
+              >
+                <DollarSign className="w-5 h-5" />
+                <span className="text-xs font-semibold">Contemplação</span>
+              </Button>
+
+              {/* Regras de Comissão */}
+              <Button
+                variant="outline"
+                className="h-auto py-3 flex flex-col items-center gap-2 hover:bg-violet-50 hover:border-violet-200 hover:text-violet-700 transition-colors"
+                onClick={() => (window.location.href = '/painel-master/comissoes')}
+              >
+                <TrendingUp className="w-5 h-5" />
+                <span className="text-xs font-semibold">Comissões</span>
+              </Button>
+            </motion.div>
+          )}
+
         </motion.div>
       </div>
 
