@@ -1609,14 +1609,16 @@ ${link}`;
         )}>
           <div className={cn(
             "-m-4 md:-m-5 mb-4 p-4 md:p-5 text-white",
-            caixaIniciado
+            caixaIniciado && caixa.status !== 'finalizado'
               ? "bg-gradient-to-r from-green-600 to-emerald-600"
-              : "bg-gradient-to-r from-green-500 to-green-600"
+              : caixa.status === 'finalizado'
+                ? "bg-gradient-to-r from-violet-600 to-purple-600"
+                : "bg-gradient-to-r from-green-500 to-green-600"
           )}>
             <div className="flex items-start justify-between w-full mb-1">
               <h1 className="text-xl md:text-2xl font-bold flex-1 mr-2 leading-tight">{caixa.nome}</h1>
               <div className="flex items-center gap-2 flex-shrink-0">
-                {caixaIniciado && (
+                {caixaIniciado && caixa.status !== 'finalizado' && (
                   <Badge className="bg-white text-green-600 border border-green-100 shadow-sm whitespace-nowrap">
                     <Play className="w-3 h-3 mr-1" />
                     Em andamento
@@ -1754,34 +1756,37 @@ ${link}`;
             </div>
           )}
 
-          {/* Botão Iniciar Caixa - quando completo - APENAS ADMIN/MASTER */}
-          {caixaCompleto && !caixaIniciado && (usuario?.tipo === 'master' || caixa?.adminId?._id === usuario?._id) && (
-            <div className="mt-4 p-4 bg-green-50 border-2 border-green-300 rounded-xl">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center">
-                  <Play className="w-6 h-6 text-white" />
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-bold text-green-800">
-                    🎉 Caixa completo! Pronto para iniciar.
-                  </p>
-                  <p className="text-xs text-green-600 mt-0.5">
-                    Todos os {caixa.qtdParticipantes} participantes foram adicionados.
-                  </p>
-                </div>
-                <Button
-                  variant="primary"
-                  onClick={() => setShowIniciarCaixa(true)}
-                  leftIcon={<Play className="w-4 h-4" />}
-                  className="bg-green-600 hover:bg-green-700"
-                >
-                  Iniciar Caixa
-                </Button>
+          {/* Banner Iniciar Caixa */}
+          {caixaCompleto && !caixaIniciado && caixa.status !== 'finalizado' && (
+            <Card className="mb-6 bg-gradient-to-r from-green-50 to-emerald-50 border-green-200 shadow-sm relative overflow-hidden">
+              <div className="absolute top-0 right-0 p-4 opacity-10">
+                <Play className="w-32 h-32 text-green-600" />
               </div>
-            </div>
-          )}
+              <div className="p-4 sm:p-6 flex flex-col sm:flex-row items-center justify-between gap-4 relative z-10">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center shrink-0 shadow-sm">
+                    <Play className="w-6 h-6 text-green-600 ml-1" />
+                  </div>
+                  <div className="text-center sm:text-left">
+                    <h3 className="font-bold text-green-900 text-lg">Caixa completo! Pronto para iniciar.</h3>
+                    <p className="text-green-700 text-sm">Todos os {caixa.qtdParticipantes} participantes foram adicionados.</p>
+                  </div>
+                </div>
 
-          {/* Convite */}
+                {(usuario?.tipo === 'master' || usuario?._id === caixa.adminId?._id) && (
+                  <Button
+                    onClick={() => setShowIniciarCaixa(true)}
+                    className="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white shadow-md hover:shadow-lg transition-all transform hover:-translate-y-0.5"
+                    // isLoading={loadingIniciar} // Assuming loadingIniciar is defined elsewhere if needed
+                    size="lg"
+                    leftIcon={<Play className="w-5 h-5" />}
+                  >
+                    Iniciar Caixa
+                  </Button>
+                )}
+              </div>
+            </Card>
+          )}    {/* Convite */}
           <div className="mt-4 p-3 bg-gray-50 rounded-xl flex items-center justify-between">
             <div>
               <p className="text-xs text-gray-500 mb-0.5">Código de Convite</p>
@@ -2232,7 +2237,7 @@ ${link}`;
                     size="sm"
                     leftIcon={<Shuffle className="w-4 h-4" />}
                     onClick={handleSortear}
-                    disabled={!caixaCompleto || caixaIniciado}
+                    disabled={!caixaCompleto || caixaIniciado || caixa.status === 'finalizado'}
                   >
                     Sortear Posições
                   </Button>
@@ -2241,7 +2246,7 @@ ${link}`;
                     size="sm"
                     leftIcon={<GripVertical className="w-4 h-4" />}
                     onClick={() => isReordering ? saveOrder() : setIsReordering(true)}
-                    disabled={!caixaCompleto || caixaIniciado}
+                    disabled={!caixaCompleto || caixaIniciado || caixa.status === 'finalizado'}
                   >
                     {isReordering ? 'Salvar Ordem' : 'Reordenar'}
                   </Button>

@@ -435,7 +435,26 @@ export function DetalhesPagamento({
       vDate.setHours(12, 0, 0, 0)
       vDate.setHours(0, 0, 0, 0) // Zerar para comparação
 
+      // SE finalizado, e backend diz que tá pago (cobranca status), é pago.
+      // Se não tem cobrança, mas caixa tá finalizado, teoricamente deveria estar pago, 
+      // MAS vamos confiar primeiro na cobrança. Se não houver info, assumimos pago se caixa finalizado? 
+      // O user pediu: "os status de todos os participantes... deve ser PAGO... pois o caixa foi concluido"
+      // Então se caixa.status === 'finalizado', forçamos 'pago' VISUALMENTE?
+      // Melhor: se finalizado, e não tem status explícito de erro, mostra pago.
+
       const isAtrasado = caixa.status === 'ativo' && !isPago && vDate < today
+
+      let statusFinal: 'pago' | 'pendente' | 'atrasado' = 'pendente'
+
+      if (caixa.status === 'finalizado') {
+        statusFinal = 'pago'
+      } else if (caixa.status !== 'ativo') {
+        statusFinal = 'pendente'
+      } else {
+        if (isPago) statusFinal = 'pago'
+        else if (isAtrasado) statusFinal = 'atrasado'
+        else statusFinal = 'pendente'
+      }
 
       resultado.push({
         mes: parcela,
@@ -447,7 +466,7 @@ export function DetalhesPagamento({
         correcaoIPCA,
         valorTotal,
         dataVencimento: dataVencimento.toISOString(),
-        status: caixa.status !== 'ativo' ? 'pendente' : (isPago ? 'pago' : isAtrasado ? 'atrasado' : 'pendente'),
+        status: statusFinal,
       })
     }
     return resultado
