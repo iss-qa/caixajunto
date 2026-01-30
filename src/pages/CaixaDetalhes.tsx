@@ -1554,7 +1554,8 @@ ${link}`;
         {/* Ações do Caixa */}
         <div className="flex gap-2">
           {/* Botões de Editar e Excluir - APENAS ADMIN/MASTER */}
-          {(usuario?.tipo === 'master' || usuario?.tipo === 'administrador') && (
+          {/* Botões de Editar e Excluir - APENAS ADMIN/MASTER e se NÃO FINALIZADO */}
+          {(usuario?.tipo === 'master' || usuario?.tipo === 'administrador') && caixa.status !== 'finalizado' && (
             <>
               <Button
                 variant="ghost"
@@ -1813,37 +1814,38 @@ ${link}`;
             <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-xl">
               <div>
                 <h3 className="font-bold text-gray-900 mb-4">Resumo de Pagamentos</h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-xs text-blue-600 font-medium whitespace-nowrap">Tipo de Caixa</p>
-                    <p className="text-sm font-bold text-blue-700 capitalize">
-                      {caixa.tipo || 'Mensal'}
-                    </p>
+
+                {(!caixaIniciado && caixa.status !== 'finalizado') ? (
+                  <div className="text-center py-8 text-gray-400 bg-gray-50/50 rounded-xl border border-gray-100 mb-6">
+                    <Clock className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                    <p className="text-sm">Os pagamentos serão exibidos após o caixa ser iniciado</p>
                   </div>
-                  <div>
-                    <p className="text-xs text-blue-600 font-medium whitespace-nowrap">Valor da Parcela</p>
-                    <p className="text-sm font-bold text-blue-700">
-                      {formatCurrency(caixa.valorParcela || (caixa.valorTotal / caixa.qtdParticipantes))}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-blue-600 font-medium whitespace-nowrap">Qtd Participantes</p>
-                    <p className="text-sm font-bold text-blue-700">
-                      {caixa.qtdParticipantes}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-blue-600 font-medium whitespace-nowrap">Qtd de Parcelas</p>
-                    <p className="text-sm font-bold text-blue-700">
-                      {caixa.duracaoMeses}
-                    </p>
-                  </div>
-                </div>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+                      <div className="col-span-1">
+                        <p className="text-xs text-blue-600 font-medium mb-1">Tipo de Caixa</p>
+                        <p className="font-bold text-blue-900 capitalize">{caixa.tipo || 'Mensal'}</p>
+                      </div>
+                      <div className="col-span-1">
+                        <p className="text-xs text-blue-600 font-medium mb-1">Valor da Parcela</p>
+                        <p className="font-bold text-blue-900">{formatCurrency(caixa.valorParcela)}</p>
+                      </div>
+                      <div className="col-span-1">
+                        <p className="text-xs text-blue-600 font-medium mb-1">Qtd Participantes</p>
+                        <p className="font-bold text-blue-900">{caixa.qtdParticipantes}</p>
+                      </div>
+                      <div className="col-span-1">
+                        <p className="text-xs text-blue-600 font-medium mb-1">Qtd de Parcelas</p>
+                        <p className="font-bold text-blue-900">{caixa.qtdParticipantes}</p>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
-              {caixaIniciado ? (
+
+              {(caixaIniciado || caixa.status === 'finalizado') && (
                 <div>
-
-
                   <div className="flex gap-3 overflow-x-auto pb-4 pt-1 px-1 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent snap-x snap-mandatory">
                     {Array.from({ length: caixa.duracaoMeses }).map((_, idx) => {
                       const mes = idx + 1;
@@ -1896,11 +1898,6 @@ ${link}`;
                       );
                     })}
                   </div>
-                </div>
-              ) : (
-                <div className="text-center py-2">
-                  <Clock className="w-6 h-6 text-gray-300 mx-auto mb-1" />
-                  <p className="text-sm text-gray-500">Os pagamentos serão exibidos após o caixa ser iniciado</p>
                 </div>
               )}
             </div>
