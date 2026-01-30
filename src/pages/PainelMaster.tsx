@@ -274,7 +274,7 @@ export function PainelMaster() {
               <p className="text-sm text-gray-500 font-medium">Caixas Concluídos</p>
               <div className="flex items-baseline gap-2">
                 <p className="text-2xl font-bold text-gray-900">{data?.caixas.finalizados}</p>
-                <Badge variant="neutral" size="sm" className="bg-gray-100 text-gray-600">{taxaConclusao}%</Badge>
+                <Badge variant="gray" size="sm" className="bg-gray-100 text-gray-600">{taxaConclusao}%</Badge>
               </div>
             </div>
           </div>
@@ -419,7 +419,7 @@ export function PainelMaster() {
             >
               {/* Configurar Split */}
               <Button
-                variant="outline"
+                variant="secondary"
                 className="h-auto py-3 flex flex-col items-center gap-2 hover:bg-violet-50 hover:border-violet-200 hover:text-violet-700 transition-colors"
                 onClick={() => (window.location.href = '/painel-master/split')}
               >
@@ -429,7 +429,7 @@ export function PainelMaster() {
 
               {/* Gerenciar Split */}
               <Button
-                variant="outline"
+                variant="secondary"
                 className="h-auto py-3 flex flex-col items-center gap-2 hover:bg-violet-50 hover:border-violet-200 hover:text-violet-700 transition-colors"
                 onClick={() => (window.location.href = '/painel-master/split/gerenciar')}
               >
@@ -439,7 +439,7 @@ export function PainelMaster() {
 
               {/* Gerenciar Comunicação */}
               <Button
-                variant="outline"
+                variant="secondary"
                 className="h-auto py-3 flex flex-col items-center gap-2 hover:bg-violet-50 hover:border-violet-200 hover:text-violet-700 transition-colors"
                 onClick={() => (window.location.href = '/painel-master/comunicacao')}
               >
@@ -449,7 +449,7 @@ export function PainelMaster() {
 
               {/* Gerenciar Admins */}
               <Button
-                variant="outline"
+                variant="secondary"
                 className="h-auto py-3 flex flex-col items-center gap-2 hover:bg-violet-50 hover:border-violet-200 hover:text-violet-700 transition-colors"
                 onClick={() => (window.location.href = '/painel-master/administradores')}
               >
@@ -459,7 +459,7 @@ export function PainelMaster() {
 
               {/* Contemplação */}
               <Button
-                variant="outline"
+                variant="secondary"
                 className="h-auto py-3 flex flex-col items-center gap-2 hover:bg-violet-50 hover:border-violet-200 hover:text-violet-700 transition-colors"
                 onClick={() => (window.location.href = '/painel-master/contemplacao')}
               >
@@ -469,7 +469,7 @@ export function PainelMaster() {
 
               {/* Regras de Comissão */}
               <Button
-                variant="outline"
+                variant="secondary"
                 className="h-auto py-3 flex flex-col items-center gap-2 hover:bg-violet-50 hover:border-violet-200 hover:text-violet-700 transition-colors"
                 onClick={() => (window.location.href = '/painel-master/comissoes')}
               >
