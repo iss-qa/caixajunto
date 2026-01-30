@@ -63,10 +63,27 @@ interface MasterDashboardData {
     totalUsuarios: number;
     totalCaixasAtivos: number;
     valorTotalMovimentado: number;
-    receitaPotencial: number;
+    receitaPotencialBruta: number;
+    receitaPotencialLiquida: number;
+    receitaBrutaAdmins: number;
+    receitaLiquidaAdmins: number;
+    custosLytexCriacaoSubconta: number;
+    custosLytexManutencao: number;
+    totalCustosLytexSubcontas: number;
     receitaEfetiva: number;
   };
 }
+
+// Helper para Tooltip
+const InfoTooltip = ({ text }: { text: string }) => (
+  <div className="group relative ml-2 inline-flex">
+    <div className="cursor-help rounded-full bg-gray-200 px-1.5 text-[10px] text-gray-600 font-bold">?</div>
+    <div className="absolute bottom-full left-1/2 mb-2 w-48 -translate-x-1/2 hidden rounded bg-gray-800 p-2 text-xs text-white shadow-lg group-hover:block z-10">
+      {text}
+      <div className="absolute top-full left-1/2 -mt-1 h-2 w-2 -translate-x-1/2 rotate-45 bg-gray-800"></div>
+    </div>
+  </div>
+);
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -132,7 +149,13 @@ export function PainelMaster() {
           totalUsuarios: 1250,
           totalCaixasAtivos: 89,
           valorTotalMovimentado: 892500,
-          receitaPotencial: 66600,
+          receitaPotencialBruta: 66600, // Updated from receitaPotencial
+          receitaPotencialLiquida: 60000, // New mock
+          receitaBrutaAdmins: 8500, // New mock
+          receitaLiquidaAdmins: 8000, // New mock
+          custosLytexCriacaoSubconta: 1500, // New mock
+          custosLytexManutencao: 500, // New mock
+          totalCustosLytexSubcontas: 2000, // New mock
           receitaEfetiva: 45000,
         },
       });
@@ -272,7 +295,7 @@ export function PainelMaster() {
           <p className="text-xs text-gray-500 mt-1">Volume Movimentado</p>
         </Card>
 
-        {/* Receita Potencial */}
+        {/* Receita Potencial Bruta */}
         <Card className="bg-gradient-to-br from-amber-50 to-amber-100/50 border-amber-200/50">
           <div className="flex items-center justify-between mb-2">
             <div className="w-10 h-10 bg-amber-500 rounded-xl flex items-center justify-center">
@@ -284,22 +307,88 @@ export function PainelMaster() {
             </div>
           </div>
           <p className="text-2xl md:text-3xl font-bold text-gray-900">
-            {formatCurrency(data?.resumo.receitaPotencial || 0)}
+            {formatCurrency(data?.resumo.receitaPotencialBruta || 0)}
           </p>
-          <p className="text-xs text-gray-500 mt-1">Receita Potencial</p>
+          <div className="flex items-center mt-1">
+            <p className="text-xs text-gray-500">Receita Potencial Bruta</p>
+            <InfoTooltip text="Total Parcelas x Taxa de Serviço (R$ 10,00)" />
+          </div>
         </Card>
 
-        {/* Receita Efetiva (NOVO) */}
+        {/* Receita Potencial Líquida */}
+        <Card className="bg-gradient-to-br from-amber-50 to-amber-100/50 border-amber-200/50">
+          <div className="flex items-center justify-between mb-2">
+            <div className="w-10 h-10 bg-amber-600 rounded-xl flex items-center justify-center">
+              <TrendingUp className="w-5 h-5 text-white" />
+            </div>
+          </div>
+          <p className="text-2xl md:text-3xl font-bold text-gray-900">
+            {formatCurrency(data?.resumo.receitaPotencialLiquida || 0)}
+          </p>
+          <div className="flex items-center mt-1">
+            <p className="text-xs text-gray-500">Receita Potencial Líquida</p>
+            <InfoTooltip text="Receita Bruta - Custo Lytex (R$ 0,59 por boleto)" />
+          </div>
+        </Card>
+
+        {/* Receita Efetiva */}
         <Card className="bg-gradient-to-br from-emerald-50 to-emerald-100/50 border-emerald-200/50">
           <div className="flex items-center justify-between mb-2">
             <div className="w-10 h-10 bg-emerald-500 rounded-xl flex items-center justify-center">
               <DollarSign className="w-5 h-5 text-white" />
             </div>
           </div>
-          <p className="text-2xl md:text-3xl font-bold text-gray-900">
+          <p className="text-2xl md:text-3xl font-bold text-center text-gray-900">
             {formatCurrency(data?.resumo.receitaEfetiva || 0)}
           </p>
-          <p className="text-xs text-gray-500 mt-1">Receita Efetiva</p>
+          <div className="flex items-center justify-center mt-1">
+            <p className="text-xs text-gray-500">Receita Efetiva (Projetada)</p>
+            <InfoTooltip text="Receita Líquida Juntix + Receita Adm - Custos Subconta" />
+          </div>
+        </Card>
+
+        {/* Receita Admins (Bruta & Liquida) */}
+        <Card className="bg-gradient-to-br from-cyan-50 to-cyan-100/50 border-cyan-200/50">
+          <div className="flex items-center justify-between mb-2">
+            <div className="w-8 h-8 bg-cyan-500 rounded-lg flex items-center justify-center">
+              <Users className="w-4 h-4 text-white" />
+            </div>
+            <InfoTooltip text="Taxa Adesão R$ 100,00 por Admin" />
+          </div>
+          <div className="space-y-2">
+            <div>
+              <p className="text-lg font-bold text-gray-900">{formatCurrency(data?.resumo.receitaBrutaAdmins || 0)}</p>
+              <p className="text-[10px] text-gray-500">Receita Bruta Adm</p>
+            </div>
+            <div className="pt-1 border-t border-cyan-200">
+              <p className="text-lg font-bold text-cyan-700">{formatCurrency(data?.resumo.receitaLiquidaAdmins || 0)}</p>
+              <p className="text-[10px] text-cyan-600">Receita Líquida Adm (-Lytex 0.59)</p>
+            </div>
+          </div>
+        </Card>
+
+        {/* Custos Lytex */}
+        <Card className="bg-gradient-to-br from-pink-50 to-pink-100/50 border-pink-200/50">
+          <div className="flex items-center justify-between mb-2">
+            <div className="w-8 h-8 bg-pink-500 rounded-lg flex items-center justify-center">
+              <Activity className="w-4 h-4 text-white" />
+            </div>
+            <InfoTooltip text="Custos Operacionais Lytex" />
+          </div>
+          <div className="space-y-1">
+            <div className="flex justify-between">
+              <span className="text-[10px] text-gray-500">Criação Subcontas</span>
+              <span className="text-xs font-bold text-pink-700">{formatCurrency(data?.resumo.custosLytexCriacaoSubconta || 0)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-[10px] text-gray-500">Manutenção Mensal</span>
+              <span className="text-xs font-bold text-pink-700">{formatCurrency(data?.resumo.custosLytexManutencao || 0)}</span>
+            </div>
+            <div className="pt-1 mt-1 border-t border-pink-200 flex justify-between">
+              <span className="text-[10px] font-bold text-gray-700">Total Custos</span>
+              <span className="text-xs font-bold text-pink-900">{formatCurrency(data?.resumo.totalCustosLytexSubcontas || 0)}</span>
+            </div>
+          </div>
         </Card>
 
         {/* Split de Pagamentos */}

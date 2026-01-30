@@ -499,7 +499,7 @@ export function Caixas() {
                       </span>
                     </div>
                   )}
-                  {isCompleto && caixa.status !== 'ativo' && (
+                  {isCompleto && caixa.status === 'aguardando' && (
                     <div className="flex items-center gap-2 p-2 bg-green-100 rounded-lg mb-3 -mt-1">
                       <CheckCircle2 className="w-4 h-4 text-green-600" />
                       <span className="text-xs font-semibold text-green-700">Completo! Pronto para iniciar</span>
@@ -514,7 +514,7 @@ export function Caixas() {
                   {caixa.status === 'finalizado' && (
                     <div className="flex items-center gap-2 p-2 bg-violet-500 rounded-lg mb-3 -mt-1">
                       <CheckCircle2 className="w-4 h-4 text-white" />
-                      <span className="text-xs font-semibold text-white">Concluído</span>
+                      <span className="text-xs font-semibold text-white">Caixa Finalizado com Sucesso!</span>
                     </div>
                   )}
 
@@ -627,7 +627,6 @@ export function Caixas() {
                           {pendentes} pendentes
                         </span>
                       </div>
-                    ) : (semParticipantes || isIncompleto) && usuario?.tipo !== 'usuario' ? (
                       <span
                         className={cn(
                           "inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-lg",
@@ -636,6 +635,10 @@ export function Caixas() {
                       >
                         <UserPlus className="w-3 h-3" />
                         Clique para adicionar
+                      </span>
+                    ) : caixa.status === 'finalizado' ? (
+                      <span className="text-sm text-gray-500">
+                        Clique para visualizar detalhes
                       </span>
                     ) : (
                       <span className="text-sm text-gray-500">
