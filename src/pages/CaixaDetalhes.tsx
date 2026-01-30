@@ -1622,6 +1622,12 @@ ${link}`;
                     Em andamento
                   </Badge>
                 )}
+                {caixa?.status === 'finalizado' && (
+                  <Badge className="bg-white text-violet-600 border border-violet-100 shadow-sm whitespace-nowrap">
+                    <CheckCircle2 className="w-3 h-3 mr-1" />
+                    Concluído
+                  </Badge>
+                )}
                 {caixa?.status === 'pausado' && (
                   <Badge variant="warning" className="bg-white text-amber-600 border border-amber-100 shadow-sm whitespace-nowrap">
                     Pausado

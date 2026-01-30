@@ -479,7 +479,8 @@ export function Caixas() {
                     'min-h-[240px] h-full',
                     semParticipantes && 'ring-2 ring-red-300 bg-gradient-to-br from-red-50 to-white',
                     isIncompleto && 'ring-2 ring-amber-300 bg-gradient-to-br from-amber-50 to-white',
-                    !semParticipantes && !isIncompleto && caixa.status === 'ativo' && 'ring-2 ring-green-300 bg-gradient-to-br from-green-50 to-white'
+                    !semParticipantes && !isIncompleto && caixa.status === 'ativo' && 'ring-2 ring-green-300 bg-gradient-to-br from-green-50 to-white',
+                    caixa.status === 'finalizado' && 'ring-2 ring-violet-300 bg-gradient-to-br from-violet-50 to-white'
                   )}
                   data-testid={`caixa-card-${caixa._id}`}
                 >
@@ -508,6 +509,12 @@ export function Caixas() {
                     <div className="flex items-center gap-2 p-2 bg-green-500 rounded-lg mb-3 -mt-1">
                       <Play className="w-4 h-4 text-white" />
                       <span className="text-xs font-semibold text-white">Em andamento</span>
+                    </div>
+                  )}
+                  {caixa.status === 'finalizado' && (
+                    <div className="flex items-center gap-2 p-2 bg-violet-500 rounded-lg mb-3 -mt-1">
+                      <CheckCircle2 className="w-4 h-4 text-white" />
+                      <span className="text-xs font-semibold text-white">Concluído</span>
                     </div>
                   )}
 
