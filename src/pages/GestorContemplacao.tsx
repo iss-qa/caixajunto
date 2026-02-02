@@ -265,6 +265,10 @@ export function GestorContemplacao() {
     const [modalAdminVisible, setModalAdminVisible] = useState(false);
     const [admins, setAdmins] = useState<any[]>([]);
     const [selectedAdmin, setSelectedAdmin] = useState('');
+    const [comissaoInfo, setComissaoInfo] = useState<{
+        valorComissao: number;
+        percentual: number;
+    } | null>(null);
 
     useEffect(() => {
         loadAdmins();
@@ -279,7 +283,29 @@ export function GestorContemplacao() {
         }
     };
 
-    const handleContemplacaoAdmin = async () => {
+    const handleAbrirModalAdmin = async () => {
+        if (!selectedCaixa) return;
+        try {
+            setActionLoading(true);
+            // Pré-calcular comissão usando taxaAdministrativa do caixa ou padrão 5%
+            const taxaComissao = selectedCaixa.taxaAdministrativa || 0.05;
+            setComissaoInfo({
+                valorComissao: Math.round((selectedCaixa.valorTotal || 0) * taxaComissao),
+                percentual: taxaComissao * 100,
+            });
+            setModalAdminVisible(true);
+        } catch (error) {
+            console.error('Erro ao abrir modal:', error);
+            // Abre modal mesmo se falhar
+            setComissaoInfo({
+                valorComissao: Math.round((selectedCaixa.valorTotal || 0) * 0.05),
+                percentual: 5,
+            });
+            setModalAdminVisible(true);
+        } finally {
+            setActionLoading(false);
+        }
+    }; const handleContemplacaoAdmin = async () => {
         if (!selectedAdmin || !selectedCaixa) return;
         try {
             setActionLoading(true);
@@ -461,7 +487,7 @@ export function GestorContemplacao() {
                         <CheckCircle2 className="w-4 h-4 mr-2" />
                         Contemplação Manual
                     </Button>
-                    <Button onClick={() => setModalAdminVisible(true)} className="bg-purple-600 hover:bg-purple-700 text-sm">
+                    <Button onClick={handleAbrirModalAdmin} className="bg-purple-600 hover:bg-purple-700 text-sm">
                         <Users className="w-4 h-4 mr-2" />
                         Gerar Cont. Admin
                     </Button>
@@ -765,6 +791,16 @@ export function GestorContemplacao() {
                                 <p className="text-sm text-gray-500 mt-1">
                                     Valor do caixa: {formatCurrency(selectedCaixa.valorTotal || 0)}
                                 </p>
+                                {comissaoInfo && (
+                                    <div className="border-t border-gray-200 mt-3 pt-3">
+                                        <p className="text-sm font-medium text-purple-600">
+                                            Comissão: {formatCurrency(comissaoInfo.valorComissao)}
+                                        </p>
+                                        <p className="text-xs text-gray-500">
+                                            Percentual: {comissaoInfo.percentual.toFixed(2)}%
+                                        </p>
+                                    </div>
+                                )}
                             </div>
 
                             <div className="flex gap-3">
@@ -785,7 +821,7 @@ export function GestorContemplacao() {
                                     disabled={!selectedAdmin || actionLoading}
                                     isLoading={actionLoading}
                                 >
-                                    Gerar Contemplação
+                                    Solicitar Contemplação
                                 </Button>
                             </div>
                         </div>
