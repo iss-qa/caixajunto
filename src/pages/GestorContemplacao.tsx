@@ -10,8 +10,11 @@ import {
     ArrowRight,
     Filter,
     Download,
+    Users,
+    Wallet,
+    RefreshCw,
 } from 'lucide-react';
-import { recebimentosService, caixasService, participantesService } from '../lib/api';
+import { recebimentosService, caixasService, participantesService, usuariosService, fundoGarantidorService } from '../lib/api';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
@@ -258,6 +261,122 @@ export function GestorContemplacao() {
         }
     };
 
+    // === FUNCIONALIDADE 1: Contemplação Manual de Administradores ===
+    const [modalAdminVisible, setModalAdminVisible] = useState(false);
+    const [admins, setAdmins] = useState<any[]>([]);
+    const [selectedAdmin, setSelectedAdmin] = useState('');
+
+    useEffect(() => {
+        loadAdmins();
+    }, []);
+
+    const loadAdmins = async () => {
+        try {
+            const data = await usuariosService.getAdministradores();
+            setAdmins(data);
+        } catch (error) {
+            console.error('Erro ao carregar administradores:', error);
+        }
+    };
+
+    const handleContemplacaoAdmin = async () => {
+        if (!selectedAdmin || !selectedCaixa) return;
+        try {
+            setActionLoading(true);
+            const response = await recebimentosService.contemplarAdminManual(selectedAdmin, selectedCaixa._id);
+
+            if (response.success) {
+                alert(`✅ ${response.message}\nTransação ID: ${response.transacaoId}`);
+                setModalAdminVisible(false);
+                setSelectedAdmin('');
+                await loadData();
+            } else {
+                alert(`❌ ${response.message}`);
+            }
+        } catch (error: any) {
+            console.error('Erro ao contemplar admin:', error);
+            alert(`❌ Erro: ${error.response?.data?.message || error.message || 'Erro desconhecido'}`);
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
+    // === FUNCIONALIDADE 2: Saque do Fundo de Reserva ===
+    const [modalSaqueFundoVisible, setModalSaqueFundoVisible] = useState(false);
+    const [fundoConfig, setFundoConfig] = useState({
+        subcontaFundoId: '',
+        bankAccountId: '',
+        clientId: '',
+        clientSecret: '',
+    });
+    const [valorFundoCalculado, setValorFundoCalculado] = useState(0);
+    const [taxaComissao, setTaxaComissao] = useState(0);
+
+    const handleSaqueFundo = async () => {
+        if (!selectedCaixa || !fundoConfig.clientId) {
+            alert('❌ Preencha todos os campos de configuração do fundo');
+            return;
+        }
+        try {
+            setActionLoading(true);
+            const response = await fundoGarantidorService.solicitarSaque({
+                caixaId: selectedCaixa._id,
+                ...fundoConfig,
+            });
+
+            if (response.success) {
+                setValorFundoCalculado(response.valorFundo || 0);
+                setTaxaComissao(response.taxaComissao || 0);
+                alert(`✅ ${response.message}\nValor: R$ ${((response.valorFundo || 0) / 100).toFixed(2)}\nTransação: ${response.transacaoId}`);
+                setModalSaqueFundoVisible(false);
+            } else {
+                alert(`❌ ${response.message}`);
+            }
+        } catch (error: any) {
+            console.error('Erro ao solicitar saque do fundo:', error);
+            alert(`❌ Erro: ${error.response?.data?.message || error.message || 'Erro desconhecido'}`);
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
+    // === FUNCIONALIDADE 3: Reposição do Fundo ===
+    const [modalReposicaoVisible, setModalReposicaoVisible] = useState(false);
+    const [selectedParticipante, setSelectedParticipante] = useState('');
+    const [valorReposicao, setValorReposicao] = useState('');
+    const splitFundoId = import.meta.env.VITE_SPLIT_FUNDO_RESERVA_ID || '';
+
+    const handleReposicaoFundo = async () => {
+        if (!selectedCaixa || !selectedParticipante || !valorReposicao) {
+            alert('❌ Preencha todos os campos');
+            return;
+        }
+        try {
+            setActionLoading(true);
+            const valorCentavos = Math.round(parseFloat(valorReposicao) * 100);
+            const response = await fundoGarantidorService.gerarCobrancaReposicao({
+                caixaId: selectedCaixa._id,
+                participanteId: selectedParticipante,
+                valorReposicao: valorCentavos,
+                splitFundoId,
+            });
+
+            if (response.success) {
+                alert(`✅ ${response.message}`);
+                setModalReposicaoVisible(false);
+                setSelectedParticipante('');
+                setValorReposicao('');
+            } else {
+                alert(`❌ ${response.message}`);
+            }
+        } catch (error: any) {
+            console.error('Erro ao gerar cobrança de reposição:', error);
+            alert(`❌ Erro: ${error.response?.data?.message || error.message || 'Erro desconhecido'}`);
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
     if (loading && !stats && !selectedCaixa) { // Adjusted loading condition for initial caixa selection
         return (
             <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
@@ -330,22 +449,35 @@ export function GestorContemplacao() {
                     </Button>
                     <div>
                         <h1 className="text-2xl font-bold text-gray-900">{selectedCaixa.nome}</h1>
-                        <p className="text-gray-500">Gestão de Contemplados e Saques</p>
+                        <p className="text-gray-500">{selectedCaixa.descricao || 'Gerencie recebimentos e contemplações'}</p>
                     </div>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-col sm:flex-row gap-3">
                     <Button
-                        size="sm"
-                        className="bg-amber-500 hover:bg-amber-600 text-white"
+                        variant="secondary"
                         onClick={() => setFixModalVisible(true)}
+                        className="text-sm"
                     >
-                        🔧 Gerar Contemplação Manual
+                        <CheckCircle2 className="w-4 h-4 mr-2" />
+                        Contemplação Manual
                     </Button>
-                    <Button size="sm" onClick={loadData}>Atualizar</Button>
+                    <Button onClick={() => setModalAdminVisible(true)} className="bg-purple-600 hover:bg-purple-700 text-sm">
+                        <Users className="w-4 h-4 mr-2" />
+                        Gerar Cont. Admin
+                    </Button>
+                    <Button onClick={() => setModalSaqueFundoVisible(true)} className="bg-emerald-600 hover:bg-emerald-700 text-sm">
+                        <Wallet className="w-4 h-4 mr-2" />
+                        Saque Fundo
+                    </Button>
+                    <Button onClick={() => setModalReposicaoVisible(true)} className="bg-blue-600 hover:bg-blue-700 text-sm">
+                        <RefreshCw className="w-4 h-4 mr-2" />
+                        Repor Fundo
+                    </Button>
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+            {/* Grid de Botões de Ações Rápidas */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
                 <Card className="bg-white border-l-4 border-l-blue-500">
                     <div className="flex justify-between items-start">
                         <div>
@@ -466,24 +598,34 @@ export function GestorContemplacao() {
                                     <td className="py-4">
                                         <div className="flex items-center gap-2">
                                             <span className="text-gray-700 font-medium">{item.recebedorId?.nome}</span>
-                                            {!item.participanteId && <Badge variant="info">Admin</Badge>}
+                                            {!item.participanteId && (
+                                                <Badge
+                                                    variant="info"
+                                                    className="bg-blue-100 text-blue-700 border-blue-200"
+                                                >
+                                                    Administrador
+                                                </Badge>
+                                            )}
                                         </div>
                                     </td>
                                     <td className="py-4">
                                         {!item.participanteId ? (
-                                            <Badge variant="warning">Comissão</Badge>
+                                            <span className="text-gray-400 text-xl font-bold">—</span>
                                         ) : (
                                             <span className="text-gray-600">{item.mesReferencia}/{item.caixaId?.duracaoEmMeses || 4}</span>
                                         )}
                                     </td>
                                     <td className="py-4">
                                         <span className="text-gray-600">
-                                            {new Date(item.dataPrevista).toLocaleDateString()}
+                                            {item.dataPagamento
+                                                ? new Date(item.dataPagamento).toLocaleDateString()
+                                                : new Date(item.dataPrevista).toLocaleDateString()
+                                            }
                                         </span>
                                     </td>
                                     <td className="py-4">
                                         <span className="font-semibold text-gray-900">
-                                            {formatCurrency(item.valorTotal)}
+                                            {formatCurrency(item.valorTotal / 100)}
                                         </span>
                                     </td>
                                     <td className="py-4">
@@ -578,6 +720,243 @@ export function GestorContemplacao() {
                                     isLoading={actionLoading}
                                 >
                                     Gerar
+                                </Button>
+                            </div>
+                        </div>
+                    </motion.div>
+                </div>
+            )}
+
+            {/* Modal de Contemplação Manual de Administradores */}
+            {modalAdminVisible && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl"
+                    >
+                        <div className="p-6">
+                            <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mb-4 mx-auto">
+                                <Users className="w-6 h-6 text-purple-600" />
+                            </div>
+                            <h3 className="text-xl font-bold text-center text-gray-900 mb-2">
+                                Contemplar Administrador
+                            </h3>
+                            <p className="text-center text-gray-500 mb-6">
+                                Gera saque direto de comissão para um administrador sobre este caixa.
+                            </p>
+
+                            <select
+                                className="w-full px-4 py-3 border border-gray-200 rounded-xl mb-6 bg-white focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                value={selectedAdmin}
+                                onChange={(e) => setSelectedAdmin(e.target.value)}
+                            >
+                                <option value="">Selecione o administrador...</option>
+                                {admins.map(admin => (
+                                    <option key={admin._id} value={admin._id}>
+                                        {admin.nome} - {admin.email} ({admin.tipo})
+                                    </option>
+                                ))}
+                            </select>
+
+                            <div className="bg-gray-50 p-4 rounded-xl mb-6">
+                                <p className="text-xs text-gray-500 mb-2">Caixa selecionado:</p>
+                                <p className="font-medium text-gray-900">{selectedCaixa.nome}</p>
+                                <p className="text-sm text-gray-500 mt-1">
+                                    Valor do caixa: {formatCurrency(selectedCaixa.valorTotal || 0)}
+                                </p>
+                            </div>
+
+                            <div className="flex gap-3">
+                                <Button
+                                    variant="secondary"
+                                    className="flex-1"
+                                    onClick={() => {
+                                        setModalAdminVisible(false);
+                                        setSelectedAdmin('');
+                                    }}
+                                    disabled={actionLoading}
+                                >
+                                    Cancelar
+                                </Button>
+                                <Button
+                                    className="flex-1 bg-purple-600 hover:bg-purple-700"
+                                    onClick={handleContemplacaoAdmin}
+                                    disabled={!selectedAdmin || actionLoading}
+                                    isLoading={actionLoading}
+                                >
+                                    Gerar Contemplação
+                                </Button>
+                            </div>
+                        </div>
+                    </motion.div>
+                </div>
+            )}
+
+            {/* Modal de Saque do Fundo de Reserva */}
+            {modalSaqueFundoVisible && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="bg-white rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl"
+                    >
+                        <div className="p-6">
+                            <div className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center mb-4 mx-auto">
+                                <Wallet className="w-6 h-6 text-emerald-600" />
+                            </div>
+                            <h3 className="text-xl font-bold text-center text-gray-900 mb-2">
+                                Saque do Fundo de Reserva
+                            </h3>
+                            <p className="text-center text-gray-500 mb-6">
+                                Retira a comissão acumulada do fundo para a subconta configurada.
+                            </p>
+
+                            <div className="space-y-4 mb-6">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Subconta Fundo ID
+                                    </label>
+                                    <input
+                                        type="text"
+                                        className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500"
+                                        placeholder="Subconta ID do fundo"
+                                        value={fundoConfig.subcontaFundoId}
+                                        onChange={(e) => setFundoConfig({ ...fundoConfig, subcontaFundoId: e.target.value })}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Bank Account ID
+                                    </label>
+                                    <input
+                                        type="text"
+                                        className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500"
+                                        placeholder="Bank Account ID"
+                                        value={fundoConfig.bankAccountId}
+                                        onChange={(e) => setFundoConfig({ ...fundoConfig, bankAccountId: e.target.value })}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Client ID
+                                    </label>
+                                    <input
+                                        type="text"
+                                        className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500"
+                                        placeholder="Client ID"
+                                        value={fundoConfig.clientId}
+                                        onChange={(e) => setFundoConfig({ ...fundoConfig, clientId: e.target.value })}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Client Secret
+                                    </label>
+                                    <input
+                                        type="password"
+                                        className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500"
+                                        placeholder="Client Secret"
+                                        value={fundoConfig.clientSecret}
+                                        onChange={(e) => setFundoConfig({ ...fundoConfig, clientSecret: e.target.value })}
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="flex gap-3">
+                                <Button
+                                    variant="secondary"
+                                    className="flex-1"
+                                    onClick={() => {
+                                        setModalSaqueFundoVisible(false);
+                                        setFundoConfig({ subcontaFundoId: '', bankAccountId: '', clientId: '', clientSecret: '' });
+                                    }}
+                                    disabled={actionLoading}
+                                >
+                                    Cancelar
+                                </Button>
+                                <Button
+                                    className="flex-1 bg-emerald-600 hover:bg-emerald-700"
+                                    onClick={handleSaqueFundo}
+                                    disabled={actionLoading}
+                                    isLoading={actionLoading}
+                                >
+                                    Solicitar Saque
+                                </Button>
+                            </div>
+                        </div>
+                    </motion.div>
+                </div>
+            )}
+
+            {/* Modal de Reposição do Fundo */}
+            {modalReposicaoVisible && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl"
+                    >
+                        <div className="p-6">
+                            <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mb-4 mx-auto">
+                                <RefreshCw className="w-6 h-6 text-blue-600" />
+                            </div>
+                            <h3 className="text-xl font-bold text-center text-gray-900 mb-2">
+                                Reposição do Fundo
+                            </h3>
+                            <p className="text-center text-gray-500 mb-6">
+                                Gera cobrança para participante repor valor usado do fundo.
+                            </p>
+
+                            <select
+                                className="w-full px-4 py-3 border border-gray-200 rounded-xl mb-4 bg-white focus:ring-2 focus:ring-blue-500"
+                                value={selectedParticipante}
+                                onChange={(e) => setSelectedParticipante(e.target.value)}
+                            >
+                                <option value="">Selecione o participante...</option>
+                                {participantesLista.map(p => (
+                                    <option key={p._id} value={p._id}>
+                                        {p.usuarioId?.nome || p.nome || 'Participante'} - Posição: {p.posicao || 'S/ Pos'}
+                                    </option>
+                                ))}
+                            </select>
+
+                            <div className="mb-6">
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Valor da Reposição (R$)
+                                </label>
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500"
+                                    placeholder="0.00"
+                                    value={valorReposicao}
+                                    onChange={(e) => setValorReposicao(e.target.value)}
+                                />
+                                <p className="text-xs text-gray-500 mt-1">Editável para incluir juros/multa</p>
+                            </div>
+
+                            <div className="flex gap-3">
+                                <Button
+                                    variant="secondary"
+                                    className="flex-1"
+                                    onClick={() => {
+                                        setModalReposicaoVisible(false);
+                                        setSelectedParticipante('');
+                                        setValorReposicao('');
+                                    }}
+                                    disabled={actionLoading}
+                                >
+                                    Cancelar
+                                </Button>
+                                <Button
+                                    className="flex-1 bg-blue-600 hover:bg-blue-700"
+                                    onClick={handleReposicaoFundo}
+                                    disabled={actionLoading}
+                                    isLoading={actionLoading}
+                                >
+                                    Gerar Cobrança
                                 </Button>
                             </div>
                         </div>

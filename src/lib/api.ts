@@ -612,6 +612,14 @@ export const recebimentosService = {
     const response = await api.post(`/recebimentos/${id}/solicitar-saque`);
     return response.data;
   },
+  // Contemplação manual de administradores (Funcionalidade 1)
+  contemplarAdminManual: async (adminId: string, caixaId: string) => {
+    const response = await api.post('/recebimentos/contemplacao-manual-admin', {
+      adminId,
+      caixaId,
+    });
+    return response.data;
+  },
 };
 
 // Regras de Comissão
@@ -622,6 +630,41 @@ export const regrasComissaoService = {
   },
   getInfoTaxaAdmin: async (adminId: string) => {
     const response = await api.get(`/regras-comissao/admin/${adminId}/taxa`);
+    return response.data;
+  },
+};
+
+// Fundo Garantidor (Func. 2 e 3)
+export const fundoGarantidorService = {
+  // Funcionalidade 2: Saque do Fundo de Reserva
+  solicitarSaque: async (params: {
+    caixaId: string;
+    subcontaFundoId: string;
+    bankAccountId: string;
+    clientId: string;
+    clientSecret: string;
+  }) => {
+    const response = await api.post('/fundo-garantidor/solicitar-saque', params);
+    return response.data;
+  },
+  // Funcionalidade 3: Reposição do Fundo de Reserva
+  gerarCobrancaReposicao: async (params: {
+    caixaId: string;
+    participanteId: string;
+    valorReposicao: number;
+    splitFundoId: string;
+  }) => {
+    const response = await api.post('/fundo-garantidor/gerar-cobranca-reposicao', params);
+    return response.data;
+  },
+  // Buscar saldo do fundo por caixa
+  calcularSaldo: async (caixaId: string) => {
+    const response = await api.get(`/fundo-garantidor/caixa/${caixaId}/saldo`);
+    return response.data;
+  },
+  // Listar movimentos do fundo
+  getMovimentos: async (caixaId: string) => {
+    const response = await api.get(`/fundo-garantidor/caixa/${caixaId}`);
     return response.data;
   },
 };
