@@ -385,6 +385,7 @@ export function GerenciarComunicacao() {
                             <option value="alerta_atraso">Alerta de Atraso</option>
                             <option value="cobranca">Cobrança Gerada</option>
                             <option value="contemplacao">Participante Contemplado</option>
+                             <option value="orientacao">Orientação</option>
                             <option value="manual">Manual</option>
                         </select>
                     </div>
