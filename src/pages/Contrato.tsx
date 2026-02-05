@@ -262,30 +262,25 @@ export default function ContratoViewer() {
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-8 px-4">
       <div className="max-w-5xl mx-auto">
         <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
-          <div className="bg-gradient-to-r from-green-600 to-emerald-600 p-8 text-white">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-sm">
-                  <FileText className="w-8 h-8" />
-                </div>
-                <div>
-                  <h1 className="text-3xl font-bold mb-1">Contrato de Adesão ao Juntix</h1>
-                  <p className="text-green-100">Termos e Condições de Uso da Plataforma</p>
-                </div>
+          <div className="bg-gradient-to-r from-green-600 to-emerald-600 p-6 md:p-8 text-white">
+            <div className="flex flex-col md:flex-row items-center justify-between gap-4 text-center md:text-left">
+              <div>
+                <h1 className="text-2xl md:text-3xl font-bold mb-1">Contrato de Adesão ao Juntix</h1>
+                <p className="text-green-100 text-sm md:text-base">Termos e Condições de Uso da Plataforma</p>
               </div>
               <button
                 onClick={handleDownloadPDF}
-                className="flex items-center gap-2 bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg transition-colors backdrop-blur-sm"
+                className="hidden md:flex items-center gap-2 bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg transition-colors backdrop-blur-sm"
               >
                 <Download className="w-5 h-5" />
-                <span className="hidden sm:inline">Baixar PDF</span>
+                <span>Baixar PDF</span>
               </button>
             </div>
           </div>
 
 
-          <div id="contrato-content" className="p-8 space-y-8">
-            <section className="bg-gradient-to-br from-green-50 to-emerald-50 p-6 rounded-xl border border-green-200">
+          <div id="contrato-content" className="p-4 md:p-8 space-y-6 md:space-y-8">
+            <section className="bg-gradient-to-br from-green-50 to-emerald-50 p-4 md:p-6 rounded-xl border border-green-200">
               <h2 className="text-2xl font-bold text-gray-900 mb-4">Preâmbulo</h2>
               <p className="text-gray-700 leading-relaxed">
                 Diante dos abusos praticados por agiotas, das altas taxas de juros cobradas por cartões de crédito, empréstimos bancários e financeiras, somados à elevada carga tributária que onera as operações financeiras tradicionais no Brasil, a <strong>ISS SOFWARE QUALITY SOLUTIONS</strong> desenvolveu o <strong>Juntix</strong>, uma plataforma digital que visa modernizar e trazer segurança ao tradicional sistema de "caixa rotativo".
@@ -304,7 +299,7 @@ export default function ContratoViewer() {
               </h2>
 
               <div className="grid md:grid-cols-2 gap-4">
-                <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-6 rounded-xl border border-blue-200">
+                <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-4 md:p-6 rounded-xl border border-blue-200">
                   <h3 className="font-bold text-lg text-blue-900 mb-3 flex items-center gap-2">
                     <Building2 className="w-5 h-5" />
                     Contratada
@@ -331,7 +326,7 @@ export default function ContratoViewer() {
                   </table>
                 </div>
 
-                <div className="bg-gradient-to-br from-purple-50 to-purple-100 p-6 rounded-xl border border-purple-200">
+                <div className="bg-gradient-to-br from-purple-50 to-purple-100 p-4 md:p-6 rounded-xl border border-purple-200">
                   <h3 className="font-bold text-lg text-purple-900 mb-3 flex items-center gap-2">
                     <User className="w-5 h-5" />
                     Contratante
@@ -561,8 +556,7 @@ export default function ContratoViewer() {
             </section>
 
             <section>
-              <h2 className="text-2xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-                <Shield className="w-6 h-6 text-green-600" />
+              <h2 className="text-1xl font-bold text-gray-900 mb-4 flex items-center gap-2">
                 Papel e Responsabilidades do Administrador
               </h2>
 
@@ -706,16 +700,18 @@ export default function ContratoViewer() {
           </div>
 
           {aceito && (
-            <div className="bg-green-50 border-l-4 border-green-500 p-4 m-6 rounded-r-lg">
-              <div className="flex items-center gap-3">
-                <CheckCircle className="w-6 h-6 text-green-600" />
-                <div className="flex-1">
-                  <p className="font-semibold text-green-900">Contrato Assinado</p>
-                  <p className="text-sm text-green-700">Você aceitou os termos do contrato. Baixe e armazene uma cópia para seus registros.</p>
+            <div className="bg-green-50 border-l-4 border-green-500 p-4 m-4 md:m-6 rounded-r-lg">
+              <div className="flex flex-col md:flex-row items-start md:items-center gap-4">
+                <div className="flex items-start gap-3 flex-1">
+                  <CheckCircle className="w-6 h-6 text-green-600 mt-1 md:mt-0" />
+                  <div>
+                    <p className="font-semibold text-green-900">Contrato Assinado</p>
+                    <p className="text-sm text-green-700">Você aceitou os termos do contrato. Baixe e armazene uma cópia para seus registros.</p>
+                  </div>
                 </div>
                 <button
                   onClick={handleDownloadPDF}
-                  className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors"
+                  className="w-full md:w-auto flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors"
                 >
                   <Download className="w-4 h-4" />
                   <span>Baixar PDF</span>

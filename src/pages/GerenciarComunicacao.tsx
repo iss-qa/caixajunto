@@ -17,6 +17,8 @@ const tipoMensagemLabels: Record<string, string> = {
     cobranca: 'Cobrança',
     caixa_iniciado: 'Caixa Iniciado',
     contemplacao: 'Participante Contemplado',
+    cadastro: 'Cadastro',
+    onboarding: 'Onboarding',
 };
 
 const tipoMensagemColors: Record<string, string> = {
@@ -28,6 +30,8 @@ const tipoMensagemColors: Record<string, string> = {
     cobranca: 'bg-orange-100 text-orange-700',
     caixa_iniciado: 'bg-emerald-100 text-emerald-700',
     contemplacao: 'bg-yellow-100 text-yellow-700',
+    cadastro: 'bg-teal-100 text-teal-700',
+    onboarding: 'bg-indigo-100 text-indigo-700',
 };
 
 export function GerenciarComunicacao() {
@@ -69,6 +73,21 @@ export function GerenciarComunicacao() {
             nome: 'Boas-vindas',
             gatilho: 'Ao Iniciar o Caixa',
             descricao: 'Enviada para todos os participantes quando o administrador inicia o caixa (status muda para Ativo).'
+        },
+        {
+            nome: 'Cadastro via Convite',
+            gatilho: 'Ao Registrar-se com Código',
+            descricao: 'Enviada para o participante imediatamente após o cadastro realizado através de um link/código de convite.'
+        },
+        {
+            nome: 'Onboarding - Passo 1',
+            gatilho: '5 min após Cadastro',
+            descricao: 'Instruções sobre como se habilitar (contrato, dados, termos).'
+        },
+        {
+            nome: 'Onboarding - Passo 2',
+            gatilho: '7 min após Cadastro',
+            descricao: 'Instruções sobre verificação de identidade e acesso à carteira.'
         },
         {
             nome: 'Caixa Iniciado',
@@ -385,7 +404,9 @@ export function GerenciarComunicacao() {
                             <option value="alerta_atraso">Alerta de Atraso</option>
                             <option value="cobranca">Cobrança Gerada</option>
                             <option value="contemplacao">Participante Contemplado</option>
-                             <option value="orientacao">Orientação</option>
+                            <option value="cadastro">Cadastro</option>
+                            <option value="onboarding">Onboarding</option>
+                            <option value="orientacao">Orientação</option>
                             <option value="manual">Manual</option>
                         </select>
                     </div>
