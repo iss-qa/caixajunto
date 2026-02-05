@@ -702,6 +702,40 @@ export const SubAccountCreation = ({
                             )}
                         </AnimatePresence>
 
+                        {/* Loading Overlay */}
+                        <AnimatePresence>
+                            {creatingSubAccount && (
+                                <motion.div
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                    exit={{ opacity: 0 }}
+                                    className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center"
+                                >
+                                    <motion.div
+                                        initial={{ scale: 0.9, opacity: 0 }}
+                                        animate={{ scale: 1, opacity: 1 }}
+                                        exit={{ scale: 0.9, opacity: 0 }}
+                                        className="bg-white rounded-3xl p-8 shadow-2xl max-w-md mx-4 text-center"
+                                    >
+                                        <div className="w-16 h-16 mx-auto mb-6 relative">
+                                            <div className="absolute inset-0 border-4 border-blue-200 rounded-full"></div>
+                                            <div className="absolute inset-0 border-4 border-blue-600 rounded-full border-t-transparent animate-spin"></div>
+                                        </div>
+                                        <h3 className="text-xl font-bold text-gray-900 mb-2">
+                                            Criando sua conta...
+                                        </h3>
+                                        <p className="text-gray-600 mb-4">
+                                            Aguarde enquanto configuramos sua subconta e dados bancários.
+                                        </p>
+                                        <div className="flex items-center justify-center gap-2 text-sm text-blue-600">
+                                            <Loader2 className="animate-spin" size={16} />
+                                            <span>Isso pode levar alguns segundos</span>
+                                        </div>
+                                    </motion.div>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+
                         {/* Submit Button */}
                         <motion.button
                             whileHover={{ scale: isFormValid ? 1.02 : 1 }}
@@ -713,7 +747,7 @@ export const SubAccountCreation = ({
                             {creatingSubAccount ? (
                                 <>
                                     <Loader2 className="animate-spin" size={24} />
-                                    Criando subconta...
+                                    Aguarde...
                                 </>
                             ) : (
                                 <>

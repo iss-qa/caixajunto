@@ -190,8 +190,12 @@ export default function ContratoViewer() {
 
       setAceito(true);
 
-      // Update AuthContext to reflect signed contract immediately
-      updateUsuario({ contratoAssinado: true });
+      // Update AuthContext to reflect signed contract, CPF and chavePix immediately
+      updateUsuario({
+        contratoAssinado: true,
+        cpf: cpf.replace(/\D/g, ''),
+        chavePix: chavePix.trim(),
+      });
 
       // Navigate to wallet after a short delay to show success state
       setTimeout(() => {
