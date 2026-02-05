@@ -40,6 +40,8 @@ import {
   Camera,
   CheckCircle,
   XCircle,
+  DollarSign,
+  Info,
 } from 'lucide-react';
 import { caixasService, participantesService, usuariosService, cobrancasService, pagamentosService, splitConfigService, subcontasService } from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -190,6 +192,7 @@ export function CaixaDetalhes() {
   const [showErrorModal, setShowErrorModal] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [editStep, setEditStep] = useState(1); // Estado para controlar etapas do modal de edição
   const [editForm, setEditForm] = useState({
     nome: '',
     descricao: '',
@@ -220,6 +223,8 @@ export function CaixaDetalhes() {
   );
   const [customParticipantes, setCustomParticipantes] = useState(false);
   const [customDuracao, setCustomDuracao] = useState(false);
+  const [showValorCustomEdit, setShowValorCustomEdit] = useState(false);
+  const [valorCustomEdit, setValorCustomEdit] = useState('');
   const [cepLoading, setCepLoading] = useState(false);
 
 
@@ -1107,18 +1112,31 @@ ${link}`;
       // Buscar vínculos existentes de participantes
       const responseParticipantes = await participantesService.getAll();
       const listaParticipantes = Array.isArray(responseParticipantes) ? responseParticipantes : responseParticipantes.participantes || [];
-      const usuariosComVinculo = new Set(
-        listaParticipantes.map((p: any) => p.usuarioId?._id || p.usuarioId)
-      );
+
+      // NOVA REGRA: Criar conjunto de usuários em caixas ATIVOS (não finalizados)
+      // Participantes de caixas finalizados PODEM ser adicionados a novos caixas
+      const usuariosEmCaixasAtivos = new Set();
+      listaParticipantes.forEach((p: any) => {
+        const caixaStatus = p.caixaId?.status;
+        // Apenas bloquear se o caixa NÃO estiver finalizado
+        if (caixaStatus && caixaStatus !== 'finalizado') {
+          usuariosEmCaixasAtivos.add(p.usuarioId?._id || p.usuarioId);
+        }
+      });
 
       // Filtrar participantes que JÁ ESTÃO NESTE CAIXA
       const participantesNesteCaixa = new Set(
         participantes.map(p => p.usuarioId._id)
       );
 
-      // Regra: não pode estar em 2 caixas simultaneamente → somente usuários sem vínculo
+      // Regras de filtragem:
+      // 3.1: Participante em caixa ativo NÃO aparece
+      // 3.2: Participante em caixa finalizado PODE aparecer
+      // 3.3: Participante sem vínculo DEVE aparecer
       // E também não pode adicionar quem já está neste caixa
-      const livres = usuarios.filter((u: any) => !usuariosComVinculo.has(u._id) && !participantesNesteCaixa.has(u._id));
+      const livres = usuarios.filter((u: any) =>
+        !usuariosEmCaixasAtivos.has(u._id) && !participantesNesteCaixa.has(u._id)
+      );
       setUsuariosSemCaixa(livres);
     } catch (error) {
       console.error('Erro ao carregar usuários sem caixa:', error);
@@ -1139,21 +1157,10 @@ ${link}`;
     }
 
     try {
+      // A validação de caixa ativo já foi feita em loadUsuariosSemCaixa()
+      // Não precisa validar novamente aqui
       await Promise.all(
         usuariosSelecionadosIds.map(async (usuarioId) => {
-          // TODO: impedir múltiplos caixas simultâneos para o mesmo participante (regra pode ser revista futuramente)
-          try {
-            const participacoes = await participantesService.getByUsuario(usuarioId);
-            const lista = Array.isArray(participacoes) ? participacoes : participacoes?.participacoes || [];
-            const temCaixaAtivo = lista.some((p: any) => String(p.caixaId?.status || p.status || '').toLowerCase() === 'ativo');
-            if (temCaixaAtivo) {
-              throw new Error('Este participante já está em um caixa em andamento.');
-            }
-          } catch (e: any) {
-            if (e?.message?.includes('em andamento')) {
-              throw e;
-            }
-          }
           const participante = await participantesService.create({
             caixaId: id,
             usuarioId,
@@ -2344,8 +2351,9 @@ ${link}`;
                     // Check if ANY participant has a position (meaning positions were drawn)
                     const positionsDrawn = participantes.some(p => (p.posicao || 0) > 0);
 
-                    // Show trash ONLY if positions haven't been drawn AND user has permission AND caixa not started
-                    const showTrash = !positionsDrawn && !caixaIniciado && (isMaster || isAdmin);
+                    // Show trash if caixa hasn't started yet (regardless of sorting) AND user has permission
+                    // User can remove/change participants before starting, even after sorting
+                    const showTrash = !caixaIniciado && (isMaster || isAdmin);
 
                     // Check if this card belongs to the logged user (for participants only)
                     const isOwnCard = usuario?.tipo === 'usuario'
@@ -3046,179 +3054,432 @@ ${link}`;
         </div>
       </Modal>
 
-      {/* Modal Editar Caixa */}
+      {/* Modal Editar Caixa - Multi-Step */}
       <Modal
         isOpen={showEditCaixa}
-        onClose={() => setShowEditCaixa(false)}
-        title="Editar Caixa"
+        onClose={() => {
+          setShowEditCaixa(false);
+          setEditStep(1); // Reset ao fechar
+        }}
+        title={`Editar Caixa - Etapa ${editStep} de 3`}
         size="lg"
       >
         <div className="space-y-4">
-          <Input
-            label="Nome do Caixa"
-            value={editForm.nome}
-            onChange={(e) => setEditForm({ ...editForm, nome: e.target.value })}
-            leftIcon={<Wallet className="w-4 h-4" />}
-          />
-          <div>
-            <label className="label">Descrição</label>
-            <textarea
-              className="input resize-none h-16"
-              value={editForm.descricao}
-              onChange={(e) => setEditForm({ ...editForm, descricao: e.target.value })}
-              placeholder="Descreva o objetivo deste caixa..."
-            />
-          </div>
-
-          {/* Tipo do Caixa */}
-          <div>
-            <label className="label">Tipo do Caixa</label>
-            <div className="grid grid-cols-3 gap-2">
-              <button
-                type="button"
-                onClick={() => setEditForm({ ...editForm, tipo: 'mensal' })}
-                className={cn(
-                  'p-2 rounded-xl border-2 text-center transition-all',
-                  editForm.tipo === 'mensal'
-                    ? 'border-green-500 bg-green-50 text-green-700'
-                    : 'border-gray-200 hover:border-green-200'
+          {/* Progress Indicator */}
+          <div className="flex items-center justify-between mb-6">
+            {[1, 2, 3].map((step) => (
+              <div key={step} className="flex items-center flex-1">
+                <div
+                  className={cn(
+                    'w-8 h-8 rounded-full flex items-center justify-center font-semibold text-sm transition-all',
+                    editStep >= step
+                      ? 'bg-green-500 text-white'
+                      : 'bg-gray-200 text-gray-500'
+                  )}
+                >
+                  {step}
+                </div>
+                {step < 3 && (
+                  <div
+                    className={cn(
+                      'flex-1 h-1 mx-2 transition-all',
+                      editStep > step ? 'bg-green-500' : 'bg-gray-200'
+                    )}
+                  />
                 )}
-              >
-                <span className="font-semibold block text-sm">Mensal</span>
-                <span className="text-xs text-gray-500">Até 12 meses</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setEditForm({ ...editForm, tipo: 'semanal' })}
-                className={cn(
-                  'p-2 rounded-xl border-2 text-center transition-all',
-                  editForm.tipo === 'semanal'
-                    ? 'border-green-500 bg-green-50 text-green-700'
-                    : 'border-gray-200 hover:border-green-200'
-                )}
-              >
-                <span className="font-semibold block text-sm">Semanal</span>
-                <span className="text-xs text-gray-500">Até 24 sem.</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setEditForm({ ...editForm, tipo: 'diario', qtdParticipantes: 4, duracaoMeses: 4 })}
-                className={cn(
-                  'p-2 rounded-xl border-2 text-center transition-all',
-                  editForm.tipo === 'diario'
-                    ? 'border-orange-500 bg-orange-50 text-orange-700'
-                    : 'border-gray-200 hover:border-orange-200'
-                )}
-              >
-                <span className="font-semibold block text-sm">Diário</span>
-                <span className="text-xs text-gray-500">4 dias</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Valor Total */}
-          <Input
-            label="Valor Total (R$)"
-            type="number"
-            min={50}
-            value={editForm.valorTotal}
-            onChange={(e) => setEditForm({ ...editForm, valorTotal: parseInt(e.target.value) || 50 })}
-            leftIcon={<span className="text-gray-400">R$</span>}
-          />
-          {/* TODO: Voltar para min={500} após testes em produção */}
-
-          {/* Participantes - Fixo para diário */}
-          <div>
-            <label className="label">Número de Participantes {editForm.tipo === 'diario' ? '(fixo)' : '(= número de parcelas)'}</label>
-            <Input
-              type="number"
-              min={2}
-              max={editForm.tipo === 'diario' ? 4 : editForm.tipo === 'semanal' ? 24 : 12}
-              value={editForm.qtdParticipantes}
-              disabled={editForm.tipo === 'diario'}
-              onChange={(e) => {
-                if (editForm.tipo === 'diario') return;
-                const maxVal = editForm.tipo === 'semanal' ? 24 : 12;
-                const val = Math.max(2, Math.min(parseInt(e.target.value) || 2, maxVal));
-                setEditForm({ ...editForm, qtdParticipantes: val });
-              }}
-              leftIcon={<Users className="w-4 h-4" />}
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              {editForm.tipo === 'diario' ? '4 participantes (4 por dia)' : `Máximo: ${editForm.tipo === 'semanal' ? '24' : '12'} participantes`}
-            </p>
-          </div>
-
-          {/* Duração - Fixo para diário */}
-          <div>
-            <label className="label">Duração ({editForm.tipo === 'diario' ? 'dias' : editForm.tipo === 'semanal' ? 'semanas' : 'meses'})</label>
-            <Input
-              type="number"
-              min={2}
-              max={editForm.tipo === 'diario' ? 4 : editForm.tipo === 'semanal' ? 24 : 12}
-              value={editForm.duracaoMeses}
-              disabled={editForm.tipo === 'diario'}
-              onChange={(e) => {
-                if (editForm.tipo === 'diario') return;
-                const maxVal = editForm.tipo === 'semanal' ? 24 : 12;
-                const val = Math.max(2, Math.min(parseInt(e.target.value) || 2, maxVal));
-                setEditForm({ ...editForm, duracaoMeses: val });
-              }}
-              leftIcon={<Calendar className="w-4 h-4" />}
-            />
-            <p className="text-xs text-amber-600 mt-1">
-              {editForm.tipo === 'diario' ? '4 dias (16 parcelas = 4/dia x 4 dias)' : '⚠️ Recomendado: duração = número de participantes'}
-            </p>
-          </div>
-
-          {/* Data de Vencimento da Primeira Parcela */}
-          <div>
-            <label className="label">Data de Vencimento da 1ª Parcela</label>
-            <Input
-              type="date"
-              min={getMinDataVencimento(editForm.tipo)}
-              value={editForm.dataVencimento}
-              onChange={(e) => setEditForm({ ...editForm, dataVencimento: e.target.value })}
-              leftIcon={<Calendar className="w-4 h-4" />}
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              Mínimo: {editForm.tipo === 'diario' ? 'A partir de hoje' : '5 dias a partir de hoje'}
-            </p>
-          </div>
-
-          {/* Resumo */}
-          <div className={`p-3 rounded-xl ${editForm.tipo === 'diario' ? 'bg-orange-50' : 'bg-green-50'}`}>
-            <p className={`text-xs font-medium mb-2 ${editForm.tipo === 'diario' ? 'text-orange-600' : 'text-green-600'}`}>Resumo:</p>
-            <div className="grid grid-cols-2 gap-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-gray-600">Parcela:</span>
-                <span className="font-semibold">{formatCurrency(editForm.tipo === 'diario' ? editForm.valorTotal / 16 : editForm.valorTotal / editForm.qtdParticipantes)}</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">Seu ganho (10%):</span>
-                <span className={`font-semibold ${editForm.tipo === 'diario' ? 'text-orange-700' : 'text-green-700'}`}>{formatCurrency(editForm.valorTotal * 0.10)}</span>
+            ))}
+          </div>
+
+          {/* Etapa 1: Informações Básicas */}
+          {editStep === 1 && (
+            <div className="space-y-4">
+              <Input
+                label="Nome do Caixa"
+                value={editForm.nome}
+                onChange={(e) => setEditForm({ ...editForm, nome: e.target.value })}
+                leftIcon={<Wallet className="w-4 h-4" />}
+              />
+              <div>
+                <label className="label">Descrição</label>
+                <textarea
+                  className="input resize-none h-16"
+                  value={editForm.descricao}
+                  onChange={(e) => setEditForm({ ...editForm, descricao: e.target.value })}
+                  placeholder="Descreva o objetivo deste caixa..."
+                />
               </div>
-              <div className="flex justify-between col-span-2">
-                <span className="text-gray-600">Total de parcelas:</span>
-                <span className="font-semibold">
-                  {editForm.tipo === 'diario' ? '16 (4/dia × 4 dias)' : `${editForm.qtdParticipantes} ${editForm.tipo === 'semanal' ? 'semanas' : 'meses'}`}
-                </span>
+
+              {/* Tipo do Caixa */}
+              <div>
+                <label className="label">Tipo do Caixa</label>
+                <div className={cn(
+                  'grid gap-2',
+                  usuario?.tipo === 'master' ? 'grid-cols-3' : 'grid-cols-2'
+                )}>
+                  <button
+                    type="button"
+                    onClick={() => setEditForm({ ...editForm, tipo: 'mensal' })}
+                    className={cn(
+                      'p-2 rounded-xl border-2 text-center transition-all',
+                      editForm.tipo === 'mensal'
+                        ? 'border-green-500 bg-green-50 text-green-700'
+                        : 'border-gray-200 hover:border-green-200'
+                    )}
+                  >
+                    <span className="font-semibold block text-sm">Mensal</span>
+                    <span className="text-xs text-gray-500">Até 12 meses</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditForm({ ...editForm, tipo: 'semanal' })}
+                    className={cn(
+                      'p-2 rounded-xl border-2 text-center transition-all',
+                      editForm.tipo === 'semanal'
+                        ? 'border-green-500 bg-green-50 text-green-700'
+                        : 'border-gray-200 hover:border-green-200'
+                    )}
+                  >
+                    <span className="font-semibold block text-sm">Semanal</span>
+                    <span className="text-xs text-gray-500">Até 24 sem.</span>
+                  </button>
+                  {/* Diário - Apenas para Master */}
+                  {usuario?.tipo === 'master' && (
+                    <button
+                      type="button"
+                      onClick={() => setEditForm({ ...editForm, tipo: 'diario', qtdParticipantes: 4, duracaoMeses: 4 })}
+                      className={cn(
+                        'p-2 rounded-xl border-2 text-center transition-all',
+                        editForm.tipo === 'diario'
+                          ? 'border-orange-500 bg-orange-50 text-orange-700'
+                          : 'border-gray-200 hover:border-orange-200'
+                      )}
+                    >
+                      <span className="font-semibold block text-sm">Diário</span>
+                      <span className="text-xs text-gray-500">4 dias</span>
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
+          {/* Etapa 2: Valor e Participantes */}
+          {editStep === 2 && (
+            <div className="space-y-6">
+              {/* Valor Total com Sugestões */}
+              <div>
+                <label className="label flex items-center gap-2">
+                  <DollarSign className="w-4 h-4 text-blue-500" />
+                  Valor Total do Caixa
+                </label>
+                <div className="grid grid-cols-3 gap-2 mb-3">
+                  {[
+                    { value: 1000, label: 'R$ 1.000' },
+                    { value: 2000, label: 'R$ 2.000' },
+                    { value: 3000, label: 'R$ 3.000' },
+                    { value: 5000, label: 'R$ 5.000' },
+                    { value: 7000, label: 'R$ 7.000' },
+                    { value: 10000, label: 'R$ 10.000' },
+                  ].map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => {
+                        setEditForm({ ...editForm, valorTotal: option.value });
+                        setShowValorCustomEdit(false);
+                        setValorCustomEdit('');
+                      }}
+                      className={cn(
+                        'p-3 rounded-xl border-2 text-center transition-all',
+                        editForm.valorTotal === option.value && !showValorCustomEdit
+                          ? 'border-blue-500 bg-blue-50 text-blue-700'
+                          : 'border-gray-200 hover:border-blue-200'
+                      )}
+                    >
+                      <span className="font-semibold">{option.label}</span>
+                    </button>
+                  ))}
+                </div>
+                {/* Valor personalizado */}
+                <div className="mt-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowValorCustomEdit(!showValorCustomEdit)}
+                    className={cn(
+                      'w-full p-3 rounded-xl border-2 text-center transition-all',
+                      showValorCustomEdit
+                        ? 'border-blue-500 bg-blue-50 text-blue-700'
+                        : 'border-dashed border-gray-300 text-gray-500 hover:border-blue-300'
+                    )}
+                  >
+                    {showValorCustomEdit ? 'Valor Personalizado' : '+ Digitar outro valor'}
+                  </button>
+                  {showValorCustomEdit && (
+                    <div className="mt-3">
+                      <Input
+                        placeholder="Ex: 15000"
+                        value={valorCustomEdit}
+                        onChange={(e) => {
+                          setValorCustomEdit(e.target.value);
+                          const val = parseInt(e.target.value) || 0;
+                          if (val >= 50) {
+                            setEditForm({ ...editForm, valorTotal: val });
+                          }
+                        }}
+                        leftIcon={<DollarSign className="w-4 h-4" />}
+                        type="number"
+                        min={50}
+                      />
+                      <p className="text-xs text-gray-500 mt-1">Mínimo: R$ 50,00</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Participantes com Opções */}
+              <div>
+                <label className="label flex items-center gap-2">
+                  <Users className="w-4 h-4 text-blue-500" />
+                  Número de Participantes (= número de parcelas)
+                </label>
+                {editForm.tipo !== 'diario' ? (
+                  <>
+                    <div className="grid grid-cols-4 gap-2">
+                      {(editForm.tipo === 'semanal' ? [4, 6, 8, 10, 12, 16, 20, 24] : [4, 6, 8, 10]).map((num) => (
+                        <button
+                          key={num}
+                          type="button"
+                          onClick={() => setEditForm({ ...editForm, qtdParticipantes: num, duracaoMeses: num })}
+                          className={cn(
+                            'p-3 rounded-xl border-2 text-center transition-all',
+                            editForm.qtdParticipantes === num
+                              ? 'border-blue-500 bg-blue-50 text-blue-700'
+                              : 'border-gray-200 hover:border-blue-200'
+                          )}
+                        >
+                          <span className="font-semibold">{num}</span>
+                        </button>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setCustomParticipantes(!customParticipantes)}
+                      className="w-full mt-2 p-2 text-sm text-gray-500 border-dashed border-2 border-gray-200 rounded-xl hover:border-blue-300"
+                    >
+                      {customParticipantes ? 'Ver opções' : '+ Outro valor'}
+                    </button>
+                    {customParticipantes && (
+                      <div className="mt-2">
+                        <Input
+                          type="number"
+                          min={2}
+                          max={editForm.tipo === 'semanal' ? 24 : 12}
+                          value={editForm.qtdParticipantes}
+                          onChange={(e) => {
+                            const val = Math.max(2, Math.min(parseInt(e.target.value) || 2, editForm.tipo === 'semanal' ? 24 : 12));
+                            setEditForm({ ...editForm, qtdParticipantes: val, duracaoMeses: val });
+                          }}
+                          leftIcon={<Users className="w-4 h-4" />}
+                        />
+                        <p className="text-xs text-gray-500 mt-1">
+                          Mín: 2 | Máx: {editForm.tipo === 'semanal' ? '24' : '12'}
+                        </p>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <Input
+                    type="number"
+                    value={4}
+                    disabled
+                    leftIcon={<Users className="w-4 h-4" />}
+                  />
+                )}
+                <p className="text-xs text-amber-600 mt-2">
+                  ⚠️ Importante: Cada participante recebe em uma posição. {editForm.qtdParticipantes} participantes = {editForm.qtdParticipantes} parcelas
+                </p>
+              </div>
+
+              {/* Resumo */}
+              <div className="p-4 bg-blue-50 rounded-xl">
+                <p className="text-sm font-medium text-blue-700 mb-2">Resumo</p>
+                <div className="space-y-1 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Tipo</span>
+                    <span className="font-semibold text-gray-900 capitalize">{editForm.tipo}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Valor total</span>
+                    <span className="font-semibold text-gray-900">{formatCurrency(editForm.valorTotal)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Parcela</span>
+                    <span className="font-semibold text-gray-900">
+                      {formatCurrency(editForm.tipo === 'diario' ? editForm.valorTotal / 16 : editForm.valorTotal / editForm.qtdParticipantes)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Total de parcelas</span>
+                    <span className="font-semibold text-gray-900">
+                      {editForm.qtdParticipantes}{editForm.tipo === 'diario' ? '' : editForm.tipo === 'semanal' ? ' semanas' : ' meses'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Etapa 3: Data de Vencimento e Resumo */}
+          {editStep === 3 && (
+            <div className="space-y-4">
+              {/* Data de Vencimento + Data Prevista */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="label flex items-center gap-2">
+                    <Calendar className="w-4 h-4 text-blue-500" />
+                    Data de Vencimento da 1ª Parcela
+                  </label>
+                  <Input
+                    type="date"
+                    min={getMinDataVencimento(editForm.tipo)}
+                    value={editForm.dataVencimento}
+                    onChange={(e) => setEditForm({ ...editForm, dataVencimento: e.target.value })}
+                    leftIcon={<Calendar className="w-4 h-4" />}
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    {editForm.tipo === 'diario'
+                      ? 'A data deve ser depois de amanhã (bloqueia apenas amanhã)'
+                      : 'A data deve ser no mínimo 5 dias a partir de hoje'}
+                  </p>
+                </div>
+                <div>
+                  <label className="label flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4 text-blue-500" />
+                    Data Prevista de Contemplação
+                  </label>
+                  <Input
+                    type="text"
+                    value={editForm.dataVencimento ? (() => {
+                      const data = new Date(editForm.dataVencimento + 'T00:00:00');
+                      if (editForm.tipo === 'diario') {
+                        data.setDate(data.getDate() + 3);
+                      } else if (editForm.tipo === 'semanal') {
+                        data.setDate(data.getDate() + (7 * (editForm.qtdParticipantes - 1)));
+                      } else {
+                        data.setMonth(data.getMonth() + (editForm.qtdParticipantes - 1));
+                      }
+                      return data.toLocaleDateString('pt-BR');
+                    })() : '-'}
+                    disabled
+                    className="bg-gray-50 text-gray-700"
+                  />
+                  <p className="text-xs text-blue-600 mt-1">
+                    ✨ Pagar antes é bem melhor
+                  </p>
+                </div>
+              </div>
+
+              {/* Resumo Final */}
+              <div className="p-4 bg-gradient-to-br from-blue-50 to-blue-100/50 border-blue-200/50 border rounded-xl">
+                <h3 className="font-semibold text-gray-900 mb-4">Resumo do Caixa</h3>
+                <div className="space-y-3">
+                  <div className="flex justify-between py-2 border-b border-blue-200/50">
+                    <span className="text-gray-600">Nome</span>
+                    <span className="font-semibold text-gray-900">{editForm.nome || '-'}</span>
+                  </div>
+                  <div className="flex justify-between py-2 border-b border-blue-200/50">
+                    <span className="text-gray-600">Tipo</span>
+                    <span className="font-semibold text-gray-900 capitalize">{editForm.tipo}</span>
+                  </div>
+                  <div className="flex justify-between py-2 border-b border-blue-200/50">
+                    <span className="text-gray-600">Valor Total</span>
+                    <span className="font-semibold text-gray-900">{formatCurrency(editForm.valorTotal)}</span>
+                  </div>
+                  <div className="flex justify-between py-2 border-b border-blue-200/50">
+                    <span className="text-gray-600">Parcela</span>
+                    <span className="font-semibold text-gray-900">
+                      {formatCurrency(editForm.tipo === 'diario' ? editForm.valorTotal / 16 : editForm.valorTotal / editForm.qtdParticipantes)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between py-2 border-b border-blue-200/50">
+                    <span className="text-gray-600">Participantes / Parcelas</span>
+                    <span className="font-semibold text-gray-900">{editForm.qtdParticipantes}</span>
+                  </div>
+                  <div className="flex justify-between py-2 border-b border-blue-200/50">
+                    <span className="text-gray-600">1ª Parcela</span>
+                    <span className="font-semibold text-gray-900">
+                      {editForm.dataVencimento ? new Date(editForm.dataVencimento + 'T00:00:00').toLocaleDateString('pt-BR') : '-'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between py-2 border-b border-blue-200/50">
+                    <span className="text-gray-600">Última Parcela</span>
+                    <span className="font-semibold text-gray-900">
+                      {editForm.dataVencimento ? (() => {
+                        const data = new Date(editForm.dataVencimento + 'T00:00:00');
+                        if (editForm.tipo === 'diario') {
+                          data.setDate(data.getDate() + 3);
+                        } else if (editForm.tipo === 'semanal') {
+                          data.setDate(data.getDate() + (7 * (editForm.qtdParticipantes - 1)));
+                        } else {
+                          data.setMonth(data.getMonth() + (editForm.qtdParticipantes - 1));
+                        }
+                        return data.toLocaleDateString('pt-BR');
+                      })() : '-'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Composição das Parcelas */}
+                <div className="mt-4 p-3 bg-white/50 rounded-xl">
+                  <div className="flex items-start gap-2">
+                    <Info className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                    <div className="text-sm">
+                      <p className="font-medium text-blue-700 mb-1">Composição das Parcelas:</p>
+                      <ul className="text-gray-600 space-y-0.5 text-xs">
+                        <li>• 1ª Parcela: {formatCurrency(editForm.tipo === 'diario' ? editForm.valorTotal / 16 : editForm.valorTotal / editForm.qtdParticipantes)} + R$ 10,00 (serviço) + R$ 50,00 (taxa admin)</li>
+                        <li>• Parcelas 2 a {editForm.qtdParticipantes - 1}: {formatCurrency(editForm.tipo === 'diario' ? editForm.valorTotal / 16 : editForm.valorTotal / editForm.qtdParticipantes)} + R$ 10,00 + IPCA</li>
+                        <li>• Última: {formatCurrency(editForm.tipo === 'diario' ? editForm.valorTotal / 16 : editForm.valorTotal / editForm.qtdParticipantes)} + R$ 10,00 + R$ 50,00 (comissão admin) + IPCA</li>
+                      </ul>
+                      <p className="mt-2 text-blue-700 font-medium">
+                        💰 Seu ganho como admin: {formatCurrency(editForm.valorTotal * 0.10)} (10%)
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Botões de Navegação */}
           <div className="flex gap-3 pt-2">
-            <Button variant="secondary" className="flex-1" onClick={() => setShowEditCaixa(false)}>
-              Cancelar
-            </Button>
-            <Button
-              variant="primary"
-              className="flex-1"
-              onClick={handleUpdateCaixa}
-              disabled={!isDataVencimentoValida(editForm.dataVencimento, editForm.tipo)}
-            >
-              Salvar Alterações
-            </Button>
+            {editStep > 1 && (
+              <Button
+                variant="secondary"
+                className="flex-1"
+                onClick={() => setEditStep(editStep - 1)}
+              >
+                Voltar
+              </Button>
+            )}
+            {editStep < 3 ? (
+              <Button
+                variant="primary"
+                className="flex-1"
+                onClick={() => setEditStep(editStep + 1)}
+              >
+                Próximo
+              </Button>
+            ) : (
+              <Button
+                variant="primary"
+                className="flex-1"
+                onClick={handleUpdateCaixa}
+                disabled={!isDataVencimentoValida(editForm.dataVencimento, editForm.tipo)}
+              >
+                Salvar Alterações
+              </Button>
+            )}
           </div>
         </div>
       </Modal>

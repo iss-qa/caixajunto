@@ -895,11 +895,11 @@ const CarteiraDataAccounts = ({
     return (
         <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 py-8 px-4">
             <div className="max-w-5xl mx-auto space-y-6">
-                {/* Card de Status da Conta */}
+                {/* Card de Status da Conta - Oculto em mobile */}
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="bg-white rounded-3xl shadow-lg border border-gray-100 overflow-hidden"
+                    className="bg-white rounded-3xl shadow-lg border border-gray-100 overflow-hidden hidden sm:block"
                 >
                     <div className={`p-8 ${subcontaData ? 'bg-gradient-to-r from-green-50 to-emerald-50' : 'bg-gradient-to-r from-yellow-50 to-orange-50'}`}>
                         <div className="flex items-start gap-4">
@@ -934,68 +934,76 @@ const CarteiraDataAccounts = ({
                         </div>
                     </div>
 
-                    <div className="p-8">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-2xl">
-                                <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
-                                    <User className="text-blue-600" size={24} />
-                                </div>
-                                <div>
-                                    <p className="text-sm text-gray-600 font-medium">Nome Completo</p>
-                                    <p className="text-lg font-bold text-gray-900">{subcontaData?.name || accountData.name}</p>
-                                </div>
-                            </div>
-
-                            <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-2xl">
-                                <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
-                                    <Hash className="text-purple-600" size={24} />
-                                </div>
-                                <div>
-                                    <p className="text-sm text-gray-600 font-medium">CPF/CNPJ</p>
-                                    <p className="text-lg font-bold text-gray-900">{subcontaData?.cpfCnpj || accountData.cpf}</p>
-                                </div>
-                            </div>
-
-                            <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-2xl">
-                                <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
-                                    <Mail className="text-green-600" size={24} />
-                                </div>
-                                <div>
-                                    <p className="text-sm text-gray-600 font-medium">E-mail</p>
-                                    <p className="text-lg font-bold text-gray-900">{subcontaData?.email || accountData.email}</p>
-                                </div>
-                            </div>
-
-                            {subcontaData?.cellphone && (
-                                <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-2xl">
-                                    <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center">
-                                        <Phone className="text-orange-600" size={24} />
+                    <div className="p-4 sm:p-8">
+                        {/* Layout compacto para mobile - sem ícones */}
+                        <div className="grid grid-cols-2 sm:grid-cols-2 gap-2 sm:gap-6">
+                            {/* Nome Completo */}
+                            <div className="col-span-2 sm:col-span-1 p-3 sm:p-4 bg-gray-50 rounded-xl sm:rounded-2xl">
+                                <div className="flex items-center gap-3">
+                                    <div className="hidden sm:flex w-12 h-12 bg-blue-100 rounded-xl items-center justify-center">
+                                        <User className="text-blue-600" size={24} />
                                     </div>
-                                    <div>
-                                        <p className="text-sm text-gray-600 font-medium">Celular</p>
-                                        <p className="text-lg font-bold text-gray-900">{subcontaData.cellphone}</p>
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-xs sm:text-sm text-gray-600 font-medium">Nome Completo</p>
+                                        <p className="text-sm sm:text-lg font-bold text-gray-900 truncate">{subcontaData?.name || accountData.name}</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* CPF/CNPJ */}
+                            <div className="p-3 sm:p-4 bg-gray-50 rounded-xl sm:rounded-2xl">
+                                <div className="flex items-center gap-3">
+                                    <div className="hidden sm:flex w-12 h-12 bg-purple-100 rounded-xl items-center justify-center">
+                                        <Hash className="text-purple-600" size={24} />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-xs sm:text-sm text-gray-600 font-medium">CPF/CNPJ</p>
+                                        <p className="text-sm sm:text-lg font-bold text-gray-900 truncate">{subcontaData?.cpfCnpj || accountData.cpf}</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* E-mail */}
+                            <div className="col-span-2 sm:col-span-1 p-3 sm:p-4 bg-gray-50 rounded-xl sm:rounded-2xl">
+                                <div className="flex items-center gap-3">
+                                    <div className="hidden sm:flex w-12 h-12 bg-green-100 rounded-xl items-center justify-center">
+                                        <Mail className="text-green-600" size={24} />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-xs sm:text-sm text-gray-600 font-medium">E-mail</p>
+                                        <p className="text-sm sm:text-lg font-bold text-gray-900 truncate">{subcontaData?.email || accountData.email}</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Celular */}
+                            {subcontaData?.cellphone && (
+                                <div className="p-3 sm:p-4 bg-gray-50 rounded-xl sm:rounded-2xl">
+                                    <div className="flex items-center gap-3">
+                                        <div className="hidden sm:flex w-12 h-12 bg-orange-100 rounded-xl items-center justify-center">
+                                            <Phone className="text-orange-600" size={24} />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-xs sm:text-sm text-gray-600 font-medium">Celular</p>
+                                            <p className="text-sm sm:text-lg font-bold text-gray-900">{subcontaData.cellphone}</p>
+                                        </div>
                                     </div>
                                 </div>
                             )}
 
-                            <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-2xl">
-                                <div className="w-12 h-12 bg-pink-100 rounded-xl flex items-center justify-center">
-                                    <FileText className="text-pink-600" size={24} />
-                                </div>
-                                <div>
-                                    <p className="text-sm text-gray-600 font-medium">Tipo</p>
-                                    <p className="text-lg font-bold text-gray-900">{subcontaData?.type?.toUpperCase() || 'PF'}</p>
-                                </div>
+                            {/* Tipo */}
+                            <div className="p-3 sm:p-4 bg-gray-50 rounded-xl sm:rounded-2xl">
+                                <p className="text-xs sm:text-sm text-gray-600 font-medium">Tipo</p>
+                                <p className="text-sm sm:text-lg font-bold text-gray-900">{subcontaData?.type?.toUpperCase() || 'PF'}</p>
                             </div>
 
-                            <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-2xl">
-                                <div>
-                                    <p className="text-sm text-gray-600 font-medium">Status</p>
-                                    <span className={`inline-flex items-center gap-2 px-4 py-2 mt-1 ${subcontaData ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'} rounded-xl text-sm font-bold`}>
-                                        {subcontaData ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
-                                        {subcontaData ? 'Ativa' : 'Pendente'}
-                                    </span>
-                                </div>
+                            {/* Status */}
+                            <div className="p-3 sm:p-4 bg-gray-50 rounded-xl sm:rounded-2xl">
+                                <p className="text-xs sm:text-sm text-gray-600 font-medium">Status</p>
+                                <span className={`inline-flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-1 sm:py-2 mt-1 ${subcontaData ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'} rounded-lg sm:rounded-xl text-xs sm:text-sm font-bold`}>
+                                    {subcontaData ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
+                                    {subcontaData ? 'Ativa' : 'Pendente'}
+                                </span>
                             </div>
                         </div>
 
@@ -1010,64 +1018,6 @@ const CarteiraDataAccounts = ({
                     </div>
                 </motion.div>
 
-                {/* Card de Dados Lytex */}
-                {subcontaData?.lytexId && (
-                    <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.1 }}
-                        className="bg-white rounded-3xl shadow-lg border border-gray-100 p-8"
-                    >
-                        <h4 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3">
-                            <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-500 rounded-xl flex items-center justify-center">
-                                <FileText className="text-white" size={24} />
-                            </div>
-                            Dados Lytex
-                        </h4>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="p-4 bg-gradient-to-br from-blue-50 to-blue-100 rounded-2xl border-2 border-blue-200">
-                                <p className="text-sm text-blue-700 font-medium mb-1">ID Lytex</p>
-                                <p className="font-mono text-sm bg-white px-3 py-2 rounded-lg text-gray-900 font-bold break-all">
-                                    {subcontaData.lytexId}
-                                </p>
-                            </div>
-
-                            {subcontaData._id && (
-                                <div className="p-4 bg-gradient-to-br from-purple-50 to-purple-100 rounded-2xl border-2 border-purple-200">
-                                    <p className="text-sm text-purple-700 font-medium mb-1">ID Local</p>
-                                    <p className="font-mono text-sm bg-white px-3 py-2 rounded-lg text-gray-900 font-bold break-all">
-                                        {subcontaData._id}
-                                    </p>
-                                </div>
-                            )}
-
-                            <div className="p-4 bg-gradient-to-br from-green-50 to-green-100 rounded-2xl border-2 border-green-200">
-                                <p className="text-sm text-green-700 font-medium mb-2">Credenciais API</p>
-                                <span className={`inline-flex items-center gap-2 px-4 py-2 ${subcontaData.hasCredentials ? 'bg-green-500 text-white' : 'bg-orange-500 text-white'} rounded-xl text-sm font-bold`}>
-                                    {subcontaData.hasCredentials ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
-                                    {subcontaData.hasCredentials ? 'Configuradas' : 'Não configuradas'}
-                                </span>
-                            </div>
-
-                            {subcontaData.clientId && (
-                                <div className="p-4 bg-gradient-to-br from-indigo-50 to-indigo-100 rounded-2xl border-2 border-indigo-200">
-                                    <p className="text-sm text-indigo-700 font-medium mb-1">Client ID</p>
-                                    <p className="font-mono text-xs bg-white px-3 py-2 rounded-lg text-gray-900 font-bold break-all">
-                                        {subcontaData.clientId}
-                                    </p>
-                                </div>
-                            )}
-
-                            {subcontaData.nomeCaixa && (
-                                <div className="p-4 bg-gradient-to-br from-pink-50 to-pink-100 rounded-2xl border-2 border-pink-200 md:col-span-2">
-                                    <p className="text-sm text-pink-700 font-medium mb-1">Caixa Associado</p>
-                                    <p className="text-lg font-bold text-gray-900">{subcontaData.nomeCaixa}</p>
-                                </div>
-                            )}
-                        </div>
-                    </motion.div>
-                )}
-
                 {/* Card de Dados Bancários */}
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
@@ -1075,12 +1025,12 @@ const CarteiraDataAccounts = ({
                     transition={{ delay: 0.2 }}
                     className="bg-white rounded-3xl shadow-lg border border-gray-100 p-8"
                 >
-                    <h4 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3">
+                    <h3 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3">
                         <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-500 rounded-xl flex items-center justify-center">
-                            <CreditCard className="text-white" size={24} />
+                            <CreditCard className="text-white" size={22} />
                         </div>
                         Dados da Conta e Endereço
-                    </h4>
+                    </h3>
 
                     {loadingBankAccount ? (
                         <div className="flex flex-col items-center justify-center py-12">
@@ -1144,10 +1094,12 @@ const CarteiraDataAccounts = ({
                         <div className="space-y-6">
                             <div className="p-6 bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-200 rounded-2xl">
                                 <div className="flex items-start gap-3">
-                                    <AlertCircle className="text-amber-600 mt-1 flex-shrink-0" size={24} />
+                                    <AlertCircle className="text-amber-600 mt-1 flex-shrink-0" size={20
+
+                                    } />
                                     <div>
-                                        <p className="font-bold text-amber-900 mb-1">Nenhum dado bancário cadastrado</p>
-                                        <p className="text-sm text-amber-700">Preencha o formulário abaixo para configurar sua conta e receber pagamentos.</p>
+                                        <p className="font-bold text-amber-700 mb-1">Nenhum dado bancário cadastrado</p>
+                                        <p className="text-sm text-amber-500">Preencha o formulário abaixo para configurar sua conta e receber pagamentos.</p>
                                     </div>
                                 </div>
                             </div>
@@ -1177,12 +1129,12 @@ const CarteiraDataAccounts = ({
                                 error={bankAccountError}
                             />
 
-                            <div className="mt-8 pt-8 border-t-2 border-gray-100">
-                                <h5 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                            <div className="mt-6 sm:mt-8 pt-6 sm:pt-8 border-t-2 border-gray-100">
+                                <h5 className="text-base sm:text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
                                     <MapPin className="text-blue-600" size={20} />
-                                    Endereço de Correspondência
+                                    Endereço
                                 </h5>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-6">
                                     <ModernInput
                                         label="CEP"
                                         value={addressZip}
@@ -1311,22 +1263,77 @@ const CarteiraDataAccounts = ({
                     </motion.div>
                 )}
 
-                {/* Card de Faturamento e Limites */}
-                {/* ... (existing cards) ... */}
+                {/* Card de Dados Lytex - Seção técnica no final */}
+                {subcontaData?.lytexId && (
+                    <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.4 }}
+                        className="bg-white rounded-3xl shadow-lg border border-gray-100 p-4 sm:p-8"
+                    >
+                        <h4 className="text-lg sm:text-2xl font-bold text-gray-900 mb-4 sm:mb-6 flex items-center gap-2 sm:gap-3">
+                            <div className="w-8 h-8 sm:w-12 sm:h-12 bg-gradient-to-br from-blue-500 to-purple-500 rounded-lg sm:rounded-xl flex items-center justify-center">
+                                <FileText className="text-white" size={18} />
+                            </div>
+                            <span className="hidden sm:inline">Dados Lytex</span>
+                            <span className="sm:hidden">Dados Técnicos</span>
+                        </h4>
+                        <div className="grid grid-cols-1 gap-3 sm:gap-4">
+                            <div className="p-3 sm:p-4 bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl sm:rounded-2xl border-2 border-blue-200">
+                                <p className="text-xs sm:text-sm text-blue-700 font-medium mb-1">ID Lytex</p>
+                                <p className="font-mono text-xs sm:text-sm bg-white px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-gray-900 font-bold break-all">
+                                    {subcontaData.lytexId}
+                                </p>
+                            </div>
 
+                            {subcontaData._id && (
+                                <div className="p-3 sm:p-4 bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl sm:rounded-2xl border-2 border-purple-200">
+                                    <p className="text-xs sm:text-sm text-purple-700 font-medium mb-1">ID Local</p>
+                                    <p className="font-mono text-xs sm:text-sm bg-white px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-gray-900 font-bold break-all">
+                                        {subcontaData._id}
+                                    </p>
+                                </div>
+                            )}
+
+                            <div className="p-3 sm:p-4 bg-gradient-to-br from-green-50 to-green-100 rounded-xl sm:rounded-2xl border-2 border-green-200">
+                                <p className="text-xs sm:text-sm text-green-700 font-medium mb-1 sm:mb-2">Credenciais API</p>
+                                <span className={`inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 ${subcontaData.hasCredentials ? 'bg-green-500 text-white' : 'bg-orange-500 text-white'} rounded-lg sm:rounded-xl text-xs sm:text-sm font-bold`}>
+                                    {subcontaData.hasCredentials ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
+                                    {subcontaData.hasCredentials ? 'Configuradas' : 'Não configuradas'}
+                                </span>
+                            </div>
+
+                            {subcontaData.clientId && (
+                                <div className="p-3 sm:p-4 bg-gradient-to-br from-indigo-50 to-indigo-100 rounded-xl sm:rounded-2xl border-2 border-indigo-200">
+                                    <p className="text-xs sm:text-sm text-indigo-700 font-medium mb-1">Client ID</p>
+                                    <p className="font-mono text-xs bg-white px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-gray-900 font-bold break-all">
+                                        {subcontaData.clientId}
+                                    </p>
+                                </div>
+                            )}
+
+                            {subcontaData.nomeCaixa && (
+                                <div className="p-3 sm:p-4 bg-gradient-to-br from-pink-50 to-pink-100 rounded-xl sm:rounded-2xl border-2 border-pink-200">
+                                    <p className="text-xs sm:text-sm text-pink-700 font-medium mb-1">Caixa Associado</p>
+                                    <p className="text-sm sm:text-lg font-bold text-gray-900">{subcontaData.nomeCaixa}</p>
+                                </div>
+                            )}
+                        </div>
+                    </motion.div>
+                )}
 
                 {/* Informações Importantes */}
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.5 }}
-                    className="bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-3xl p-8"
+                    className="bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-2xl sm:rounded-3xl p-4 sm:p-8"
                 >
-                    <h4 className="text-xl font-bold text-blue-900 mb-4 flex items-center gap-2">
-                        <Info size={24} />
-                        Informações Importantes
+                    <h4 className="text-base sm:text-xl font-bold text-blue-900 mb-3 sm:mb-4 flex items-center gap-2">
+                        <Info size={20} />
+                        Informações
                     </h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4">
                         <div className="flex items-start gap-3 p-4 bg-white/70 rounded-2xl">
                             <CheckCircle2 className="text-green-600 mt-1 flex-shrink-0" size={20} />
                             <p className="text-sm text-blue-900 font-medium">Saques processados em até 1 dia útil</p>

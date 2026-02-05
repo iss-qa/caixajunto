@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { CheckCircle, FileText, Download, Building2, User, Calendar, Shield } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../lib/api';
@@ -35,6 +36,7 @@ const getDenominacao = (tipo: string): string => {
 
 export default function ContratoViewer() {
   const { usuario, updateUsuario } = useAuth();
+  const location = useLocation();
   const [aceito, setAceito] = useState(false);
   const [aceitando, setAceitando] = useState(false);
   const [userData, setUserData] = useState<UserData | null>(null);
@@ -43,6 +45,25 @@ export default function ContratoViewer() {
   const [chavePix, setChavePix] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  // Scroll automático para seção de Partes Contratantes quando redirecionado da Carteira
+  useEffect(() => {
+    if (location.hash === '#partes-contratantes') {
+      // Delay para garantir que o DOM está renderizado
+      const timer = setTimeout(() => {
+        const section = document.getElementById('partes-contratantes');
+        if (section) {
+          section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          // Destacar os campos de CPF e Chave PIX com uma animação
+          section.classList.add('ring-2', 'ring-green-500', 'ring-offset-4', 'rounded-xl');
+          setTimeout(() => {
+            section.classList.remove('ring-2', 'ring-green-500', 'ring-offset-4', 'rounded-xl');
+          }, 2000);
+        }
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [location.hash]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -276,7 +297,7 @@ export default function ContratoViewer() {
               </div>
             </section>
 
-            <section>
+            <section id="partes-contratantes">
               <h2 className="text-2xl font-bold text-gray-900 mb-4 flex items-center gap-2">
                 <Building2 className="w-6 h-6 text-green-600" />
                 Partes Contratantes

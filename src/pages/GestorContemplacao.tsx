@@ -14,7 +14,7 @@ import {
     Wallet,
     RefreshCw,
 } from 'lucide-react';
-import { recebimentosService, caixasService, participantesService, usuariosService, fundoGarantidorService } from '../lib/api';
+import { recebimentosService, caixasService, participantesService, usuariosService, fundoGarantidorService, regrasComissaoService } from '../lib/api';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
@@ -265,6 +265,8 @@ export function GestorContemplacao() {
     const [modalAdminVisible, setModalAdminVisible] = useState(false);
     const [admins, setAdmins] = useState<any[]>([]);
     const [selectedAdmin, setSelectedAdmin] = useState('');
+    const [caixasDoAdmin, setCaixasDoAdmin] = useState<any[]>([]);
+    const [selectedCaixaAdmin, setSelectedCaixaAdmin] = useState('');
     const [comissaoInfo, setComissaoInfo] = useState<{
         valorComissao: number;
         percentual: number;
@@ -284,37 +286,84 @@ export function GestorContemplacao() {
     };
 
     const handleAbrirModalAdmin = async () => {
-        if (!selectedCaixa) return;
+        setModalAdminVisible(true);
+    };
+
+    // Quando admin é selecionado, carregar caixas dele
+    const handleAdminChange = async (adminId: string) => {
+        setSelectedAdmin(adminId);
+        setSelectedCaixaAdmin('');
+        setComissaoInfo(null);
+
+        if (!adminId) {
+            setCaixasDoAdmin([]);
+            return;
+        }
+
         try {
             setActionLoading(true);
-            // Pré-calcular comissão usando taxaAdministrativa do caixa ou padrão 5%
-            const taxaComissao = selectedCaixa.taxaAdministrativa || 0.05;
-            setComissaoInfo({
-                valorComissao: Math.round((selectedCaixa.valorTotal || 0) * taxaComissao),
-                percentual: taxaComissao * 100,
-            });
-            setModalAdminVisible(true);
+            const response = await caixasService.getAll({ adminId });
+            setCaixasDoAdmin(response.caixas || response || []);
         } catch (error) {
-            console.error('Erro ao abrir modal:', error);
-            // Abre modal mesmo se falhar
-            setComissaoInfo({
-                valorComissao: Math.round((selectedCaixa.valorTotal || 0) * 0.05),
-                percentual: 5,
-            });
-            setModalAdminVisible(true);
+            console.error('Erro ao carregar caixas do admin:', error);
+            setCaixasDoAdmin([]);
         } finally {
             setActionLoading(false);
         }
-    }; const handleContemplacaoAdmin = async () => {
-        if (!selectedAdmin || !selectedCaixa) return;
+    };
+
+    // Quando caixa é selecionado, calcular comissão
+    const handleCaixaAdminChange = async (caixaId: string) => {
+        setSelectedCaixaAdmin(caixaId);
+        setComissaoInfo(null);
+
+        if (!caixaId || !selectedAdmin) return;
+
         try {
             setActionLoading(true);
-            const response = await recebimentosService.contemplarAdminManual(selectedAdmin, selectedCaixa._id);
+            const caixa = caixasDoAdmin.find(c => c._id === caixaId);
+            if (!caixa) return;
+
+            // Buscar comissão via API
+            const comissaoData = await regrasComissaoService.getComissaoCaixa(selectedAdmin, caixa.valorTotal);
+
+            console.log('📊 Dados de comissão recebidos:', comissaoData);
+
+            setComissaoInfo({
+                valorComissao: comissaoData.valorComissao || 0, // Já vem calculado em reais
+                percentual: (comissaoData.taxaDecimal || 0) * 100, // Usar taxaDecimal, não taxaAtual
+            });
+        } catch (error) {
+            console.error('Erro ao calcular comissão:', error);
+            // Fallback: usar 10% padrão
+            const caixa = caixasDoAdmin.find(c => c._id === caixaId);
+            if (caixa) {
+                setComissaoInfo({
+                    valorComissao: caixa.valorTotal * 0.10,
+                    percentual: 10,
+                });
+            }
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
+    const handleContemplacaoAdmin = async () => {
+        if (!selectedAdmin || !selectedCaixaAdmin) {
+            alert('❌ Selecione um administrador e um caixa');
+            return;
+        }
+        try {
+            setActionLoading(true);
+            const response = await recebimentosService.contemplarAdminManual(selectedAdmin, selectedCaixaAdmin);
 
             if (response.success) {
                 alert(`✅ ${response.message}\nTransação ID: ${response.transacaoId}`);
                 setModalAdminVisible(false);
                 setSelectedAdmin('');
+                setSelectedCaixaAdmin('');
+                setCaixasDoAdmin([]);
+                setComissaoInfo(null);
                 await loadData();
             } else {
                 alert(`❌ ${response.message}`);
@@ -651,7 +700,7 @@ export function GestorContemplacao() {
                                     </td>
                                     <td className="py-4">
                                         <span className="font-semibold text-gray-900">
-                                            {formatCurrency(item.valorTotal / 100)}
+                                            {formatCurrency(item.valorTotal)}
                                         </span>
                                     </td>
                                     <td className="py-4">
@@ -775,7 +824,7 @@ export function GestorContemplacao() {
                             <select
                                 className="w-full px-4 py-3 border border-gray-200 rounded-xl mb-6 bg-white focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                                 value={selectedAdmin}
-                                onChange={(e) => setSelectedAdmin(e.target.value)}
+                                onChange={(e) => handleAdminChange(e.target.value)}
                             >
                                 <option value="">Selecione o administrador...</option>
                                 {admins.map(admin => (
@@ -785,13 +834,37 @@ export function GestorContemplacao() {
                                 ))}
                             </select>
 
-                            <div className="bg-gray-50 p-4 rounded-xl mb-6">
-                                <p className="text-xs text-gray-500 mb-2">Caixa selecionado:</p>
-                                <p className="font-medium text-gray-900">{selectedCaixa.nome}</p>
-                                <p className="text-sm text-gray-500 mt-1">
-                                    Valor do caixa: {formatCurrency(selectedCaixa.valorTotal || 0)}
-                                </p>
-                                {comissaoInfo && (
+
+                            {selectedAdmin && (
+                                <>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">Selecione o Caixa</label>
+                                    <select
+                                        value={selectedCaixaAdmin}
+                                        onChange={(e) => handleCaixaAdminChange(e.target.value)}
+                                        className="w-full px-4 py-3 border border-gray-200 rounded-xl mb-4 bg-white focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                        disabled={caixasDoAdmin.length === 0 || actionLoading}
+                                    >
+                                        <option value="">
+                                            {caixasDoAdmin.length === 0 ? 'Carregando caixas...' : 'Selecione o caixa...'}
+                                        </option>
+                                        {caixasDoAdmin.map(caixa => (
+                                            <option key={caixa._id} value={caixa._id}>
+                                                {caixa.nome} - R$ {(caixa.valorTotal || 0).toFixed(2)}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </>
+                            )}
+
+                            {selectedCaixaAdmin && comissaoInfo && (
+                                <div className="bg-gray-50 p-4 rounded-xl mb-6">
+                                    <p className="text-xs text-gray-500 mb-2">Caixa selecionado:</p>
+                                    <p className="font-medium text-gray-900">
+                                        {caixasDoAdmin.find(c => c._id === selectedCaixaAdmin)?.nome}
+                                    </p>
+                                    <p className="text-sm text-gray-500 mt-1">
+                                        Valor do caixa: {formatCurrency(caixasDoAdmin.find(c => c._id === selectedCaixaAdmin)?.valorTotal || 0)}
+                                    </p>
                                     <div className="border-t border-gray-200 mt-3 pt-3">
                                         <p className="text-sm font-medium text-purple-600">
                                             Comissão: {formatCurrency(comissaoInfo.valorComissao)}
@@ -800,8 +873,8 @@ export function GestorContemplacao() {
                                             Percentual: {comissaoInfo.percentual.toFixed(2)}%
                                         </p>
                                     </div>
-                                )}
-                            </div>
+                                </div>
+                            )}
 
                             <div className="flex gap-3">
                                 <Button
@@ -818,7 +891,7 @@ export function GestorContemplacao() {
                                 <Button
                                     className="flex-1 bg-purple-600 hover:bg-purple-700"
                                     onClick={handleContemplacaoAdmin}
-                                    disabled={!selectedAdmin || actionLoading}
+                                    disabled={!selectedCaixaAdmin || actionLoading}
                                     isLoading={actionLoading}
                                 >
                                     Solicitar Contemplação

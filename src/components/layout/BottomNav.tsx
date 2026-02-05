@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Home, Bell, Wallet, User, CreditCard, FileText } from 'lucide-react';
+import { Home, Wallet, User, FileText } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useAuth } from '../../contexts/AuthContext';
 import { useUI } from '../../contexts/UIContext';
@@ -26,9 +26,8 @@ export function BottomNav() {
       : [
         { path: '/dashboard', label: 'Início', icon: Home },
         { path: '/caixas', label: 'Caixas', icon: Wallet },
-        { path: '/pagamentos', label: 'Pagtos', icon: CreditCard },
-        { path: '/notificacoes', label: 'Avisos', icon: Bell },
         { path: '/contrato', label: 'Contrato', icon: FileText },
+        { path: '/carteira', label: 'Carteira', icon: Wallet },
         { path: '/perfil', label: 'Perfil', icon: User },
       ];
 

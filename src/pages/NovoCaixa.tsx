@@ -400,28 +400,34 @@ export function NovoCaixa() {
                       <Clock className="w-4 h-4 text-green-500" />
                       Tipo do Caixa
                     </label>
-                    <div className="grid grid-cols-3 gap-3">
-                      <button
-                        type="button"
-                        onClick={() => setForm({ ...form, tipo: 'diario', qtdParticipantes: 4, duracaoMeses: 4 })}
-                        className={cn(
-                          'p-4 rounded-xl border-2 text-left transition-all',
-                          form.tipo === 'diario'
-                            ? 'border-green-500 bg-green-50'
-                            : 'border-gray-200 hover:border-green-200'
-                        )}
-                        data-testid="tipo-diario"
-                      >
-                        <div className="flex items-center gap-2 mb-2">
-                          <Clock className={cn('w-5 h-5', form.tipo === 'diario' ? 'text-green-600' : 'text-gray-400')} />
-                          <span className={cn('font-semibold', form.tipo === 'diario' ? 'text-green-700' : 'text-gray-700')}>
-                            Diário
-                          </span>
-                        </div>
-                        <p className="text-xs text-gray-500">
-                          Pagamentos diários, até 30 participantes/dias
-                        </p>
-                      </button>
+                    <div className={cn(
+                      'grid gap-3',
+                      usuario?.tipo === 'master' ? 'grid-cols-3' : 'grid-cols-2'
+                    )}>
+                      {/* Diário - Apenas para Master */}
+                      {usuario?.tipo === 'master' && (
+                        <button
+                          type="button"
+                          onClick={() => setForm({ ...form, tipo: 'diario', qtdParticipantes: 4, duracaoMeses: 4 })}
+                          className={cn(
+                            'p-4 rounded-xl border-2 text-left transition-all',
+                            form.tipo === 'diario'
+                              ? 'border-green-500 bg-green-50'
+                              : 'border-gray-200 hover:border-green-200'
+                          )}
+                          data-testid="tipo-diario"
+                        >
+                          <div className="flex items-center gap-2 mb-2">
+                            <Clock className={cn('w-5 h-5', form.tipo === 'diario' ? 'text-green-600' : 'text-gray-400')} />
+                            <span className={cn('font-semibold', form.tipo === 'diario' ? 'text-green-700' : 'text-gray-700')}>
+                              Diário
+                            </span>
+                          </div>
+                          <p className="text-xs text-gray-500">
+                            Pagamentos diários, até 30 participantes/dias
+                          </p>
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => setForm({ ...form, tipo: 'semanal', qtdParticipantes: 12, duracaoMeses: 12 })}

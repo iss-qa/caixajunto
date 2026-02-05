@@ -1371,8 +1371,14 @@ const WalletDashboard = () => {
     );
   };
 
-  // BLOCK: Users must sign contract before accessing wallet
-  if (usuario?.tipo === 'usuario' && !usuario?.contratoAssinado) {
+  // BLOCK: ALL users must sign contract AND have CPF before accessing wallet
+  // Check if user needs to complete contract signing (CPF + chavePix + accept terms)
+  const needsContractCompletion = !usuario?.contratoAssinado || !usuario?.cpf;
+
+  if (needsContractCompletion) {
+    const missingCpf = !usuario?.cpf;
+    const missingContract = !usuario?.contratoAssinado;
+
     return (
       <div className="min-h-screen bg-gray-50">
         <div className="bg-white border-b border-gray-200">
@@ -1393,20 +1399,70 @@ const WalletDashboard = () => {
             </div>
 
             <h2 className="text-2xl font-bold text-gray-900 mb-4">
-              Contrato de Adesão Pendente
+              {missingCpf ? 'Complete seu Cadastro' : 'Contrato de Adesão Pendente'}
             </h2>
 
-            <p className="text-gray-600 mb-8 max-w-md mx-auto">
-              Para acessar a carteira e utilizar todas as funcionalidades do Juntix, você precisa ler e aceitar o Contrato de Adesão.
+            <p className="text-gray-600 mb-6 max-w-md mx-auto">
+              Para acessar a carteira e utilizar todas as funcionalidades do Juntix, você precisa completar os seguintes passos:
             </p>
+
+            {/* Checklist visual */}
+            <div className="bg-gray-50 rounded-xl p-4 mb-8 text-left max-w-sm mx-auto">
+              <div className="space-y-3">
+                <div className={`flex items-center gap-3 ${!missingCpf ? 'text-green-600' : 'text-amber-600'}`}>
+                  {!missingCpf ? (
+                    <div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center">
+                      <Check className="w-4 h-4" />
+                    </div>
+                  ) : (
+                    <div className="w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center">
+                      <span className="text-xs font-bold">1</span>
+                    </div>
+                  )}
+                  <span className={`font-medium ${!missingCpf ? 'line-through' : ''}`}>
+                    Preencher CPF
+                  </span>
+                </div>
+
+                <div className={`flex items-center gap-3 ${usuario?.chavePix ? 'text-green-600' : 'text-amber-600'}`}>
+                  {usuario?.chavePix ? (
+                    <div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center">
+                      <Check className="w-4 h-4" />
+                    </div>
+                  ) : (
+                    <div className="w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center">
+                      <span className="text-xs font-bold">2</span>
+                    </div>
+                  )}
+                  <span className={`font-medium ${usuario?.chavePix ? 'line-through' : ''}`}>
+                    Informar Chave PIX
+                  </span>
+                </div>
+
+                <div className={`flex items-center gap-3 ${!missingContract ? 'text-green-600' : 'text-amber-600'}`}>
+                  {!missingContract ? (
+                    <div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center">
+                      <Check className="w-4 h-4" />
+                    </div>
+                  ) : (
+                    <div className="w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center">
+                      <span className="text-xs font-bold">3</span>
+                    </div>
+                  )}
+                  <span className={`font-medium ${!missingContract ? 'line-through' : ''}`}>
+                    Aceitar os Termos de Uso
+                  </span>
+                </div>
+              </div>
+            </div>
 
             <div className="space-y-4">
               <button
-                onClick={() => navigate('/contrato')}
+                onClick={() => navigate('/contrato#partes-contratantes')}
                 className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white px-6 py-4 rounded-xl font-semibold transition-all shadow-lg hover:shadow-xl"
               >
                 <FileText className="w-5 h-5" />
-                <span>Li e aceito os termos de uso e Contrato de Adesão ao Juntix</span>
+                <span>Ir para Contrato de Adesão</span>
               </button>
 
               <button
@@ -1483,6 +1539,7 @@ const WalletDashboard = () => {
             updateUsuario={updateUsuario}
             onSuccess={() => {
               setHasSubAccount(true);
+              setActiveTab('account'); // Redirecionar para aba "Dados da Conta"
               setSuccessMessage('Subconta criada com sucesso! ✅');
               setShowSuccessModal(true);
               setTimeout(() => {
