@@ -31,6 +31,7 @@ type ExistingSplitConfig = {
     agencia: string;
     conta: string;
   };
+  ipcaBase?: number;
 };
 
 const asRecord = (v: unknown): Record<string, unknown> =>
@@ -105,9 +106,9 @@ interface DadosBancarios {
   conta: string;
 }
 
-const calcularValorComIPCA = (valorBase: number, meses: number): number => {
+const calcularValorComIPCA = (valorBase: number, meses: number, ipcaPct: number): number => {
   if (meses === 0) return valorBase;
-  const taxa = 0.004; // 0.4% ao mês
+  const taxa = ipcaPct / 100;
   return valorBase * Math.pow(1 + taxa, meses);
 };
 
@@ -123,6 +124,12 @@ const TAXA_SERVICO_DADOS_FIXOS = {
   banco: '104 - CAIXA ECONOMICA FEDERAL',
   agencia: '3463',
   conta: '577975287-3',
+};
+
+const FUNDO_RESERVA_DADOS_FIXOS = {
+  banco: '077 - BANCO INTER',
+  agencia: '0001',
+  conta: '9121689-3',
 };
 
 export default function SplitConfig() {
@@ -142,12 +149,16 @@ export default function SplitConfig() {
   const [savingCredentials, setSavingCredentials] = useState<{ [key: string]: boolean }>({});
 
   // Estados para dados bancários
-  const [dadosBancariosFundoReserva, setDadosBancariosFundoReserva] = useState<DadosBancarios>({
-    banco: '',
-    agencia: '',
-    conta: '',
-  });
-  const [savingBankData, setSavingBankData] = useState(false);
+  // Estados para dados bancários (REMOVIDO - AGORA É FIXO)
+  // const [dadosBancariosFundoReserva, setDadosBancariosFundoReserva] = useState<DadosBancarios>({
+  //   banco: '',
+  //   agencia: '',
+  //   conta: '',
+  // });
+  // const [savingBankData, setSavingBankData] = useState(false);
+
+  // IPCA Base
+  const [ipcaBase, setIpcaBase] = useState<string>('');
 
   // Estado para controlar caixas já configurados
   const [configuredCaixas, setConfiguredCaixas] = useState<string[]>([]);
@@ -260,9 +271,10 @@ export default function SplitConfig() {
   useEffect(() => {
     if (selectedCaixaId) {
       setShowTable(false);
-      setDadosBancariosFundoReserva({ banco: '', agencia: '', conta: '' });
+      // setDadosBancariosFundoReserva({ banco: '', agencia: '', conta: '' });
       setAdminInfo(null);
       setAdminCredentialsSaved(false);
+      setIpcaBase('');
 
       (async () => {
         try {
@@ -303,6 +315,7 @@ export default function SplitConfig() {
                   conta: toStringSafe(dadosBancariosFundoReservaRaw.conta),
                 }
                 : undefined,
+              ipcaBase: toNumberSafe(rawConfig.ipcaBase, 0) || undefined,
             };
 
             setExistingConfig(data);
@@ -310,8 +323,12 @@ export default function SplitConfig() {
             setShowTable(true);
 
             // Carregar dados bancários do fundo de reserva se existirem
-            if (data.dadosBancariosFundoReserva) {
-              setDadosBancariosFundoReserva(data.dadosBancariosFundoReserva);
+            // if (data.dadosBancariosFundoReserva) {
+            //   setDadosBancariosFundoReserva(data.dadosBancariosFundoReserva);
+            // }
+
+            if (data.ipcaBase) {
+              setIpcaBase(String(data.ipcaBase)); // Formatando para string para o input
             }
 
             // Buscar info do admin se tiver ID
@@ -449,13 +466,15 @@ export default function SplitConfig() {
   };
 
   // Auto-save de dados bancários do fundo de reserva ao sair do campo
+  // Auto-save de dados bancários do fundo de reserva ao sair do campo (REMOVIDO - AGORA É FIXO)
+  /*
   const handleAutoSaveBankData = async () => {
     if (!selectedCaixaId) return;
     if (!dadosBancariosFundoReserva.banco && !dadosBancariosFundoReserva.agencia && !dadosBancariosFundoReserva.conta) return;
-
+  
     try {
       setSavingBankData(true);
-
+  
       const payload = {
         taxaServicoSubId: EMPRESA_TAXA_SERVICO_LYTEX_ID,
         fundoReservaSubId: EMPRESA_FUNDO_RESERVA_LYTEX_ID,
@@ -463,7 +482,7 @@ export default function SplitConfig() {
         participantesMesOrdem: participantesOrdem.map((p) => p.id),
         dadosBancariosFundoReserva: dadosBancariosFundoReserva,
       };
-
+  
       await splitConfigService.saveForCaixa(selectedCaixaId, payload);
       console.log('✅ Dados bancários do fundo de reserva salvos automaticamente');
     } catch (e: unknown) {
@@ -472,6 +491,7 @@ export default function SplitConfig() {
       setSavingBankData(false);
     }
   };
+  */
 
   const handleSaveConfig = async () => {
     if (!selectedCaixaId) return;
@@ -485,10 +505,11 @@ export default function SplitConfig() {
         fundoReservaSubId: EMPRESA_FUNDO_RESERVA_LYTEX_ID,
         adminSubId: adminSubId || undefined,
         participantesMesOrdem: participantesOrdem.map((p) => p.id),
-        dadosBancariosFundoReserva: dadosBancariosFundoReserva.banco || dadosBancariosFundoReserva.agencia || dadosBancariosFundoReserva.conta
-          ? dadosBancariosFundoReserva
-          : undefined,
+        dadosBancariosFundoReserva: FUNDO_RESERVA_DADOS_FIXOS,
+        ipcaBase: ipcaBase ? parseFloat(ipcaBase.replace(',', '.')) : undefined,
       };
+
+      console.log('📤 [Frontend] Salvando payload:', payload);
 
       const resp = await splitConfigService.saveForCaixa(selectedCaixaId, payload);
       const respRec = asRecord(resp);
@@ -983,55 +1004,65 @@ export default function SplitConfig() {
               </p>
             </div>
 
-            <div className="flex items-center gap-2 mb-3">
-              <AlertTriangle className="text-amber-500" size={18} />
-              <span className="text-sm text-amber-700 font-medium">
-                Preencha os dados bancários para transferências do fundo.
-              </span>
-            </div>
+
 
             <div className="space-y-3">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Banco</label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    placeholder="Ex: 260 - NU PAGAMENTOS - IP"
-                    value={dadosBancariosFundoReserva.banco}
-                    onChange={(e) => setDadosBancariosFundoReserva({ ...dadosBancariosFundoReserva, banco: e.target.value })}
-                    onBlur={handleAutoSaveBankData}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent text-sm"
-                  />
-                  {savingBankData && (
-                    <Loader2 size={14} className="absolute right-2 top-1/2 -translate-y-1/2 animate-spin text-amber-500" />
-                  )}
+                <label className="block text-sm font-medium text-gray-500 mb-1">Banco</label>
+                <div className="px-3 py-2 bg-gray-100 border border-gray-200 rounded-lg text-sm text-gray-700">
+                  {FUNDO_RESERVA_DADOS_FIXOS.banco}
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Agência</label>
-                  <input
-                    type="text"
-                    placeholder="Ex: 0001"
-                    value={dadosBancariosFundoReserva.agencia}
-                    onChange={(e) => setDadosBancariosFundoReserva({ ...dadosBancariosFundoReserva, agencia: e.target.value })}
-                    onBlur={handleAutoSaveBankData}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent text-sm"
-                  />
+                  <label className="block text-sm font-medium text-gray-500 mb-1">Agência</label>
+                  <div className="px-3 py-2 bg-gray-100 border border-gray-200 rounded-lg text-sm text-gray-700">
+                    {FUNDO_RESERVA_DADOS_FIXOS.agencia}
+                  </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Conta Corrente</label>
-                  <input
-                    type="text"
-                    placeholder="Ex: 7146725-9"
-                    value={dadosBancariosFundoReserva.conta}
-                    onChange={(e) => setDadosBancariosFundoReserva({ ...dadosBancariosFundoReserva, conta: e.target.value })}
-                    onBlur={handleAutoSaveBankData}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent text-sm"
-                  />
+                  <label className="block text-sm font-medium text-gray-500 mb-1">Conta Corrente</label>
+                  <div className="px-3 py-2 bg-gray-100 border border-gray-200 rounded-lg text-sm text-gray-700">
+                    {FUNDO_RESERVA_DADOS_FIXOS.conta}
+                  </div>
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+
+        {/* Input IPCA Base */}
+        <div className="bg-white rounded-lg shadow-sm p-5 border-2 border-orange-500 mb-6 relative">
+          <div className="absolute top-3 right-3">
+            <span className="px-2 py-1 bg-orange-500 text-white text-xs font-bold uppercase rounded-full">
+              IPCA Base
+            </span>
+          </div>
+          <h3 className="text-sm font-bold uppercase text-gray-600 mb-3 flex items-center gap-2">
+            Índice IPCA Base
+          </h3>
+          <div className="max-w-xs">
+            <label className="block text-sm text-gray-700 mb-1">
+              IPCA Atual (%)
+            </label>
+            <div className="relative">
+              <input
+                type="text"
+                value={ipcaBase}
+                onChange={(e) => {
+                  const val = e.target.value.replace(/[^0-9.,]/g, '');
+                  setIpcaBase(val);
+                }}
+                placeholder="Ex: 0,33"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-sm"
+              />
+              <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                <span className="text-gray-500 sm:text-sm">%</span>
+              </div>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">
+              Utilizado para o cálculo mensal dos participantes.
+            </p>
           </div>
         </div>
 
@@ -1047,6 +1078,13 @@ export default function SplitConfig() {
           >
             {saving ? 'Salvando...' : 'Salvar Configuração'}
           </button>
+
+          {configSuccess && (
+            <span className="ml-4 text-green-600 font-medium flex items-center gap-2 inline-flex animate-in fade-in slide-in-from-left-2 duration-300">
+              <CheckCircle size={20} />
+              Configuração salva com sucesso!
+            </span>
+          )}
         </div>
 
         {/* Tabela de Contemplação */}
@@ -1089,7 +1127,8 @@ export default function SplitConfig() {
                 <tbody className="divide-y divide-gray-100">
                   {participantesOrdem.map((p, idx) => {
                     const valorBase = selectedCaixa?.valorTotal || 0;
-                    const valorComCorrecao = calcularValorComIPCA(valorBase, idx);
+                    const ipcaValue = ipcaBase ? parseFloat(ipcaBase.replace(',', '.')) : 0;
+                    const valorComCorrecao = calcularValorComIPCA(valorBase, idx, ipcaValue);
                     const percentualIPCA = idx === 0 ? 0 : ((valorComCorrecao / valorBase - 1) * 100);
                     const status = getParticipanteStatus(p.id);
 
