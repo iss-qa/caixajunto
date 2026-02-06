@@ -21,7 +21,7 @@ export function Header() {
       { path: '/dashboard', label: 'Home', icon: LayoutDashboard },
       { path: '/caixas', label: 'Caixas', icon: Wallet },
       { path: '/participantes', label: 'Participantes', icon: Users },
-      { path: '/pagamentos', label: 'Financeiro', icon: CreditCard },
+      { path: '/tutorial', label: 'Tutorial', icon: FileText },
       { path: '/contrato', label: 'Contrato', icon: FileText },
       { path: '/carteira', label: 'Carteira', icon: Wallet },
     ];
@@ -31,6 +31,7 @@ export function Header() {
         { path: '/dashboard', label: 'Home', icon: LayoutDashboard },
         { path: '/caixas', label: 'Caixas', icon: Wallet },
         { path: '/contrato', label: 'Contrato', icon: FileText },
+        { path: '/tutorial', label: 'Tutorial', icon: FileText },
         { path: '/carteira', label: 'Carteira', icon: Wallet },
       ];
     }

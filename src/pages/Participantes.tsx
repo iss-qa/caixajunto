@@ -76,88 +76,16 @@ interface CaixaResumo {
   | string;
 }
 
-// Função auxiliar para remover formatação do CPF
-const formatCPF = (cpf: string): string => {
-  return cpf.replace(/[^\d]/g, ''); // Remove tudo que não é dígito
-};
-
-// Função para aplicar máscara de CPF
-const maskCPF = (value: string): string => {
-  const digits = value.replace(/\D/g, '').slice(0, 11);
-  return digits
-    .replace(/(\d{3})(\d)/, '$1.$2')
-    .replace(/(\d{3})(\d)/, '$1.$2')
-    .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
-};
-
-// Função para aplicar máscara de telefone
-const maskPhone = (value: string): string => {
-  const digits = value.replace(/\D/g, '').slice(0, 11);
-  if (digits.length <= 10) {
-    return digits
-      .replace(/(\d{2})(\d)/, '($1) $2')
-      .replace(/(\d{4})(\d)/, '$1-$2');
-  }
-  return digits
-    .replace(/(\d{2})(\d)/, '($1) $2')
-    .replace(/(\d{5})(\d)/, '$1-$2');
-};
-
-// Funções de anonimização para dados sensíveis
-const anonymizeCPF = (cpf: string): string => {
-  const digits = cpf.replace(/\D/g, '');
-  if (digits.length !== 11) return cpf;
-  // Mostra apenas primeiros 3 e últimos 2 dígitos: XXX.***.***-XX
-  return `${digits.slice(0, 3)}.***.**-${digits.slice(9)}`;
-};
-
-const anonymizeEmail = (email: string): string => {
-  const [local, domain] = email.split('@');
-  if (!domain) return email;
-  // Mostra apenas primeiros 2 caracteres: ab***@domain.com
-  const visiblePart = local.slice(0, 2);
-  const hiddenPart = '*'.repeat(Math.min(local.length - 2, 5));
-  return `${visiblePart}${hiddenPart}@${domain}`;
-};
-
-const anonymizePhone = (phone: string): string => {
-  const digits = phone.replace(/\D/g, '');
-  if (digits.length < 10) return phone;
-  // Mostra DDD e últimos 4 dígitos: (XX) *****-XXXX
-  const ddd = digits.slice(0, 2);
-  const lastFour = digits.slice(-4);
-  return `(${ddd}) *****-${lastFour}`;
-};
-
-// Função para validar CPF
-const validarCPF = (cpf: string): boolean => {
-  const digits = cpf.replace(/\D/g, '');
-
-  if (digits.length !== 11) return false;
-
-  // Verifica se todos os dígitos são iguais
-  if (/^(\d)\1+$/.test(digits)) return false;
-
-  // Validação do primeiro dígito verificador
-  let soma = 0;
-  for (let i = 0; i < 9; i++) {
-    soma += parseInt(digits[i]) * (10 - i);
-  }
-  let resto = (soma * 10) % 11;
-  if (resto === 10 || resto === 11) resto = 0;
-  if (resto !== parseInt(digits[9])) return false;
-
-  // Validação do segundo dígito verificador
-  soma = 0;
-  for (let i = 0; i < 10; i++) {
-    soma += parseInt(digits[i]) * (11 - i);
-  }
-  resto = (soma * 10) % 11;
-  if (resto === 10 || resto === 11) resto = 0;
-  if (resto !== parseInt(digits[10])) return false;
-
-  return true;
-};
+import {
+  formatCPF,
+  maskCPF,
+  maskPhone,
+  anonymizeCPF,
+  anonymizeEmail,
+  anonymizePhone,
+  anonymizePixKey,
+  validarCPF,
+} from '../utils/maskUtils';
 
 export function Participantes() {
   const { usuario: usuarioLogado } = useAuth();
@@ -299,10 +227,14 @@ export function Participantes() {
       // 4️⃣ Combinar usuários com seus caixas (agora caixasPorId está disponível!)
       const participantesComCaixa = usuarios.map((usuario: any) => {
         // Find vinculo for this usuario
-        const vinculo = listaParticipantes.find((p: any) => {
+        // Find all vinculos for this usuario
+        const vinculos = listaParticipantes.filter((p: any) => {
           const pUsuarioId = p.usuarioId?._id || p.usuarioId;
           return String(pUsuarioId) === String(usuario._id);
         });
+
+        // Prioritize vinculo with valid caixaId
+        const vinculo = vinculos.find((v: any) => v.caixaId && (typeof v.caixaId === 'object' ? v.caixaId._id : v.caixaId)) || vinculos[0];
 
         let caixaNome = '';
         let caixaId = '';
@@ -1159,7 +1091,7 @@ export function Participantes() {
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-2 text-sm text-gray-600">
                             <CreditCard className="w-3 h-3" />
-                            {participante.chavePix || '-'}
+                            {participante.chavePix ? anonymizePixKey(participante.chavePix) : '-'}
                           </div>
                         </td>
                         <td className="py-3 px-4 text-center">

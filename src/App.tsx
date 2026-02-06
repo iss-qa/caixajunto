@@ -25,6 +25,7 @@ import { GerenciarComissoes } from './pages/GerenciarComissoes';
 import { GestorContemplacao } from './pages/GestorContemplacao';
 import { Seguranca } from './pages/Seguranca';
 import { TaxaAdesao } from './pages/TaxaAdesao';
+import { Tutorial } from './pages/Tutorial';
 
 // Protected Route Component
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -192,6 +193,13 @@ function AppRoutes() {
           <TaxaAdesaoRoute>
             <RoleRoute allow={["administrador", "master"]}>
               <Pagamentos />
+            </RoleRoute>
+          </TaxaAdesaoRoute>
+        } />
+        <Route path="/tutorial" element={
+          <TaxaAdesaoRoute>
+            <RoleRoute allow={["usuario", "administrador", "master"]}>
+              <Tutorial />
             </RoleRoute>
           </TaxaAdesaoRoute>
         } />

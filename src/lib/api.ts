@@ -669,5 +669,22 @@ export const fundoGarantidorService = {
   },
 };
 
+// Videos
+export const videosService = {
+  getList: async () => {
+    const response = await api.get('/videos/list');
+    return response.data;
+  },
+  getInfo: async (filename: string) => {
+    const response = await api.get(`/videos/info/${filename}`);
+    return response.data;
+  },
+  // Helper to get stream URL
+  getStreamUrl: (filename: string) => {
+    const token = localStorage.getItem('token');
+    return `${API_URL}/videos/stream/${filename}?token=${token}`;
+  },
+};
+
 // Comunicação (Evolution API - WhatsApp)
 export { comunicacaoService } from './api/comunicacao.service';
