@@ -1104,13 +1104,13 @@ ${link}`;
 
   const loadUsuariosSemCaixa = async () => {
     try {
-      // Buscar todos os usuários do tipo 'usuario'
-      const responseUsuarios = await usuariosService.getAll();
+      // Buscar todos os usuários do tipo 'usuario' (com limite alto para garantir retorno completo dos usuários do admin)
+      const responseUsuarios = await usuariosService.getAll({ limit: 1000 });
       const listaUsuarios = Array.isArray(responseUsuarios) ? responseUsuarios : responseUsuarios.usuarios || [];
       const usuarios = listaUsuarios.filter((u: any) => u.tipo === 'usuario');
 
-      // Buscar vínculos existentes de participantes
-      const responseParticipantes = await participantesService.getAll();
+      // Buscar vínculos existentes de participantes (limite alto para verificação correta de disponibilidade)
+      const responseParticipantes = await participantesService.getAll({ limit: 1000 });
       const listaParticipantes = Array.isArray(responseParticipantes) ? responseParticipantes : responseParticipantes.participantes || [];
 
       // NOVA REGRA: Criar conjunto de usuários em caixas ATIVOS (não finalizados)

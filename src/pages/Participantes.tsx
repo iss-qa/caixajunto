@@ -103,6 +103,32 @@ const maskPhone = (value: string): string => {
     .replace(/(\d{5})(\d)/, '$1-$2');
 };
 
+// Funções de anonimização para dados sensíveis
+const anonymizeCPF = (cpf: string): string => {
+  const digits = cpf.replace(/\D/g, '');
+  if (digits.length !== 11) return cpf;
+  // Mostra apenas primeiros 3 e últimos 2 dígitos: XXX.***.***-XX
+  return `${digits.slice(0, 3)}.***.**-${digits.slice(9)}`;
+};
+
+const anonymizeEmail = (email: string): string => {
+  const [local, domain] = email.split('@');
+  if (!domain) return email;
+  // Mostra apenas primeiros 2 caracteres: ab***@domain.com
+  const visiblePart = local.slice(0, 2);
+  const hiddenPart = '*'.repeat(Math.min(local.length - 2, 5));
+  return `${visiblePart}${hiddenPart}@${domain}`;
+};
+
+const anonymizePhone = (phone: string): string => {
+  const digits = phone.replace(/\D/g, '');
+  if (digits.length < 10) return phone;
+  // Mostra DDD e últimos 4 dígitos: (XX) *****-XXXX
+  const ddd = digits.slice(0, 2);
+  const lastFour = digits.slice(-4);
+  return `(${ddd}) *****-${lastFour}`;
+};
+
 // Função para validar CPF
 const validarCPF = (cpf: string): boolean => {
   const digits = cpf.replace(/\D/g, '');
@@ -254,7 +280,8 @@ export function Participantes() {
       }
 
       // 2️⃣ Buscar todos os usuários (removido filtro de tipo para exibir todos)
-      const responseUsuarios = await usuariosService.getAll();
+      // Passando limit alto para garantir que todos os usuários sejam carregados
+      const responseUsuarios = await usuariosService.getAll({ limit: 1000 });
       const listaUsuarios = Array.isArray(responseUsuarios) ? responseUsuarios : responseUsuarios.usuarios || [];
       // Exibir todos os usuários, não apenas tipo 'usuario'
       const usuarios = listaUsuarios;
@@ -912,127 +939,155 @@ export function Participantes() {
         <>
           {/* Mobile/Tablet View (Cards) */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:hidden">
-            {filteredParticipantes.map((participante) => (
-              <Card key={participante._id} className="p-4 relative">
-                <div className="flex justify-between items-start mb-4">
-                  <div className="flex items-center gap-3">
-                    <Avatar
-                      src={participante.picture}
-                      name={participante.nome}
-                      size="md"
-                    />
-                    <div>
-                      <p className="font-bold text-gray-900 line-clamp-1">{participante.nome}</p>
-                      <p className="text-xs text-gray-500">{participante.cpf ? maskCPF(participante.cpf) : 'CPF não informado'}</p>
-                      <Badge variant={participante.score >= 80 ? 'success' : 'warning'} size="sm" className="mt-1">
-                        <Award className="w-3 h-3 mr-1" />
-                        Score: {participante.score}
-                      </Badge>
+            {filteredParticipantes.map((participante, index) => {
+              const isAdmin = participante.tipo === 'administrador' || participante.tipo === 'master';
+              const isLastItem = index >= filteredParticipantes.length - 2;
+              return (
+                <Card
+                  key={participante._id}
+                  className={`p-4 relative transition-colors ${isAdmin
+                    ? 'bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-100 shadow-sm'
+                    : ''
+                    }`}
+                >
+                  <div className="flex justify-between items-start mb-4">
+                    <div className="flex items-center gap-3">
+                      <Avatar
+                        src={participante.picture}
+                        name={participante.nome}
+                        size="md"
+                      />
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <p className="font-bold text-gray-900 line-clamp-1">{participante.nome}</p>
+                          {isAdmin && (
+                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${participante.tipo === 'master'
+                              ? 'bg-purple-100 text-purple-700'
+                              : 'bg-blue-100 text-blue-700'
+                              }`}>
+                              {participante.tipo === 'master' ? 'Master' : 'Admin'}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-gray-500">{participante.cpf ? anonymizeCPF(participante.cpf) : 'CPF não informado'}</p>
+                        <Badge variant={participante.score >= 80 ? 'success' : 'warning'} size="sm" className="mt-1">
+                          <Award className="w-3 h-3 mr-1" />
+                          Score: {participante.score}
+                        </Badge>
+                      </div>
                     </div>
-                  </div>
 
-                  {/* Actions Dropdown for Mobile */}
-                  <div className="relative">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setOpenDropdownId(openDropdownId === participante._id ? null : participante._id);
-                      }}
-                      className="p-2 -mr-2 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100"
-                    >
-                      <MoreVertical className="w-5 h-5" />
-                    </button>
+                    {/* Actions Dropdown for Mobile */}
+                    <div className="relative">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setOpenDropdownId(openDropdownId === participante._id ? null : participante._id);
+                        }}
+                        className="p-2 -mr-2 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100"
+                      >
+                        <MoreVertical className="w-5 h-5" />
+                      </button>
 
-                    {openDropdownId === participante._id && (
-                      <div className="absolute right-0 top-full mt-1 bg-white rounded-lg shadow-xl border border-gray-100 py-1 min-w-[200px] z-50">
-                        <button
-                          onClick={() => {
-                            openDetailModal(participante);
-                            setOpenDropdownId(null);
-                          }}
-                          className="w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3"
+                      {openDropdownId === participante._id && (
+                        <div
+                          className={`absolute right-0 ${isLastItem ? 'bottom-full mb-1' : 'top-full mt-1'} bg-white rounded-lg shadow-xl border border-gray-100 py-1 min-w-[200px] z-50`}
                         >
-                          <Eye className="w-4 h-4 text-gray-400" />
-                          Visualizar Detalhes
-                        </button>
-                        <button
-                          onClick={() => {
-                            openEditModal(participante);
-                            setOpenDropdownId(null);
-                          }}
-                          className="w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3"
-                        >
-                          <Edit className="w-4 h-4 text-gray-400" />
-                          Editar Participante
-                        </button>
-                        {usuarioLogado?.tipo === 'master' && (
                           <button
                             onClick={() => {
-                              openTransferModal(participante);
+                              openDetailModal(participante);
                               setOpenDropdownId(null);
                             }}
                             className="w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3"
                           >
-                            <ArrowRightLeft className="w-4 h-4 text-gray-400" />
-                            Transferir Participante
+                            <Eye className="w-4 h-4 text-gray-400" />
+                            Visualizar Detalhes
                           </button>
-                        )}
-                        <div className="h-px bg-gray-100 my-1"></div>
-                        <button
-                          onClick={() => {
-                            openDeleteModal(participante);
-                            setOpenDropdownId(null);
-                          }}
-                          className="w-full px-4 py-3 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-3"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                          Excluir Participante
-                        </button>
+                          <button
+                            onClick={() => {
+                              openEditModal(participante);
+                              setOpenDropdownId(null);
+                            }}
+                            className="w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3"
+                          >
+                            <Edit className="w-4 h-4 text-gray-400" />
+                            Editar Participante
+                          </button>
+                          {usuarioLogado?.tipo === 'master' && (
+                            <button
+                              onClick={() => {
+                                openTransferModal(participante);
+                                setOpenDropdownId(null);
+                              }}
+                              className="w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3"
+                            >
+                              <ArrowRightLeft className="w-4 h-4 text-gray-400" />
+                              Transferir Participante
+                            </button>
+                          )}
+                          <div className="h-px bg-gray-100 my-1"></div>
+                          <button
+                            onClick={() => {
+                              openDeleteModal(participante);
+                              setOpenDropdownId(null);
+                            }}
+                            className="w-full px-4 py-3 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-3"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                            Excluir Participante
+                          </button>
+                        </div>
+                      )}
+                      {openDropdownId === participante._id && (
+                        <div
+                          className="fixed inset-0 z-40"
+                          onClick={() => setOpenDropdownId(null)}
+                        />
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 text-sm text-gray-600 bg-white/50 p-2 rounded-lg border border-gray-100">
+                      <Mail className="w-4 h-4 text-gray-400" />
+                      <span className="truncate">{anonymizeEmail(participante.email)}</span>
+                    </div>
+
+                    <div className="flex items-center gap-2 text-sm text-gray-600 bg-white/50 p-2 rounded-lg border border-gray-100">
+                      <Phone className="w-4 h-4 text-gray-400" />
+                      <span>{participante.telefone ? anonymizePhone(participante.telefone) : '-'}</span>
+                    </div>
+
+                    {participante.caixaNome ? (
+                      <div className="flex items-center gap-2 text-sm bg-blue-50 text-blue-700 p-2 rounded-lg">
+                        <Home className="w-4 h-4 text-blue-500" />
+                        <span className="truncate">{participante.caixaNome}</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 text-sm bg-gray-50 text-gray-500 p-2 rounded-lg">
+                        <Home className="w-4 h-4 text-gray-400" />
+                        <span className="truncate">
+                          {participante.tipo === 'master'
+                            ? 'Master'
+                            : participante.tipo === 'administrador'
+                              ? 'Administrador'
+                              : 'Sem caixa vinculado'}
+                        </span>
                       </div>
                     )}
-                    {openDropdownId === participante._id && (
-                      <div
-                        className="fixed inset-0 z-40"
-                        onClick={() => setOpenDropdownId(null)}
-                      />
+
+                    {usuarioLogado?.tipo === 'master' && (
+                      <div className="flex items-center gap-2 text-xs text-gray-500 mt-2 pl-1">
+                        <span>Gerenciado por:</span>
+                        <span className="font-medium text-gray-700">
+                          {participante.adminNome || participante.criadoPorNome || '-'}
+                        </span>
+                      </div>
                     )}
                   </div>
-                </div>
-
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2 text-sm text-gray-600 bg-gray-50 p-2 rounded-lg">
-                    <Mail className="w-4 h-4 text-gray-400" />
-                    <span className="truncate">{participante.email}</span>
-                  </div>
-
-                  <div className="flex items-center gap-2 text-sm text-gray-600 bg-gray-50 p-2 rounded-lg">
-                    <Phone className="w-4 h-4 text-gray-400" />
-                    <span>{maskPhone(participante.telefone)}</span>
-                  </div>
-
-                  {participante.caixaNome ? (
-                    <div className="flex items-center gap-2 text-sm bg-blue-50 text-blue-700 p-2 rounded-lg">
-                      <Home className="w-4 h-4 text-blue-500" />
-                      <span className="truncate">{participante.caixaNome}</span>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2 text-sm bg-gray-50 text-gray-500 p-2 rounded-lg">
-                      <Home className="w-4 h-4 text-gray-400" />
-                      <span>Sem caixa vinculado</span>
-                    </div>
-                  )}
-
-                  {usuarioLogado?.tipo === 'master' && (
-                    <div className="flex items-center gap-2 text-xs text-gray-500 mt-2 pl-1">
-                      <span>Gerenciado por:</span>
-                      <span className="font-medium text-gray-700">
-                        {participante.adminNome || participante.criadoPorNome || '-'}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              </Card>
-            ))}
+                </Card>
+              );
+            })}
           </div>
 
           {/* Desktop View (Table) */}
@@ -1053,135 +1108,159 @@ export function Participantes() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredParticipantes.map((participante) => (
-                    <motion.tr
-                      key={participante._id}
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      className="border-b border-gray-100 hover:bg-gray-50 transition-colors"
-                    >
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-3">
-                          <Avatar
-                            src={participante.picture}
-                            name={participante.nome}
-                            size="sm"
-                          />
-                          <div>
-                            <p className="font-medium text-gray-900">{participante.nome}</p>
-                            <p className="text-xs text-gray-500">{participante.cpf ? maskCPF(participante.cpf) : 'CPF não informado'}</p>
+                  {filteredParticipantes.map((participante, index) => {
+                    const isAdmin = participante.tipo === 'administrador' || participante.tipo === 'master';
+                    const isLastTwo = index >= filteredParticipantes.length - 2;
+                    return (
+                      <motion.tr
+                        key={participante._id}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        className={`border-b border-gray-100 transition-colors ${isAdmin
+                          ? 'bg-gradient-to-r from-blue-50 to-indigo-50 hover:from-blue-100 hover:to-indigo-100'
+                          : 'hover:bg-gray-50'
+                          }`}
+                      >
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-3">
+                            <Avatar
+                              src={participante.picture}
+                              name={participante.nome}
+                              size="sm"
+                            />
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <p className="font-medium text-gray-900">{participante.nome}</p>
+                                {isAdmin && (
+                                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${participante.tipo === 'master'
+                                    ? 'bg-purple-100 text-purple-700'
+                                    : 'bg-blue-100 text-blue-700'
+                                    }`}>
+                                    {participante.tipo === 'master' ? 'Master' : 'Admin'}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-xs text-gray-500">{participante.cpf ? anonymizeCPF(participante.cpf) : 'CPF não informado'}</p>
+                            </div>
                           </div>
-                        </div>
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className="flex flex-col gap-1">
-                          <div className="flex items-center gap-2 text-sm text-gray-600">
-                            <Mail className="w-3 h-3" />
-                            {participante.email}
-                          </div>
-                          <div className="flex items-center gap-2 text-sm text-gray-600">
-                            <Phone className="w-3 h-3" />
-                            {participante.telefone ? maskPhone(participante.telefone) : '-'}
-                          </div>
-                        </div>
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                          <CreditCard className="w-3 h-3" />
-                          {participante.chavePix || '-'}
-                        </div>
-                      </td>
-                      <td className="py-3 px-4 text-center">
-                        <Badge variant={participante.score >= 80 ? 'success' : 'warning'} size="sm">
-                          <Award className="w-3 h-3 mr-1" />
-                          {participante.score}
-                        </Badge>
-                      </td>
-                      <td className="py-3 px-4">
-                        {participante.caixaNome ? (
-                          <div className="flex items-center gap-2">
-                            <Badge variant="info" size="sm">
-                              {participante.caixaNome}
-                            </Badge>
-                          </div>
-                        ) : (
-                          <span className="text-xs text-gray-400">Sem caixa</span>
-                        )}
-                      </td>
-                      {usuarioLogado?.tipo === 'master' && (
-                        <td className="py-3 px-4 text-sm text-gray-600">
-                          {participante.adminNome || participante.criadoPorNome || '-'}
                         </td>
-                      )}
+                        <td className="py-3 px-4">
+                          <div className="flex flex-col gap-1">
+                            <div className="flex items-center gap-2 text-sm text-gray-600">
+                              <Mail className="w-3 h-3" />
+                              {anonymizeEmail(participante.email)}
+                            </div>
+                            <div className="flex items-center gap-2 text-sm text-gray-600">
+                              <Phone className="w-3 h-3" />
+                              {participante.telefone ? anonymizePhone(participante.telefone) : '-'}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-2 text-sm text-gray-600">
+                            <CreditCard className="w-3 h-3" />
+                            {participante.chavePix || '-'}
+                          </div>
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <Badge variant={participante.score >= 80 ? 'success' : 'warning'} size="sm">
+                            <Award className="w-3 h-3 mr-1" />
+                            {participante.score}
+                          </Badge>
+                        </td>
+                        <td className="py-3 px-4">
+                          {participante.caixaNome ? (
+                            <div className="flex items-center gap-2">
+                              <Badge variant="info" size="sm">
+                                {participante.caixaNome}
+                              </Badge>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-gray-400">
+                              {participante.tipo === 'master'
+                                ? 'Master'
+                                : participante.tipo === 'administrador'
+                                  ? 'Administrador'
+                                  : 'Sem caixa'}
+                            </span>
+                          )}
+                        </td>
+                        {usuarioLogado?.tipo === 'master' && (
+                          <td className="py-3 px-4 text-sm text-gray-600">
+                            {participante.adminNome || participante.criadoPorNome || '-'}
+                          </td>
+                        )}
 
 
-                      <td className="py-3 px-4">
-                        <div className="flex items-center justify-end gap-2 relative">
-                          <button
-                            onClick={() => setOpenDropdownId(openDropdownId === participante._id ? null : participante._id)}
-                            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                          >
-                            <MoreVertical className="w-5 h-5 text-gray-600" />
-                          </button>
+                        <td className="py-3 px-4">
+                          <div className="flex items-center justify-end gap-2 relative">
+                            <button
+                              onClick={() => setOpenDropdownId(openDropdownId === participante._id ? null : participante._id)}
+                              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                            >
+                              <MoreVertical className="w-5 h-5 text-gray-600" />
+                            </button>
 
-                          {openDropdownId === participante._id && (
-                            <>
-                              {/* Backdrop to close dropdown */}
-                              <div
-                                className="fixed inset-0 z-10"
-                                onClick={() => setOpenDropdownId(null)}
-                              />
-                              {/* Dropdown menu */}
-                              <div className="absolute right-0 top-full mt-1 bg-white rounded-lg shadow-lg border border-gray-200 py-1 min-w-[200px] z-20">
-                                <button
-                                  onClick={() => {
-                                    openDetailModal(participante);
-                                    setOpenDropdownId(null);
-                                  }}
-                                  className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
-                                >
-                                  <Eye className="w-4 h-4" />
-                                  Visualizar Detalhes
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    openEditModal(participante);
-                                    setOpenDropdownId(null);
-                                  }}
-                                  className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
-                                >
-                                  <Edit className="w-4 h-4" />
-                                  Editar Participante
-                                </button>
-                                {usuarioLogado?.tipo === 'master' && (
+                            {openDropdownId === participante._id && (
+                              <>
+                                {/* Backdrop to close dropdown */}
+                                <div
+                                  className="fixed inset-0 z-10"
+                                  onClick={() => setOpenDropdownId(null)}
+                                />
+                                {/* Dropdown menu */}
+                                <div className={`absolute right-0 ${isLastTwo ? 'bottom-full mb-1' : 'top-full mt-1'} bg-white rounded-lg shadow-lg border border-gray-200 py-1 min-w-[200px] z-20`}>
                                   <button
                                     onClick={() => {
-                                      openTransferModal(participante);
+                                      openDetailModal(participante);
                                       setOpenDropdownId(null);
                                     }}
                                     className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
                                   >
-                                    <ArrowRightLeft className="w-4 h-4" />
-                                    Transferir Participante
+                                    <Eye className="w-4 h-4" />
+                                    Visualizar Detalhes
                                   </button>
-                                )}
-                                <button
-                                  onClick={() => {
-                                    openDeleteModal(participante);
-                                    setOpenDropdownId(null);
-                                  }}
-                                  className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                  Excluir Participante
-                                </button>
-                              </div>
-                            </>
-                          )}
-                        </div>
-                      </td>
-                    </motion.tr>
-                  ))}
+                                  <button
+                                    onClick={() => {
+                                      openEditModal(participante);
+                                      setOpenDropdownId(null);
+                                    }}
+                                    className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                  >
+                                    <Edit className="w-4 h-4" />
+                                    Editar Participante
+                                  </button>
+                                  {usuarioLogado?.tipo === 'master' && (
+                                    <button
+                                      onClick={() => {
+                                        openTransferModal(participante);
+                                        setOpenDropdownId(null);
+                                      }}
+                                      className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                    >
+                                      <ArrowRightLeft className="w-4 h-4" />
+                                      Transferir Participante
+                                    </button>
+                                  )}
+                                  <button
+                                    onClick={() => {
+                                      openDeleteModal(participante);
+                                      setOpenDropdownId(null);
+                                    }}
+                                    className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                    Excluir Participante
+                                  </button>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </motion.tr>
+                    );
+                  })}
+                  {/* End of map function */}
                 </tbody>
               </table>
             </div>
