@@ -109,7 +109,8 @@ interface DadosBancarios {
 const calcularValorComIPCA = (valorBase: number, meses: number, ipcaPct: number): number => {
   if (meses === 0) return valorBase;
   const taxa = ipcaPct / 100;
-  return valorBase * Math.pow(1 + taxa, meses);
+  // Alterado para não acumular/dobrar nos meses seguintes, mantendo o valor fixo de acréscimo
+  return valorBase * (1 + taxa);
 };
 
 // IDs FIXOS das empresas (valores de produção)
@@ -1107,13 +1108,13 @@ export default function SplitConfig() {
                     <th className="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase">
                       Participante
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase">
-                      Status Subconta
+                    <th className="px-4 py-3 text-center text-xs font-bold text-gray-600 uppercase w-20">
+                      Status
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase">
+                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase min-w-[200px]">
                       Client ID
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase">
+                    <th className="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase min-w-[200px]">
                       Client Secret
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase">
@@ -1132,12 +1133,18 @@ export default function SplitConfig() {
                     const percentualIPCA = idx === 0 ? 0 : ((valorComCorrecao / valorBase - 1) * 100);
                     const status = getParticipanteStatus(p.id);
 
-                    // Extrair usuarioId correto
                     const usuarioIdReal = typeof p.usuarioId === 'object' && p.usuarioId?._id
                       ? p.usuarioId._id
                       : p.id;
                     const statusByUsuarioId = getParticipanteStatus(usuarioIdReal);
                     const finalStatus = status || statusByUsuarioId;
+
+                    // Verifica se tem credenciais preenchidas (no objeto participants, no credentials state, ou se já tem subconta)
+                    const hasCredentials =
+                      (p.clientId && p.clientSecret && p.clientId.length > 0) ||
+                      (credentials[usuarioIdReal]?.clientId && credentials[usuarioIdReal]?.clientSecret && credentials[usuarioIdReal].clientId.length > 0);
+
+                    const isGreenStatus = finalStatus?.temSubconta || hasCredentials;
 
                     return (
                       <tr key={p.id} className="hover:bg-gray-50 transition-colors">
@@ -1149,19 +1156,23 @@ export default function SplitConfig() {
                         <td className="px-4 py-3">
                           <span className="font-semibold text-gray-900 text-sm">{p.nome}</span>
                         </td>
-                        <td className="px-4 py-3">
+                        <td className="px-4 py-3 text-center">
                           {loadingSubcontas ? (
-                            <span className="text-xs text-gray-500">Verificando...</span>
-                          ) : finalStatus?.temSubconta ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-800 text-xs font-medium rounded-full">
-                              <CheckCircle size={14} />
-                              Com subconta
-                            </span>
+                            <Loader2 size={16} className="animate-spin text-gray-400 mx-auto" />
+                          ) : isGreenStatus ? (
+                            <div className="flex justify-center group relative">
+                              <div className="w-3 h-3 rounded-full bg-green-500 shadow-sm ring-2 ring-green-100" />
+                              <span className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+                                {finalStatus?.temSubconta ? 'Com subconta' : 'Credenciais preenchidas'}
+                              </span>
+                            </div>
                           ) : (
-                            <span className="inline-flex items-center gap-1 px-2 py-1 bg-red-100 text-red-800 text-xs font-medium rounded-full">
-                              <XCircle size={14} />
-                              Sem subconta
-                            </span>
+                            <div className="flex justify-center group relative">
+                              <div className="w-3 h-3 rounded-full bg-red-500 shadow-sm ring-2 ring-red-100" />
+                              <span className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+                                Sem subconta
+                              </span>
+                            </div>
                           )}
                         </td>
                         <td className="px-4 py-3">
@@ -1172,12 +1183,9 @@ export default function SplitConfig() {
                               value={credentials[usuarioIdReal]?.clientId || p.clientId || ''}
                               onChange={(e) => handleCredentialChange(usuarioIdReal, 'clientId', e.target.value)}
                               onBlur={() => handleSaveCredentials(usuarioIdReal)}
-                              disabled={!finalStatus?.temSubconta}
-                              className={`w-full px-2 py-1 text-xs border rounded ${!finalStatus?.temSubconta
-                                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                                : credentials[usuarioIdReal]?.saved
-                                  ? 'border-green-300 bg-green-50'
-                                  : 'border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500'
+                              className={`w-full px-3 py-2 text-xs border rounded-md shadow-sm ${credentials[usuarioIdReal]?.saved
+                                ? 'border-green-300 bg-green-50'
+                                : 'border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500'
                                 }`}
                             />
                             {savingCredentials[usuarioIdReal] && (
@@ -1196,12 +1204,9 @@ export default function SplitConfig() {
                               value={credentials[usuarioIdReal]?.clientSecret || p.clientSecret || ''}
                               onChange={(e) => handleCredentialChange(usuarioIdReal, 'clientSecret', e.target.value)}
                               onBlur={() => handleSaveCredentials(usuarioIdReal)}
-                              disabled={!finalStatus?.temSubconta}
-                              className={`w-full px-2 py-1 text-xs border rounded ${!finalStatus?.temSubconta
-                                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                                : credentials[usuarioIdReal]?.saved
-                                  ? 'border-green-300 bg-green-50'
-                                  : 'border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500'
+                              className={`w-full px-3 py-2 text-xs border rounded-md shadow-sm ${credentials[usuarioIdReal]?.saved
+                                ? 'border-green-300 bg-green-50'
+                                : 'border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500'
                                 }`}
                             />
                             {savingCredentials[usuarioIdReal] && (
